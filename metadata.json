@@ -1,0 +1,5 @@
+{
+  "name": "AI Auto-Visualizer",
+  "description": "Upload your data (CSV, Excel) and let AI analyze it to automatically generate interactive D3.js visualizations and dashboards.",
+  "requestFramePermissions": []
+}
