@@ -54,12 +54,11 @@ const ProjectLink: React.FC<{
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMenuOpenForThis, setContextMenuOpen]);
 
-  const showThreeDots = isOpen && isDesktop;
+  const showThreeDots = isOpen;
 
   const handleCombinedClick = () => {
-    // For tablet/collapsed view: always select the project and toggle its menu.
+    // For collapsed desktop view: only select the project.
     onSelectProject(proj.id);
-    setContextMenuOpen(prev => (prev === proj.id ? null : proj.id));
   };
   
   const handleMenuButtonClick = (e: React.MouseEvent) => {
@@ -109,10 +108,8 @@ const ProjectLink: React.FC<{
         </span>
       )}
 
-      {isMenuOpenForThis && (
-        <div className={`absolute z-20 py-1.5 bg-white rounded-md shadow-lg border border-slate-100 animate-in fade-in zoom-in-95 duration-100
-            ${!isOpen ? 'left-full ml-2 w-48 top-1/2 -translate-y-1/2' : 'right-4 mt-1 w-48'}
-        `}>
+      {isMenuOpenForThis && isOpen && (
+        <div className={`absolute z-20 py-1.5 bg-white rounded-md shadow-lg border border-slate-100 animate-in fade-in zoom-in-95 duration-100 right-4 mt-1 w-48`}>
           <button onClick={() => { onRename(proj); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Edit size={14} className="mr-2 text-slate-400"/> Rename</button>
           <button onClick={() => { onDelete(proj); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={14} className="mr-2"/> Delete</button>
         </div>

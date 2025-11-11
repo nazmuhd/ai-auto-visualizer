@@ -135,6 +135,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         setError(null);
         setCurrentView('dashboard');
         setProgress(null);
+        if (window.innerWidth < 1024) setIsSidebarOpen(false);
     };
     
     // --- Project Management ---
@@ -178,7 +179,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             // If the selected project has data, it's complete. Otherwise, it's idle.
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
             setCurrentView('dashboard');
-            if (window.innerWidth < 768) setIsSidebarOpen(false);
+            if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
@@ -277,18 +278,17 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         if (activeProject.dataSource.data.length === 0 && status === 'idle') {
             return (
                  <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                        <div>
-                            <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{activeProject.name}</h2>
-                            <p className="text-sm text-slate-500">{activeProject.description || "No description provided."}</p>
+                    <div className="flex justify-between items-center gap-4 mb-6">
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-2xl font-bold text-slate-900 truncate">{activeProject.name}</h2>
+                            <p className="text-sm text-slate-500 truncate">{activeProject.description || "No description provided."}</p>
                         </div>
-                        <div>
+                        <div className="flex-shrink-0">
                             <button 
                                 onClick={() => handleOpenRenameModal(activeProject)} 
-                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"
+                                className="p-2 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"
                             >
-                                <Edit3 size={16} className="mr-2" />
-                                Edit Project
+                                <Edit3 size={16} />
                             </button>
                         </div>
                     </div>
