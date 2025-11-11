@@ -13,7 +13,7 @@ import { RenameProjectModal } from './modals/RenameProjectModal.tsx';
 import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal.tsx';
 import { DataTable } from './DataTable.tsx';
 import { AIReportView } from './AIReportView.tsx';
-import { processFileWithWorker } from '../services/dataParser.ts';
+import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 
 interface Props {
@@ -93,7 +93,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         setProgress({ status: 'Initiating upload...', percentage: 0 });
 
         try {
-            const result = await processFileWithWorker(file, (status, percentage) => {
+            const result = await processFile(file, (status, percentage) => {
                 setProgress({ status, percentage });
             });
             
@@ -324,15 +324,18 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                             <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{activeProject.name}</h2>
                             <p className="text-sm text-slate-500">Last saved: {new Date(activeProject.createdAt).toLocaleString()}</p>
                         </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                        <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200">
+                           <TabButton view="dashboard" label="Dashboard" icon={BarChart3} />
+                           <TabButton view="ai-report" label="AI Report" icon={Bot}/>
+                           <TabButton view="data" label="Data View" icon={FileText} />
+                        </div>
                         <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
                             <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
                             {renderSaveButton()}
                         </div>
-                    </div>
-                    <div className="mb-6 p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200">
-                       <TabButton view="dashboard" label="Dashboard" icon={BarChart3} />
-                       <TabButton view="ai-report" label="AI Report" icon={Bot}/>
-                       <TabButton view="data" label="Data View" icon={FileText} />
                     </div>
                     
                     {currentView === 'dashboard' && (

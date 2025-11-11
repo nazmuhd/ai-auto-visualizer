@@ -21,17 +21,45 @@ export const AIReportView: React.FC<Props> = ({ project, onGenerate }) => {
     }
     
     if (status === 'complete' && project.aiReport?.content) {
-        // A simple markdown renderer using regex
+        // A robust markdown-to-HTML renderer that produces valid, well-structured markup.
         const renderMarkdown = (text: string) => {
-            let html = text;
-            // Headers
-            html = html.replace(/### (.*?)\n/g, '<h3 class="text-xl font-bold text-slate-900 mt-6 mb-3">$1</h3>');
-            // Bold text with asterisks
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            // Bullet points
-            html = html.replace(/^\* (.*?)$/gm, '<li class="flex items-start"><span class="inline-block w-1.5 h-1.5 rounded-full bg-primary-400 mt-2.5 mr-3 shrink-0" /><span>$1</span></li>');
-            html = html.replace(/<\/li>\n<li/g, '</li><li'); // Fix spacing
-            return `<ul class="space-y-3">${html}</ul>`.replace(/<\/ul><ul/g, '');
+            const lines = text.split('\n');
+            let html = '';
+            let inList = false;
+
+            const closeList = () => {
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+            };
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                // Match headers (e.g., ### Title)
+                if (trimmedLine.startsWith('### ')) {
+                    closeList();
+                    html += `<h3 class="text-xl font-bold text-slate-900 mt-6 mb-3 pb-2 border-b border-slate-200">${trimmedLine.substring(4)}</h3>`;
+                // Match list items (e.g., * Item)
+                } else if (trimmedLine.startsWith('* ')) {
+                    if (!inList) {
+                        html += '<ul class="space-y-3 mt-4">';
+                        inList = true;
+                    }
+                    // Process bolding (**) within the list item
+                    const listItemContent = trimmedLine.substring(2).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    html += `<li class="flex items-start"><span class="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 mt-2.5 mr-3 shrink-0" /><span>${listItemContent}</span></li>`;
+                // Match paragraphs (any other non-empty line)
+                } else if (trimmedLine) {
+                    closeList();
+                    // Process bolding (**) within the paragraph
+                    const paragraphContent = trimmedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    html += `<p class="text-slate-700 leading-relaxed mt-4">${paragraphContent}</p>`;
+                }
+            }
+
+            closeList(); // Ensure any open list is closed at the end
+            return html;
         };
 
         return (
@@ -41,7 +69,6 @@ export const AIReportView: React.FC<Props> = ({ project, onGenerate }) => {
                     AI-Generated Consultant Report
                  </div>
                  <div 
-                    className="prose prose-slate max-w-none prose-h3:border-b prose-h3:border-slate-200 prose-h3:pb-2" 
                     dangerouslySetInnerHTML={{ __html: renderMarkdown(project.aiReport.content) }} 
                  />
             </div>
