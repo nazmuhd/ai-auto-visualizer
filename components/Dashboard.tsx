@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig, LoadingState, DataQualityReport, SavedDashboard } from '../types';
 import { ChartRenderer } from './charts/ChartRenderer';
-import { Sparkles, Save, Download, DollarSign, Hash, Activity, Check, Menu } from 'lucide-react';
+import { Sparkles, Save, Download, Check, Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { EmbeddedFileUpload } from './EmbeddedFileUpload';
 import { DataScanner } from './DataScanner';

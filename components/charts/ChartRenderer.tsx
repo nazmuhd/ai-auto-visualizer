@@ -461,9 +461,9 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
             {/* Edit Modal */}
             {isEditModalOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-chart-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 pb-0 flex justify-between items-center">
-                             <h3 className="text-xl font-bold text-slate-900">Edit Chart Metadata</h3>
+                             <h3 id="edit-chart-modal-title" className="text-xl font-bold text-slate-900">Edit Chart Metadata</h3>
                              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
                         </div>
                         <form onSubmit={handleSaveEdit} className="p-6 space-y-5">

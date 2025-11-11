@@ -13,14 +13,14 @@ export const DeleteConfirmationModal: React.FC<Props> = ({ isOpen, onClose, onCo
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
         <div className="p-6">
             <div className="flex items-start">
                 <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                     <AlertTriangle className="h-6 w-6 text-red-600" aria-hidden="true" />
                 </div>
                 <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-slate-900">
+                    <h3 id="delete-modal-title" className="text-lg leading-6 font-medium text-slate-900">
                         Delete Dashboard
                     </h3>
                     <div className="mt-2">

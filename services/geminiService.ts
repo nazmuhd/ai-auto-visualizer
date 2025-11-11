@@ -127,12 +127,18 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
                 if (!tmpl) return;
                 if (!availableColumns.includes(rec.mapping.x) || !availableColumns.includes(rec.mapping.y)) return;
 
+                // Gracefully handle if AI hallucinates a non-existent column for color coding
+                const validatedMapping = { ...rec.mapping };
+                if (validatedMapping.color && !availableColumns.includes(validatedMapping.color)) {
+                    validatedMapping.color = undefined;
+                }
+
                 finalCharts.push({
                     id: `chart_${index}_${rec.templateId}`,
                     type: tmpl.type,
                     title: rec.titleOverride || tmpl.defaultTitle,
                     description: rec.insightDescription || tmpl.defaultDescription,
-                    mapping: rec.mapping
+                    mapping: validatedMapping
                 });
             });
         }
