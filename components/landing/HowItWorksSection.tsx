@@ -1,5 +1,5 @@
 import React from 'react';
-import { UploadCloud, BrainCircuit, BarChart3, Paperclip } from 'lucide-react';
+import { UploadCloud, BrainCircuit, BarChart3 } from 'lucide-react';
 
 const StepCard = ({ number, title, children, className }: { number: string, title: string, children: React.ReactNode, className?: string }) => (
     <div className={`bg-white p-6 rounded-2xl shadow-lg border border-slate-100 w-full sm:w-80 ${className}`}>
@@ -23,30 +23,39 @@ export const HowItWorksSection: React.FC = () => {
             </div>
             
             <div className="relative h-[400px] hidden lg:flex items-center justify-center">
+                <style>{`
+                    @keyframes march {
+                        to {
+                            stroke-dashoffset: -44; /* Adjusted for the new dash array pattern */
+                        }
+                    }
+                    .animate-path-dots {
+                        animation: march 2s linear infinite;
+                    }
+                `}</style>
                 {/* SVG Wave and Animation Path */}
-                <svg width="110%" height="100%" viewBox="0 0 1200 120" preserveAspectRatio="none" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                <svg width="120%" height="100%" viewBox="0 -40 1200 200" preserveAspectRatio="xMidYMid slice" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
                     <defs>
-                        <path id="wavy-path" d="M 0 60 C 200 0, 400 120, 600 60 S 1000 0, 1200 60" fill="none" />
+                        {/* The new path starts at the first card, goes through the second, and ends at the third. */}
+                        <path id="wavy-path" d="M 270 -28 Q 435 150, 600 61 T 930 -28" fill="none" />
                     </defs>
                     
-                    {/* The visible dotted line */}
-                    <use href="#wavy-path" strokeDasharray="5, 10" stroke="#cbd5e1" strokeWidth="2" />
-                    
-                    {/* The paper plane icon and its animation */}
-                    <g>
-                        <path d="M22 2L11 13" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M22 2L15 22L11 13L2 9L22 2Z" fill="#38bdf8" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <animateMotion dur="10s" repeatCount="indefinite" rotate="auto">
-                            <mpath href="#wavy-path" />
-                        </animateMotion>
-                    </g>
+                    {/* The animated, rounded-circle line */}
+                    <use 
+                        href="#wavy-path" 
+                        strokeDasharray="0 22" 
+                        stroke="#94a3b8" 
+                        strokeWidth="4" 
+                        strokeLinecap="round" 
+                        className="animate-path-dots"
+                    />
                 </svg>
 
-                {/* Positioned Step Cards for Desktop */}
+                {/* Positioned Step Cards for Desktop, aligned to the wave */}
                 <div className="absolute w-full h-full">
-                    <div className="absolute top-[20%]" style={{left: '5%'}}><StepCard number="1" title="Upload Your Data" className="transform -rotate-6">Securely upload your CSV or Excel file. Your data is processed directly in your browser.</StepCard></div>
-                    <div className="absolute top-[50%]" style={{left: '50%', transform: 'translateX(-50%) translateY(-50%)'}}><StepCard number="2" title="AI-Powered Analysis" className="transform rotate-2">Our AI analyzes your data to identify key metrics and suggest effective visualizations.</StepCard></div>
-                    <div className="absolute top-[20%]" style={{left: 'auto', right: '5%'}}><StepCard number="3" title="Visualize & Interact" className="transform -rotate-3">Receive a fully interactive dashboard. Filter, drill down, and customize charts to uncover stories.</StepCard></div>
+                    <div className="absolute top-[5%]" style={{left: '17%', transform: 'translateX(-50%)'}}><StepCard number="1" title="Upload Your Data" className="transform -rotate-6">Securely upload your CSV or Excel file. Your data is processed directly in your browser.</StepCard></div>
+                    <div className="absolute top-[42%]" style={{left: '50%', transform: 'translateX(-50%) translateY(-50%)'}}><StepCard number="2" title="AI-Powered Analysis" className="transform rotate-2">Our AI analyzes your data to identify key metrics and suggest effective visualizations.</StepCard></div>
+                    <div className="absolute top-[5%]" style={{left: '83%', transform: 'translateX(-50%)'}}><StepCard number="3" title="Visualize & Interact" className="transform -rotate-3">Receive a fully interactive dashboard. Filter, drill down, and customize charts to uncover stories.</StepCard></div>
                 </div>
             </div>
 
