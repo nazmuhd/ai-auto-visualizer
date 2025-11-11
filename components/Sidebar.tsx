@@ -41,37 +41,41 @@ export const Sidebar: React.FC<Props> = ({
 }) => {
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileSectionRef = useRef<HTMLDivElement>(null); // Ref for the entire profile section
 
+  // Simplified and more robust click-outside handlers
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Close context menu if clicked outside
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
         setContextMenuOpen(null);
       }
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      // Close profile menu if clicked outside the entire profile section
+      if (isProfileMenuOpen && profileSectionRef.current && !profileSectionRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isProfileMenuOpen]); // Add dependency to re-evaluate when menu opens/closes
 
   const DashboardLink: React.FC<{ dash: SavedDashboard }> = ({ dash }) => {
     const isActive = dash.id === activeDashboardId;
-    const commonClasses = `flex items-center p-2.5 rounded-lg text-sm font-medium transition-colors group relative w-full ${
+    const commonClasses = `flex items-center p-2.5 rounded-lg text-sm font-medium transition-colors w-full ${
       isOpen ? 'justify-between' : 'justify-center'
     }`;
     const activeClasses = 'bg-primary-100 text-primary-800';
     const inactiveClasses = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900';
 
     return (
-      <li className="relative">
+      <li className="relative group/item">
         <button onClick={() => onSelectDashboard(dash.id)} className={`${commonClasses} ${isActive ? activeClasses : inactiveClasses}`}>
           <div className="flex items-center truncate">
             <Folder
               size={18}
-              className={`${isOpen ? 'mr-3' : ''} flex-shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-500'}`}
+              className={`${isOpen ? 'mr-3' : ''} flex-shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover/item:text-slate-500'}`}
             />
             {isOpen && <span className="transition-opacity duration-200 truncate pr-2">{dash.name}</span>}
              {dash.isUnsaved && isOpen && <span className="text-amber-500 font-bold">*</span>}
@@ -81,14 +85,14 @@ export const Sidebar: React.FC<Props> = ({
         {isOpen && (
             <button 
                 onClick={(e) => { e.stopPropagation(); setContextMenuOpen(contextMenuOpen === dash.id ? null : dash.id); }}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full ${contextMenuOpen === dash.id ? 'bg-slate-200' : ''} text-slate-500 hover:bg-slate-200 hover:text-slate-800 opacity-0 group-hover:opacity-100`}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full ${contextMenuOpen === dash.id ? 'bg-slate-200' : ''} text-slate-500 hover:bg-slate-200 hover:text-slate-800 opacity-0 group-hover/item:opacity-100`}
             >
                 <MoreHorizontal size={16} />
             </button>
         )}
 
         {!isOpen && (
-            <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover:block z-50">
+            <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover/item:block z-50">
                 {dash.name}{dash.isUnsaved ? '*' : ''}
             </span>
         )}
@@ -149,7 +153,7 @@ export const Sidebar: React.FC<Props> = ({
             </div>
         </nav>
         
-        <div className="p-4 mt-auto border-t border-slate-100" ref={profileMenuRef}>
+        <div ref={profileSectionRef} className="p-4 mt-auto border-t border-slate-100 relative">
             {isProfileMenuOpen && (
                 <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-md shadow-lg border border-slate-100 z-20 py-1.5 animate-in fade-in zoom-in-95 duration-100">
                     <button disabled className="w-full cursor-not-allowed text-left px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-100 flex items-center opacity-50"><Settings size={14} className="mr-2"/> Settings</button>
