@@ -1,4 +1,3 @@
-
 import React, { Suspense, useState, useRef, useEffect, useMemo } from 'react';
 import { ChartConfig, DataRow, ChartType } from '../../types';
 import { RechartsBarChart } from './RechartsBarChart';
@@ -185,7 +184,7 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
             headers.join(','),
             ...filteredData.map(row => headers.map(fieldName => JSON.stringify(row[fieldName] ?? '')).join(','))
         ].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -433,14 +432,14 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
                         <form onSubmit={handleSaveEdit} className="p-6 space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Chart Title</label>
-                                <input type="text" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" required />
+                                <input type="text" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" required />
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <label className="block text-sm font-medium text-slate-700">Insight Description</label>
                                     <Info size={14} className="text-slate-400" />
                                 </div>
-                                <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none h-32" required />
+                                <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none h-32" required />
                             </div>
                             <div className="flex justify-end space-x-3 pt-4">
                                 <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-medium">Cancel</button>

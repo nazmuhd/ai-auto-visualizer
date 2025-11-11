@@ -49,3 +49,11 @@ export interface DataQualityReport {
     columnCount: number;
     isClean: boolean;
 }
+
+export interface SavedDashboard {
+    id: string;
+    name: string;
+    data: DataRow[];
+    analysis: AnalysisResult;
+    createdAt: Date;
+}
