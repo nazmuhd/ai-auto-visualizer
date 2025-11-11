@@ -1,8 +1,8 @@
 
 import React, { useMemo } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { DataRow, ChartMapping } from '../../types';
-import { ViewOptions } from './ChartRenderer';
+import { DataRow, ChartMapping } from '../../types.ts';
+import { ViewOptions } from './ChartRenderer.tsx';
 
 interface Props {
     data: DataRow[];

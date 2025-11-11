@@ -1,3 +1,4 @@
+
 import React, { useCallback, useState } from 'react';
 import { UploadCloud, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -5,21 +6,22 @@ interface Props {
     onFileSelect: (file: File) => void;
     isLoading: boolean;
     error: string | null;
+    progress: { status: string, percentage: number } | null;
 }
 
-export const EmbeddedFileUpload: React.FC<Props> = ({ onFileSelect, isLoading, error }) => {
+export const EmbeddedFileUpload: React.FC<Props> = ({ onFileSelect, isLoading, error, progress }) => {
     const [isDragging, setIsDragging] = useState(false);
 
     const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
     const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
 
     const validateAndPass = (file: File) => {
-        const validExtensions = ['.csv', '.xls', '.xlsx', '.pdf'];
+        const validExtensions = ['.csv', '.xls', '.xlsx'];
         const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
         if (validExtensions.includes(ext)) {
             onFileSelect(file);
         } else {
-             alert("Please upload a valid CSV, Excel, or PDF file.");
+             alert("Please upload a valid CSV or Excel file.");
         }
     };
 
@@ -47,10 +49,13 @@ export const EmbeddedFileUpload: React.FC<Props> = ({ onFileSelect, isLoading, e
                 `}
             >
                 {isLoading ? (
-                     <div className="flex flex-col items-center">
+                     <div className="flex flex-col items-center w-full">
                         <Loader2 className="h-12 w-12 text-primary-500 animate-spin mb-4" />
-                        <p className="text-lg font-semibold text-slate-700">Analyzing your data...</p>
-                        <p className="text-sm text-slate-500 mt-1">This can take a moment.</p>
+                        <p className="text-lg font-semibold text-slate-700">{progress?.status || 'Processing...'}</p>
+                        <p className="text-sm text-slate-500 mt-1">This can take a moment for large files.</p>
+                         <div className="w-full bg-slate-200 rounded-full h-2.5 mt-4">
+                            <div className="bg-primary-600 h-2.5 rounded-full" style={{ width: `${progress?.percentage || 0}%`, transition: 'width 0.5s ease-in-out' }}></div>
+                        </div>
                     </div>
                 ) : (
                     <>
@@ -69,7 +74,7 @@ export const EmbeddedFileUpload: React.FC<Props> = ({ onFileSelect, isLoading, e
                                 type="file" 
                                 className="sr-only" 
                                 onChange={handleFileInput} 
-                                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, .xlsx, .xls, .pdf"
+                                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, .xlsx, .xls"
                             />
                         </label>
                     </>

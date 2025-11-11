@@ -14,7 +14,8 @@
     "react-dom": "^19.2.0",
     "@google/genai": "^1.29.0",
     "recharts": "^2.15.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "luc": "^0.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

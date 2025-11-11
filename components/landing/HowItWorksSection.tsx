@@ -1,7 +1,16 @@
+
 import React from 'react';
 import { UploadCloud, BrainCircuit, BarChart3 } from 'lucide-react';
 
-const StepCard = ({ number, title, children, className }: { number: string, title: string, children: React.ReactNode, className?: string }) => (
+// FIX: Changed component definition to use React.FC and an interface for props to improve type safety and resolve inference issues with the `children` prop.
+interface StepCardProps {
+    number: string;
+    title: string;
+    children: React.ReactNode;
+    className?: string;
+}
+
+const StepCard: React.FC<StepCardProps> = ({ number, title, children, className }) => (
     <div className={`bg-white p-6 rounded-2xl shadow-lg border border-slate-100 w-full sm:w-80 ${className}`}>
         <div className="flex items-center mb-3">
             <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-primary-100 text-primary-600 font-bold text-lg border-4 border-white ring-2 ring-primary-100">

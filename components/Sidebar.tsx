@@ -13,7 +13,7 @@ import {
   Settings,
   X
 } from 'lucide-react';
-import { SavedDashboard } from '../types';
+import { SavedDashboard } from '../types.ts';
 
 interface Props {
   isOpen: boolean;

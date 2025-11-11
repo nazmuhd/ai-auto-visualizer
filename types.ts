@@ -1,8 +1,7 @@
 
-
 export type DataRow = Record<string, any>;
 
-export type LoadingState = 'idle' | 'parsing' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
+export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
 
 export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter';
 
@@ -59,3 +58,5 @@ export interface SavedDashboard {
     createdAt: Date;
     isUnsaved?: boolean;
 }
+
+export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';

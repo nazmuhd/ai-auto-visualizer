@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DataRow } from '../types';
+import { DataRow } from '../types.ts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Props {

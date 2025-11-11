@@ -1,7 +1,17 @@
+
 import React from 'react';
 import { Target, BarChart, Settings } from 'lucide-react';
 
-const SolutionCard = ({ icon: Icon, title, children, color, illustration }: { icon: React.ElementType, title: string, children: React.ReactNode, color: string, illustration: React.ReactNode }) => (
+// FIX: Changed component definition to use React.FC and an interface for props to improve type safety and resolve inference issues with the `children` prop.
+interface SolutionCardProps {
+    icon: React.ElementType;
+    title: string;
+    children: React.ReactNode;
+    color: string;
+    illustration: React.ReactNode;
+}
+
+const SolutionCard: React.FC<SolutionCardProps> = ({ icon: Icon, title, children, color, illustration }) => (
   <div className={`relative p-8 rounded-2xl border overflow-hidden transition-transform transform hover:-translate-y-2 hover:shadow-2xl ${color}`}>
     <div className="absolute -bottom-8 -right-8 opacity-15">{illustration}</div>
     <div className="relative z-10">

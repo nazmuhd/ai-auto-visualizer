@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DataRow, DataQualityReport } from '../types';
+import { DataRow, DataQualityReport } from '../types.ts';
 import { Table, Play, ArrowLeft, CheckCircle2, AlertTriangle, Info, ChevronLeft, ChevronRight, RefreshCcw } from 'lucide-react';
 
 interface Props {

@@ -1,7 +1,7 @@
 
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, DataRow, ChartConfig, ChartType, AggregationType, KpiConfig } from '../types';
+import { AnalysisResult, DataRow, ChartConfig, ChartType, AggregationType, KpiConfig } from '../types.ts';
 
 // Initialize the Gemini API client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

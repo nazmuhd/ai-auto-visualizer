@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sparkles, Linkedin, Twitter, ArrowRight } from 'lucide-react';
-import { Page } from '../App';
+import { Page } from '../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;

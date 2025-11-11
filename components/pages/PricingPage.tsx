@@ -1,7 +1,7 @@
 import React from 'react';
-import { Header } from '../landing/Header';
-import { Footer } from '../Footer';
-import { Page } from '../../App';
+import { Header } from '../landing/Header.tsx';
+import { Footer } from '../Footer.tsx';
+import { Page } from '../../types.ts';
 import { Check, Zap, ShieldCheck, Share2, BarChart3, Users } from 'lucide-react';
 
 interface Props {

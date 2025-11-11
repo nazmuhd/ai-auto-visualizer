@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Menu, X } from 'lucide-react';
-import { Page } from '../../App';
+import { Page } from '../../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;

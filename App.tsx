@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { LandingPage } from './components/LandingPage';
-import { LoginPage } from './components/pages/LoginPage';
-import { SignupPage } from './components/pages/SignupPage';
-import { AboutPage } from './components/pages/AboutPage';
-import { PricingPage } from './components/pages/PricingPage';
-import { Dashboard } from './components/Dashboard';
-import { ContactModal } from './components/modals/ContactModal';
-
-export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';
+import { LandingPage } from './components/LandingPage.tsx';
+import { LoginPage } from './components/pages/LoginPage.tsx';
+import { SignupPage } from './components/pages/SignupPage.tsx';
+import { AboutPage } from './components/pages/AboutPage.tsx';
+import { PricingPage } from './components/pages/PricingPage.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { ContactModal } from './components/modals/ContactModal.tsx';
+import { Page } from './types.ts';
 
 function App() {
   const [page, setPage] = useState<Page>('landing');

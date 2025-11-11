@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, Mail, Key, User } from 'lucide-react';
-import { Page } from '../../App';
+import { Page } from '../../types.ts';
 
 interface Props {
   onSignup: (email: string) => void;

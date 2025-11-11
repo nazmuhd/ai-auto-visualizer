@@ -10,7 +10,8 @@ const comparisonData = [
     { feature: "Sharing & Collaboration", icon: Share2, us: true, them: false, us_text: "Built-in", them_text: "Manual Export" },
 ];
 
-const ComparisonRowDesktop = ({ feature, icon: Icon, us, them }: { feature: string, icon: React.ElementType, us: boolean, them: boolean }) => (
+// FIX: Changed component definition to use React.FC for better type safety with special props like 'key'.
+const ComparisonRowDesktop: React.FC<{ feature: string; icon: React.ElementType; us: boolean; them: boolean }> = ({ feature, icon: Icon, us, them }) => (
     <div className="grid grid-cols-3 gap-4 items-center py-4 border-b border-slate-100 last:border-b-0">
         <div className="flex items-center">
             <Icon size={18} className="mr-3 text-primary-600 flex-shrink-0" />
@@ -43,7 +44,7 @@ export const ComparisonSection: React.FC = () => {
                             <div className="font-semibold text-slate-800 text-center">The Old Way</div>
                         </div>
                         <div>
-                           {comparisonData.map(item => <ComparisonRowDesktop key={item.feature} {...item} />)}
+                           {comparisonData.map((item) => <ComparisonRowDesktop key={item.feature} feature={item.feature} icon={item.icon} us={item.us} them={item.them} />)}
                         </div>
                     </div>
                     {/* Mobile Card View */}

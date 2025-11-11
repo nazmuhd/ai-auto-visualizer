@@ -1,13 +1,13 @@
 import React from 'react';
-import { Header } from './landing/Header';
-import { HeroSection } from './landing/HeroSection';
-import { HowItWorksSection } from './landing/HowItWorksSection';
-import { SolutionsSection } from './landing/SolutionsSection';
-import { ComparisonSection } from './landing/ComparisonSection';
-import { TestimonialsSection } from './landing/TestimonialsSection';
-import { FAQSection } from './landing/FAQSection';
-import { Footer } from './Footer';
-import { Page } from '../App';
+import { Header } from './landing/Header.tsx';
+import { HeroSection } from './landing/HeroSection.tsx';
+import { HowItWorksSection } from './landing/HowItWorksSection.tsx';
+import { SolutionsSection } from './landing/SolutionsSection.tsx';
+import { ComparisonSection } from './landing/ComparisonSection.tsx';
+import { TestimonialsSection } from './landing/TestimonialsSection.tsx';
+import { FAQSection } from './landing/FAQSection.tsx';
+import { Footer } from './Footer.tsx';
+import { Page } from '../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page } from '../../App';
+import { Page } from '../../types.ts';
 import { ArrowRight, Video } from 'lucide-react';
 
 const companies = [
