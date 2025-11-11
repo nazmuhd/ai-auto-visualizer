@@ -1,47 +1,68 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Dashboard } from './components/Dashboard';
-import { parseFile, sampleData, validateData } from './services/dataParser';
-import { analyzeData } from './services/geminiService';
-import { AnalysisResult, DataRow, LoadingState, DataQualityReport, ChartConfig, SavedDashboard } from './types';
+import React, { useState } from 'react';
 import { LandingPage } from './components/LandingPage';
-import { LoginModal } from './components/LoginModal';
+import { LoginPage } from './components/pages/LoginPage';
+import { SignupPage } from './components/pages/SignupPage';
+import { AboutPage } from './components/pages/AboutPage';
+import { PricingPage } from './components/pages/PricingPage';
+import { Dashboard } from './components/Dashboard';
+import { ContactModal } from './components/modals/ContactModal';
 
-const App: React.FC = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [showLoginModal, setShowLoginModal] = useState(false);
-    const [userEmail, setUserEmail] = useState<string | null>(null);
+export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';
 
-    const handleLogin = (email: string) => {
-        setUserEmail(email);
-        setIsAuthenticated(true);
-        setShowLoginModal(false);
-    };
+function App() {
+  const [page, setPage] = useState<Page>('landing');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
-    const handleLogout = () => {
-        setIsAuthenticated(false);
-        setUserEmail(null);
-        // Any other cleanup can go here
-    };
+  const handleLogin = (email: string) => {
+    setUserEmail(email);
+    setPage('dashboard');
+  };
 
-    if (!isAuthenticated) {
-        return (
-            <>
-                <LandingPage onLogin={() => setShowLoginModal(true)} />
-                {showLoginModal && (
-                    <LoginModal 
-                        onClose={() => setShowLoginModal(false)}
-                        onLogin={handleLogin}
-                    />
-                )}
-            </>
-        );
+  const handleSignup = (email: string) => {
+    setUserEmail(email);
+    setPage('dashboard');
+  };
+
+  const handleLogout = () => {
+    setUserEmail(null);
+    setPage('landing');
+  };
+
+  const handleNavigate = (newPage: Page) => {
+    window.scrollTo(0, 0); // Scroll to top on page change
+    setPage(newPage);
+  };
+
+  const renderPage = () => {
+    const commonProps = { onNavigate: handleNavigate, onContactClick: () => setIsContactModalOpen(true) };
+    switch (page) {
+      case 'login':
+        return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
+      case 'signup':
+        return <SignupPage onSignup={handleSignup} onNavigate={handleNavigate} />;
+      case 'about':
+        return <AboutPage {...commonProps} />;
+      case 'pricing':
+        return <PricingPage {...commonProps} />;
+      case 'dashboard':
+        if (userEmail) {
+          return <Dashboard userEmail={userEmail} onLogout={handleLogout} />;
+        }
+        setPage('login');
+        return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
+      case 'landing':
+      default:
+        return <LandingPage {...commonProps} />;
     }
-    
-    return (
-        <div className="h-screen bg-slate-50 text-slate-900">
-            <Dashboard userEmail={userEmail!} onLogout={handleLogout} />
-        </div>
-    );
-};
+  };
+
+  return (
+    <>
+      {renderPage()}
+      <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
+    </>
+  );
+}
 
 export default App;

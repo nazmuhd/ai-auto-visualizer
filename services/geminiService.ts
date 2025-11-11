@@ -1,5 +1,6 @@
 
-import { GoogleGenAI, Schema, Type } from "@google/genai";
+
+import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, DataRow, ChartConfig, ChartType, AggregationType, KpiConfig } from '../types';
 
 // Initialize the Gemini API client
@@ -15,7 +16,8 @@ const CHART_TEMPLATES: Record<string, any> = {
 };
 
 // --- 2. Optimized Schema for Template Matching ---
-const analysisSchema: Schema = {
+// FIX: The `Schema` type is not exported from @google/genai. Let TypeScript infer the type.
+const analysisSchema = {
     type: Type.OBJECT,
     properties: {
         summary: {
