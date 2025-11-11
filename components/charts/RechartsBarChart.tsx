@@ -14,6 +14,11 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }
     const processedData = useMemo(() => {
         if (!data || data.length === 0) return [];
 
+        // If no aggregation is specified, assume data is pre-aggregated and just sort it.
+        if (mapping.aggregation === 'none') {
+            return [...data].sort((a, b) => Number(b[mapping.y]) - Number(a[mapping.y]));
+        }
+
         // 1. Aggregate by X category
         const map = new Map<string, { sum: number, count: number, values: number[] }>();
         
@@ -46,7 +51,7 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }
         <ResponsiveContainer width="100%" height="100%">
             <BarChart
                 data={processedData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
             >
                 {viewOptions.showGrid && (
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -56,8 +61,10 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={{ stroke: '#cbd5e1' }}
                     tickLine={false}
-                    interval="preserveStartEnd"
-                    minTickGap={15}
+                    interval={0}
+                    angle={-30}
+                    textAnchor="end"
+                    height={60}
                     tickFormatter={(val) => {
                         const str = String(val);
                         return str.length > 14 ? str.substring(0, 12) + '...' : str;
@@ -94,6 +101,7 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }
                         />
                     )}
                 </Bar>
+                {/* Responsive Brush: Hidden on small screens */}
                 <Brush 
                     dataKey={mapping.x}
                     height={25}
@@ -101,6 +109,7 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }
                     fill="#f8fafc"
                     tickFormatter={() => ''}
                     travellerWidth={10}
+                    className="hidden md:block"
                 />
             </BarChart>
         </ResponsiveContainer>

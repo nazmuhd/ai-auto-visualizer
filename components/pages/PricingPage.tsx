@@ -10,22 +10,24 @@ interface Props {
 }
 
 const PricingCard = ({ plan, price, description, features, isPopular }: { plan: string, price: string, description: string, features: string[], isPopular?: boolean }) => (
-    <div className={`relative p-8 border rounded-2xl bg-white shadow-lg ${isPopular ? 'border-primary-500' : 'border-slate-200'}`}>
+    <div className={`relative p-8 border rounded-2xl bg-white shadow-lg h-full flex flex-col ${isPopular ? 'border-primary-500' : 'border-slate-200'}`}>
         {isPopular && <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary-600 text-white text-sm font-semibold rounded-full">Most Popular</div>}
-        <h3 className="text-2xl font-bold text-slate-900">{plan}</h3>
-        <p className="mt-2 text-slate-500">{description}</p>
-        <div className="mt-6">
-            <span className="text-4xl font-extrabold text-slate-900">{price}</span>
-            {plan !== 'Free' && <span className="text-slate-500"> / month</span>}
+        <div className="flex-grow">
+            <h3 className="text-2xl font-bold text-slate-900">{plan}</h3>
+            <p className="mt-2 text-slate-500">{description}</p>
+            <div className="mt-6">
+                <span className="text-4xl font-extrabold text-slate-900">{price}</span>
+                {plan !== 'Free' && <span className="text-slate-500"> / month</span>}
+            </div>
+            <ul className="mt-8 space-y-3 text-slate-600">
+                {features.map((feature, i) => (
+                    <li key={i} className="flex items-center"><Check size={16} className="text-green-500 mr-2 flex-shrink-0" /> {feature}</li>
+                ))}
+            </ul>
         </div>
-        <button className={`w-full py-3 mt-6 text-sm font-semibold rounded-lg transition-colors ${isPopular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+        <button className={`w-full py-3 mt-8 text-sm font-semibold rounded-lg transition-colors ${isPopular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
             {plan === 'Enterprise' ? 'Contact Sales' : 'Get Started'}
         </button>
-        <ul className="mt-8 space-y-3 text-slate-600">
-            {features.map((feature, i) => (
-                <li key={i} className="flex items-center"><Check size={16} className="text-green-500 mr-2 flex-shrink-0" /> {feature}</li>
-            ))}
-        </ul>
     </div>
 );
 
@@ -42,7 +44,8 @@ export const PricingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => 
                     <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight">Simple, Transparent Pricing</h1>
                     <p className="mt-4 text-lg text-slate-600">Choose the plan that's right for you.</p>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                {/* Responsive Grid for Pricing Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto items-start">
                     <PricingCard 
                         plan="Free"
                         price="$0"
@@ -56,12 +59,17 @@ export const PricingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => 
                         features={['Unlimited Dashboards', 'Priority Support', 'Advanced Export Options', 'Remove Branding']}
                         isPopular={true}
                     />
-                     <PricingCard 
-                        plan="Enterprise"
-                        price="Custom"
-                        description="For large organizations with custom needs."
-                        features={['On-premise Deployment', 'Dedicated Support', 'Custom Integrations', 'Team Management']}
-                    />
+                    {/* Wrapper to center the Enterprise card on tablet view */}
+                    <div className="md:col-span-2 lg:col-span-1 md:flex md:justify-center">
+                        <div className="w-full md:max-w-md lg:max-w-full">
+                            <PricingCard 
+                                plan="Enterprise"
+                                price="Custom"
+                                description="For large organizations with custom needs."
+                                features={['On-premise Deployment', 'Dedicated Support', 'Custom Integrations', 'Team Management']}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

@@ -11,13 +11,13 @@ const companies = [
 
 export const HeroSection: React.FC<{ onNavigate: (page: Page) => void; }> = ({ onNavigate }) => {
   return (
-    <section className="relative bg-white h-screen flex flex-col justify-center text-center overflow-hidden">
+    <section className="relative bg-white min-h-screen flex flex-col justify-center text-center overflow-hidden">
         {/* Animated background pattern - FIX: Removed mask-image to cover full viewport */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:6rem_4rem]"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-transparent"></div>
 
       {/* FIX: Changed to a flex-col layout to center content properly */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center py-20 sm:py-0">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight">
             Turn Your Data Into <span className="text-primary-600">Interactive Dashboards</span> in Seconds
@@ -25,15 +25,15 @@ export const HeroSection: React.FC<{ onNavigate: (page: Page) => void; }> = ({ o
             <p className="mt-6 max-w-2xl mx-auto text-lg text-slate-600">
             Stop wrestling with spreadsheets. Upload your data and let our AI automatically generate beautiful, insightful visualizations for you.
             </p>
-            <div className="mt-8 flex justify-center items-center space-x-4">
+            <div className="mt-8 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <button
                 onClick={() => onNavigate('signup')}
-                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium shadow-lg transition-transform transform hover:scale-105 flex items-center"
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center"
             >
                 Start Analyzing for Free <ArrowRight size={16} className="ml-2" />
             </button>
             <button
-                className="px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl font-medium shadow-sm transition-transform transform hover:scale-105 flex items-center"
+                className="px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl font-medium shadow-sm transition-transform transform hover:scale-105 flex items-center justify-center"
             >
                 <Video size={16} className="mr-2" /> Watch a Demo
             </button>

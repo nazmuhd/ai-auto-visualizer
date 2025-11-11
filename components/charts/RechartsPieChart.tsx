@@ -52,13 +52,11 @@ export const RechartsPieChart: React.FC<Props> = ({ data, mapping, viewOptions }
                     data={processedData}
                     cx="50%"
                     cy="50%"
-                    // Reduced outerRadius to make room for outer leader lines and labels
-                    outerRadius={80} 
-                    innerRadius={45} // Slightly smaller inner radius for better proportions
+                    outerRadius="80%"
+                    innerRadius="45%"
                     paddingAngle={2}
                     dataKey="value"
                     nameKey="name"
-                    // Use standard outer labels with leader lines - accepted best practice for readability
                     label={viewOptions.showLabels ? ({ name, percent }) => formatLabel(name, percent) : false}
                     labelLine={viewOptions.showLabels ? { stroke: '#cbd5e1', strokeWidth: 1 } : false}
                     className="text-xs font-medium fill-slate-600"

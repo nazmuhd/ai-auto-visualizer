@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig, LoadingState, DataQualityReport, SavedDashboard } from '../types';
 import { ChartRenderer } from './charts/ChartRenderer';
-import { Sparkles, Save, Download, DollarSign, Hash, Activity, Check } from 'lucide-react';
+import { Sparkles, Save, Download, DollarSign, Hash, Activity, Check, Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { EmbeddedFileUpload } from './EmbeddedFileUpload';
 import { DataScanner } from './DataScanner';
@@ -17,6 +17,28 @@ interface Props {
     userEmail: string;
     onLogout: () => void;
 }
+
+const useResponsiveSidebar = () => {
+    const getInitialState = () => window.innerWidth >= 1024;
+    const [isSidebarOpen, setIsSidebarOpen] = useState(getInitialState);
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 768) {
+                setIsSidebarOpen(false); // Always closed on mobile unless manually opened
+            } else if (window.innerWidth < 1024) {
+                setIsSidebarOpen(false); // Default to collapsed on tablet
+            } else {
+                setIsSidebarOpen(true); // Default to open on desktop
+            }
+        };
+        handleResize(); // Set initial state
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    return [isSidebarOpen, setIsSidebarOpen] as const;
+};
 
 export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     // Core data state for the current, active analysis/dashboard
@@ -34,7 +56,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
 
     // UI state for modals and views
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useResponsiveSidebar();
     const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -133,6 +155,10 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             setCurrentFileName(dashboard.name);
             setStatus('complete');
             setCurrentView('dashboard');
+            // On mobile, close sidebar after selection
+            if (window.innerWidth < 768) {
+                setIsSidebarOpen(false);
+            }
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
@@ -235,8 +261,8 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             return (
                 <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                        <h2 className="text-2xl font-bold text-slate-900">{currentFileName}</h2>
-                        <div className="flex items-center space-x-2">
+                         <h2 className="hidden md:block text-2xl font-bold text-slate-900 line-clamp-1">{currentFileName}</h2>
+                        <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
                             <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
                             {renderSaveButton()}
                         </div>
@@ -254,10 +280,10 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                             </section>
                         )}
                         {kpiValues.length > 0 && (
-                            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">{kpiValues.map((kpi, i) => <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><div><p className="text-sm font-medium text-slate-500 mb-1">{kpi.title}</p><p className="text-3xl font-bold text-slate-900">{kpi.displayValue}</p></div></div>)}</section>
+                            <section className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">{kpiValues.map((kpi, i) => <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><div><p className="text-sm font-medium text-slate-500 mb-1">{kpi.title}</p><p className="text-3xl font-bold text-slate-900">{kpi.displayValue}</p></div></div>)}</section>
                         )}
                         <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
-                            {currentAnalysis.charts.map((chart) => <div key={chart.id} className="h-[450px]"><ChartRenderer config={chart} data={currentData} dateColumn={dateColumn} onUpdate={handleChartUpdate} /></div>)}
+                            {currentAnalysis.charts.map((chart) => <div key={chart.id} className="h-[300px] sm:h-[350px] md:h-[400px] lg:h-[450px]"><ChartRenderer config={chart} data={currentData} dateColumn={dateColumn} onUpdate={handleChartUpdate} /></div>)}
                         </section>
                     </>
                     ) : ( <div className="h-[calc(100vh-280px)]"><DataTable data={currentData} /></div> )}
@@ -270,7 +296,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     };
 
     return (
-        <div className="flex h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50 relative">
             <Sidebar 
                 isOpen={isSidebarOpen} 
                 setIsOpen={setIsSidebarOpen}
@@ -283,9 +309,24 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                 userEmail={userEmail}
                 onLogout={onLogout}
             />
-            <main ref={mainContentRef} className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
-                {renderMainContent()}
-            </main>
+            <div className={`flex-1 transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
+                {/* --- STICKY MOBILE HEADER --- */}
+                <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200">
+                    <div className="h-16 flex items-center justify-between px-4">
+                        <div className="flex items-center min-w-0">
+                            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600">
+                                <Menu size={24} />
+                            </button>
+                            <h2 className="text-lg font-bold text-slate-900 truncate" title={currentFileName || 'New Analysis'}>
+                                {status === 'complete' && currentFileName ? currentFileName : 'New Analysis'}
+                            </h2>
+                        </div>
+                    </div>
+                </header>
+                <main ref={mainContentRef} className="h-full overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
+                    {renderMainContent()}
+                </main>
+            </div>
             
             <SaveDashboardModal 
                 isOpen={isSaveModalOpen}

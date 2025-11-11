@@ -41,7 +41,7 @@ const analysisSchema = {
         },
         recommendedCharts: {
             type: Type.ARRAY,
-            description: "Exactly 4 chart configurations matching data to templates.",
+            description: "Up to 6 diverse chart configurations matching data to templates. Prioritize quality over quantity.",
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -94,7 +94,7 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
     REQUIREMENTS:
     1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
     2. KPIs: Identify exactly 3 Key Performance Indicators (KPIs) that are most important for this dataset. Define HOW to calculate them (e.g., SUM of 'Revenue', AVERAGE of 'CSAT', COUNT_DISTINCT of 'OrderID').
-    3. CHARTS: Map the data to exactly 4 diverse chart templates that reveal different aspects of the data.
+    3. CHARTS: Map the data to a diverse set of up to 6 chart templates that reveal different aspects of the data. Choose the most insightful charts; do not add charts just to reach the maximum.
 
     AVAILABLE CHART TEMPLATES:
     - tmpl_bar_comparison (Good for: Ranking)

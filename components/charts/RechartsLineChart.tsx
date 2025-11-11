@@ -67,14 +67,6 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
              return String(a[mapping.x]).localeCompare(String(b[mapping.x]));
         });
 
-        if (isTemporal) {
-            results = results.map(r => ({
-                ...r,
-                [mapping.x]: r[mapping.x], 
-                _displayX: new Date(r[mapping.x]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
-            }));
-        }
-
         // 3. Downsample for rendering performance if dataset is large
         const finalData = downsample(results, 500);
 
@@ -155,6 +147,7 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                         )}
                     </DataComponent>
                 ))}
+                {/* Responsive Brush: Hidden on small screens */}
                 <Brush 
                     dataKey={mapping.x}
                     height={25}
@@ -162,6 +155,7 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                     fill="#f8fafc"
                     tickFormatter={() => ''}
                     travellerWidth={10}
+                    className="hidden md:block"
                 />
             </ChartComponent>
         </ResponsiveContainer>

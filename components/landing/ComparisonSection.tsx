@@ -1,7 +1,16 @@
 import React from 'react';
 import { Check, X, Clock, Zap, UserCheck, ShieldCheck, Share2, Users } from 'lucide-react';
 
-const ComparisonRow = ({ feature, icon: Icon, us, them }: { feature: string, icon: React.ElementType, us: boolean, them: boolean }) => (
+const comparisonData = [
+    { feature: "Time to Insight", icon: Clock, us: true, them: false, us_text: "Minutes", them_text: "Hours or Days" },
+    { feature: "Instant AI Analysis", icon: Zap, us: true, them: false, us_text: "Automated", them_text: "Manual" },
+    { feature: "Technical Expertise Required", icon: UserCheck, us: false, them: true, us_text: "None", them_text: "High" },
+    { feature: "Data Accessibility", icon: Users, us: true, them: false, us_text: "For Everyone", them_text: "For Analysts" },
+    { feature: "In-Browser Data Security", icon: ShieldCheck, us: true, them: false, us_text: "By Default", them_text: "N/A" },
+    { feature: "Sharing & Collaboration", icon: Share2, us: true, them: false, us_text: "Built-in", them_text: "Manual Export" },
+];
+
+const ComparisonRowDesktop = ({ feature, icon: Icon, us, them }: { feature: string, icon: React.ElementType, us: boolean, them: boolean }) => (
     <div className="grid grid-cols-3 gap-4 items-center py-4 border-b border-slate-100 last:border-b-0">
         <div className="flex items-center">
             <Icon size={18} className="mr-3 text-primary-600 flex-shrink-0" />
@@ -16,6 +25,7 @@ const ComparisonRow = ({ feature, icon: Icon, us, them }: { feature: string, ico
     </div>
 );
 
+
 export const ComparisonSection: React.FC = () => {
     return (
         <section id="comparison" className="py-20 bg-slate-50">
@@ -25,18 +35,37 @@ export const ComparisonSection: React.FC = () => {
                     <p className="text-lg text-slate-600 mt-2">See how AI Insights stacks up against traditional methods.</p>
                 </div>
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6">
-                    <div className="grid grid-cols-3 gap-4 pb-4 border-b-2 border-slate-200">
-                        <div className="font-semibold text-slate-800">Feature</div>
-                        <div className="font-semibold text-slate-800 text-center">AI Insights</div>
-                        <div className="font-semibold text-slate-800 text-center">The Old Way</div>
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block">
+                        <div className="grid grid-cols-3 gap-4 pb-4 border-b-2 border-slate-200">
+                            <div className="font-semibold text-slate-800">Feature</div>
+                            <div className="font-semibold text-slate-800 text-center">AI Insights</div>
+                            <div className="font-semibold text-slate-800 text-center">The Old Way</div>
+                        </div>
+                        <div>
+                           {comparisonData.map(item => <ComparisonRowDesktop key={item.feature} {...item} />)}
+                        </div>
                     </div>
-                    <div>
-                        <ComparisonRow feature="Time to Insight" icon={Clock} us={true} them={false} />
-                        <ComparisonRow feature="Instant AI Analysis" icon={Zap} us={true} them={false} />
-                        <ComparisonRow feature="Technical Expertise Required" icon={UserCheck} us={false} them={true} />
-                        <ComparisonRow feature="Data Accessibility" icon={Users} us={true} them={false} />
-                        <ComparisonRow feature="In-Browser Data Security" icon={ShieldCheck} us={true} them={false} />
-                        <ComparisonRow feature="Sharing & Collaboration" icon={Share2} us={true} them={false} />
+                    {/* Mobile Card View */}
+                    <div className="sm:hidden space-y-4">
+                        {comparisonData.map(({ feature, icon: Icon, us, them, us_text, them_text }) => (
+                            <div key={feature} className="p-4 rounded-lg border border-slate-200">
+                                <div className="flex items-center mb-4 font-semibold text-slate-800">
+                                    <Icon size={18} className="mr-3 text-primary-600" />
+                                    {feature}
+                                </div>
+                                <div className="space-y-3 text-sm">
+                                    <div className="flex items-center justify-between p-3 rounded bg-green-50/50">
+                                        <span className="font-medium text-green-800">AI Insights:</span>
+                                        <span className="font-bold text-green-700">{us_text}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 rounded bg-red-50/50">
+                                        <span className="font-medium text-red-800">The Old Way:</span>
+                                        <span className="font-bold text-red-700">{them_text}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
