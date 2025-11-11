@@ -1,4 +1,5 @@
 
+
 export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
@@ -50,13 +51,22 @@ export interface DataQualityReport {
     isClean: boolean;
 }
 
-export interface SavedDashboard {
+export interface Project {
     id: string;
     name: string;
-    data: DataRow[];
-    analysis: AnalysisResult;
+    description: string;
     createdAt: Date;
     isUnsaved?: boolean;
+    dataSource: {
+        name: string;
+        data: DataRow[];
+    };
+    analysis: AnalysisResult | null;
+    aiReport: {
+        content: string;
+        status: 'idle' | 'generating' | 'complete';
+    } | null;
 }
+
 
 export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';

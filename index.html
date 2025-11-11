@@ -49,6 +49,31 @@
             background: #94a3b8;
         }
 
+        /* Active project indicator in sidebar */
+        .project-link.is-active::before {
+            content: '';
+            position: absolute;
+            left: -16px; /* Position outside the padding */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 24px;
+            background-color: #0c4a6e; /* primary-900 */
+            border-radius: 2px;
+        }
+        
+        /* Hide the bar indicator when sidebar is collapsed, as the border serves as the indicator */
+        aside.w-20 .project-link.is-active::before {
+            display: none;
+        }
+        
+        @media (max-width: 767px) {
+            .project-link.is-active::before {
+                left: 0;
+            }
+        }
+
+
         @media print {
             .no-print {
                 display: none !important;

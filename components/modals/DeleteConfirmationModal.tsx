@@ -5,10 +5,10 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  dashboardName: string;
+  projectName: string;
 }
 
-export const DeleteConfirmationModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, dashboardName }) => {
+export const DeleteConfirmationModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, projectName }) => {
   if (!isOpen) return null;
 
   return (
@@ -21,11 +21,11 @@ export const DeleteConfirmationModal: React.FC<Props> = ({ isOpen, onClose, onCo
                 </div>
                 <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <h3 id="delete-modal-title" className="text-lg leading-6 font-medium text-slate-900">
-                        Delete Dashboard
+                        Delete Project
                     </h3>
                     <div className="mt-2">
                         <p className="text-sm text-slate-500">
-                            Are you sure you want to delete "<strong>{dashboardName}</strong>"? This action cannot be undone.
+                            Are you sure you want to delete "<strong>{projectName}</strong>"? This action cannot be undone.
                         </p>
                     </div>
                 </div>

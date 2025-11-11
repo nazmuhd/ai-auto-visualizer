@@ -1,40 +1,134 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  LayoutDashboard,
   Sparkles,
   FilePlus,
   ChevronLeft,
   User,
   Folder,
-  MoreHorizontal,
   Edit,
   Trash2,
   LogOut,
   Settings,
-  X
+  X,
+  MoreVertical
 } from 'lucide-react';
-import { SavedDashboard } from '../types.ts';
+import { Project } from '../types.ts';
 
 interface Props {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  onNewAnalysis: () => void;
-  savedDashboards: SavedDashboard[];
-  activeDashboardId: string | null;
-  onSelectDashboard: (id: string) => void;
-  onRename: (dashboard: SavedDashboard) => void;
-  onDelete: (dashboard: SavedDashboard) => void;
+  onNewProject: () => void;
+  savedProjects: Project[];
+  activeProjectId: string | null;
+  onSelectProject: (id: string) => void;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
   userEmail: string;
   onLogout: () => void;
 }
 
+// Sub-component for a single project link. It now manages its own outside-click detection.
+const ProjectLink: React.FC<{
+  proj: Project;
+  isActive: boolean;
+  isOpen: boolean;
+  isDesktop: boolean;
+  contextMenuOpen: string | null;
+  setContextMenuOpen: React.Dispatch<React.SetStateAction<string | null>>;
+  onSelectProject: (id: string) => void;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
+}> = ({ proj, isActive, isOpen, isDesktop, contextMenuOpen, setContextMenuOpen, onSelectProject, onRename, onDelete }) => {
+  
+  const projectLinkRef = useRef<HTMLLIElement>(null);
+  const isMenuOpenForThis = contextMenuOpen === proj.id;
+
+  // This effect correctly handles closing the menu when clicking outside this specific component
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isMenuOpenForThis && projectLinkRef.current && !projectLinkRef.current.contains(event.target as Node)) {
+        setContextMenuOpen(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpenForThis, setContextMenuOpen]);
+
+  const showThreeDots = isOpen && isDesktop;
+
+  const handleCombinedClick = () => {
+    // For tablet/collapsed view: always select the project and toggle its menu.
+    onSelectProject(proj.id);
+    setContextMenuOpen(prev => (prev === proj.id ? null : proj.id));
+  };
+  
+  const handleMenuButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setContextMenuOpen(contextMenuOpen === proj.id ? null : proj.id);
+  };
+
+  return (
+    <li className="relative" ref={projectLinkRef}>
+      <div className={`project-link relative flex items-center rounded-lg text-sm font-medium transition-colors w-full group/item 
+        ${isActive 
+            ? `bg-primary-100 text-primary-800 is-active ${!isOpen ? 'border border-primary-200' : ''}` 
+            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`
+      }>
+        <button
+          onClick={showThreeDots ? () => onSelectProject(proj.id) : handleCombinedClick}
+          className={`flex-1 p-2.5 truncate text-left ${isOpen ? '' : 'flex justify-center'}`}
+        >
+          <div className="flex items-center">
+            <Folder
+              size={18}
+              className={`${isOpen ? 'mr-3' : ''} flex-shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover/item:text-slate-500'}`}
+            />
+            {isOpen && (
+              <span className="transition-opacity duration-200 truncate pr-2">
+                {proj.name}
+                {proj.isUnsaved && <span className="text-amber-500 font-bold ml-1">*</span>}
+              </span>
+            )}
+          </div>
+        </button>
+        
+        {showThreeDots && (
+          <button
+            onClick={handleMenuButtonClick}
+            className="p-1 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700 opacity-0 group-hover/item:opacity-100 focus:opacity-100 transition-opacity mr-2"
+            aria-label={`Options for ${proj.name}`}
+          >
+            <MoreVertical size={16} />
+          </button>
+        )}
+      </div>
+      
+      {!isOpen && (
+        <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover/item:block z-50">
+          {proj.name}{proj.isUnsaved ? '*' : ''}
+        </span>
+      )}
+
+      {isMenuOpenForThis && (
+        <div className={`absolute z-20 py-1.5 bg-white rounded-md shadow-lg border border-slate-100 animate-in fade-in zoom-in-95 duration-100
+            ${!isOpen ? 'left-full ml-2 w-48 top-1/2 -translate-y-1/2' : 'right-4 mt-1 w-48'}
+        `}>
+          <button onClick={() => { onRename(proj); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Edit size={14} className="mr-2 text-slate-400"/> Rename</button>
+          <button onClick={() => { onDelete(proj); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={14} className="mr-2"/> Delete</button>
+        </div>
+      )}
+    </li>
+  );
+};
+
+
 export const Sidebar: React.FC<Props> = ({ 
     isOpen, 
     setIsOpen, 
-    onNewAnalysis,
-    savedDashboards,
-    activeDashboardId,
-    onSelectDashboard,
+    onNewProject,
+    savedProjects,
+    activeProjectId,
+    onSelectProject,
     onRename,
     onDelete,
     userEmail,
@@ -42,15 +136,18 @@ export const Sidebar: React.FC<Props> = ({
 }) => {
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
   const profileSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const checkSize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        setContextMenuOpen(null);
-      }
       if (isProfileMenuOpen && profileSectionRef.current && !profileSectionRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
@@ -58,52 +155,6 @@ export const Sidebar: React.FC<Props> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProfileMenuOpen]);
-
-  const DashboardLink: React.FC<{ dash: SavedDashboard }> = ({ dash }) => {
-    const isActive = dash.id === activeDashboardId;
-    const commonClasses = `flex items-center p-2.5 rounded-lg text-sm font-medium transition-colors w-full ${
-      isOpen ? 'justify-between' : 'justify-center'
-    }`;
-    const activeClasses = 'bg-primary-100 text-primary-800';
-    const inactiveClasses = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900';
-
-    return (
-      <li className="relative group/item">
-        <button onClick={() => onSelectDashboard(dash.id)} className={`${commonClasses} ${isActive ? activeClasses : inactiveClasses}`}>
-          <div className="flex items-center truncate">
-            <Folder
-              size={18}
-              className={`${isOpen ? 'mr-3' : ''} flex-shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover/item:text-slate-500'}`}
-            />
-            {isOpen && <span className="transition-opacity duration-200 truncate pr-2">{dash.name}</span>}
-             {dash.isUnsaved && isOpen && <span className="text-amber-500 font-bold">*</span>}
-          </div>
-        </button>
-        
-        {isOpen && (
-            <button 
-                onClick={(e) => { e.stopPropagation(); setContextMenuOpen(contextMenuOpen === dash.id ? null : dash.id); }}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full ${contextMenuOpen === dash.id ? 'bg-slate-200' : ''} text-slate-500 hover:bg-slate-200 hover:text-slate-800 opacity-0 group-hover/item:opacity-100`}
-            >
-                <MoreHorizontal size={16} />
-            </button>
-        )}
-
-        {!isOpen && (
-            <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover/item:block z-50">
-                {dash.name}{dash.isUnsaved ? '*' : ''}
-            </span>
-        )}
-
-        {contextMenuOpen === dash.id && (
-            <div ref={contextMenuRef} className="absolute left-4 right-4 mt-1 bg-white rounded-md shadow-lg border border-slate-100 z-20 py-1.5 animate-in fade-in zoom-in-95 duration-100">
-                <button onClick={() => { onRename(dash); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Edit size={14} className="mr-2 text-slate-400"/> Rename</button>
-                <button onClick={() => { onDelete(dash); setContextMenuOpen(null); }} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={14} className="mr-2"/> Delete</button>
-            </div>
-        )}
-      </li>
-    );
-  };
 
   return (
     <>
@@ -139,22 +190,35 @@ export const Sidebar: React.FC<Props> = ({
             <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
                 <div>
                     <button
-                        onClick={onNewAnalysis}
+                        onClick={onNewProject}
                         className={`flex items-center p-3 rounded-lg text-sm font-semibold transition-colors group relative w-full bg-primary-600 text-white hover:bg-primary-700 shadow-sm ${isOpen ? 'justify-start' : 'justify-center'}`}
                     >
                         <FilePlus size={20} className={`${isOpen ? 'mr-3' : ''} flex-shrink-0`} />
-                        {isOpen && <span className="transition-opacity duration-200">New Analysis</span>}
-                        {!isOpen && <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover:block z-50">New Analysis</span>}
+                        {isOpen && <span className="transition-opacity duration-200">New Project</span>}
+                        {!isOpen && <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover:block z-50">New Project</span>}
                     </button>
                 </div>
               
                 <div className="space-y-1">
-                    {isOpen && <div className="px-1 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">My Dashboards</div>}
+                    {isOpen && <div className="px-1 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">My Projects</div>}
                     <ul className="space-y-1">
-                        {savedDashboards.length === 0 && isOpen && (
-                            <p className="text-xs text-slate-400 px-2 py-4 text-center">Your saved dashboards will appear here.</p>
+                        {savedProjects.length === 0 && isOpen && (
+                            <p className="text-xs text-slate-400 px-2 py-4 text-center">Your saved projects will appear here.</p>
                         )}
-                        {savedDashboards.map((dash) => <DashboardLink key={dash.id} dash={dash} />)}
+                        {savedProjects.map((proj) => (
+                           <ProjectLink 
+                            key={proj.id} 
+                            proj={proj} 
+                            isActive={proj.id === activeProjectId}
+                            isOpen={isOpen}
+                            isDesktop={isDesktop}
+                            contextMenuOpen={contextMenuOpen}
+                            setContextMenuOpen={setContextMenuOpen}
+                            onSelectProject={onSelectProject}
+                            onRename={onRename}
+                            onDelete={onDelete}
+                           />
+                        ))}
                     </ul>
                 </div>
             </nav>
