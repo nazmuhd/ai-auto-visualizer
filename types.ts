@@ -1,4 +1,5 @@
 
+
 export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
@@ -56,4 +57,5 @@ export interface SavedDashboard {
     data: DataRow[];
     analysis: AnalysisResult;
     createdAt: Date;
+    isUnsaved?: boolean;
 }

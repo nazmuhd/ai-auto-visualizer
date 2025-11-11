@@ -4,7 +4,7 @@ import { RechartsBarChart } from './RechartsBarChart';
 import { RechartsLineChart } from './RechartsLineChart';
 import { RechartsPieChart } from './RechartsPieChart';
 import { RechartsScatterChart } from './RechartsScatterChart';
-import { Loader2, MoreVertical, Edit3, PieChart, BarChart, LineChart, ScatterChart, AreaChart, Info, X, Download, Grid, List, Tag, Calendar, ChevronDown, Filter, Check, ChevronRight } from 'lucide-react';
+import { Loader2, MoreVertical, Edit3, PieChart, BarChart, LineChart, ScatterChart, AreaChart, Info, X, Download, Grid, List, Tag, Calendar, ChevronDown, Filter, Check, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
     config: ChartConfig;
@@ -29,6 +29,7 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
     const [expandedMenuSection, setExpandedMenuSection] = useState<string | null>(null);
 
     const menuRef = useRef<HTMLDivElement>(null);
+    const chartContainerRef = useRef<HTMLDivElement>(null);
 
     // --- View Controls State ---
     const [viewOptions, setViewOptions] = useState<ViewOptions>({
@@ -176,6 +177,38 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
         setIsEditModalOpen(false);
         setIsMenuOpen(false);
     };
+    
+    const handleExportPNG = () => {
+        const svgElement = chartContainerRef.current?.querySelector('svg');
+        if (!svgElement) return;
+
+        const svgString = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = 2; // Render at 2x resolution for better quality
+            canvas.width = svgElement.clientWidth * scale;
+            canvas.height = svgElement.clientHeight * scale;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.scale(scale, scale);
+                ctx.drawImage(img, 0, 0);
+                const pngUrl = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = pngUrl;
+                link.download = `${config.title.replace(/\s+/g, '_').toLowerCase()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+        setIsMenuOpen(false);
+    };
 
     const handleDownloadCSV = () => {
         if (!filteredData || filteredData.length === 0) return;
@@ -270,6 +303,10 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
                                     
                                     <button onClick={() => setIsEditModalOpen(true)} className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center transition-colors">
                                         <Edit3 size={16} className="mr-3 text-slate-400" /> Edit Title & Description
+                                    </button>
+                                    
+                                    <button onClick={handleExportPNG} className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center transition-colors">
+                                        <ImageIcon size={16} className="mr-3 text-slate-400" /> Export as PNG
                                     </button>
 
                                     <button onClick={handleDownloadCSV} className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center transition-colors">
@@ -405,7 +442,7 @@ export const ChartRenderer: React.FC<Props> = ({ config, data, dateColumn, onUpd
                 </div>
 
                 {/* Chart Area */}
-                <div className="flex-1 p-4 min-h-[300px] relative z-0">
+                <div ref={chartContainerRef} className="flex-1 p-4 min-h-[300px] relative z-0">
                     {/* Floating View Toggles - Fixed position relative to chart area, visible on hover */}
                     <div className="absolute top-2 right-4 z-20 flex items-center space-x-1 bg-white/90 backdrop-blur-sm p-1 rounded-md shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0">
                         {config.type !== 'pie' && (

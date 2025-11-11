@@ -17,6 +17,12 @@ const App: React.FC = () => {
         setShowLoginModal(false);
     };
 
+    const handleLogout = () => {
+        setIsAuthenticated(false);
+        setUserEmail(null);
+        // Any other cleanup can go here
+    };
+
     if (!isAuthenticated) {
         return (
             <>
@@ -33,7 +39,7 @@ const App: React.FC = () => {
     
     return (
         <div className="h-screen bg-slate-50 text-slate-900">
-            <Dashboard userEmail={userEmail!} />
+            <Dashboard userEmail={userEmail!} onLogout={handleLogout} />
         </div>
     );
 };
