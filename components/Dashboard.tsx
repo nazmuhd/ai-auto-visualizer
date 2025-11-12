@@ -17,6 +17,7 @@ import { AIReportView } from './AIReportView.tsx';
 import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
+import { DashboardSettingsModal } from './modals/DashboardSettingsModal.tsx';
 
 interface DashboardProps {
     userEmail: string;
@@ -105,63 +106,6 @@ const DashboardView: React.FC<{
     </section>
 );
 
-const DashboardEditMode: React.FC<{
-    project: Project;
-    dashboardLayout: string;
-    isAddingKpi: boolean;
-    newKpiForm: Omit<KpiConfig, 'id'>;
-    onKpiVisibilityToggle: (kpiId: string) => void;
-    onChartVisibilityToggle: (chartId: string) => void;
-    onAddCustomKpi: (e: React.FormEvent) => void;
-    setIsAddingKpi: (isAdding: boolean) => void;
-    setNewKpiForm: (form: Omit<KpiConfig, 'id'>) => void;
-}> = ({ project, dashboardLayout, isAddingKpi, newKpiForm, onKpiVisibilityToggle, onChartVisibilityToggle, onAddCustomKpi, setIsAddingKpi, setNewKpiForm }) => {
-    const analysis = project.analysis!;
-    const visibleCharts = analysis.charts.filter(c => c.visible);
-    const layout = layouts.find(l => l.id === dashboardLayout) || layouts[0];
-    return (
-        <section className="mb-8 p-6 bg-primary-50 border-2 border-dashed border-primary-200 rounded-2xl space-y-6 duration-300">
-            <div>
-                <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage KPIs</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {analysis.kpis.map(kpi => (
-                        <button key={kpi.id} onClick={() => onKpiVisibilityToggle(kpi.id)} className={`p-3 border rounded-lg text-left flex items-center justify-between w-full transition-all ${kpi.visible ? 'bg-white border-primary-300 ring-2 ring-primary-100' : 'bg-white/60 hover:bg-white border-slate-200 opacity-70 hover:opacity-100'}`}>
-                            <div><p className={`font-medium ${kpi.visible ? 'text-primary-800' : 'text-slate-800'}`}>{kpi.title}</p><p className={`text-xs ${kpi.visible ? 'text-primary-600' : 'text-slate-500'}`}> {kpi.operation.replace('_', ' ')} of "{kpi.column}"</p></div>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${kpi.visible ? 'bg-primary-600 border-primary-600' : 'border-slate-300'}`}>{kpi.visible && <CheckCircle className="w-4 h-4 text-white" />}</div>
-                        </button>
-                    ))}
-                </div>
-                {isAddingKpi ? (
-                    <form onSubmit={onAddCustomKpi} className="p-4 border border-primary-200 rounded-lg bg-white mt-4 space-y-3">
-                        <h4 className="font-semibold text-primary-800">Add Custom KPI</h4>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input value={newKpiForm.title} onChange={e => setNewKpiForm({ ...newKpiForm, title: e.target.value })} placeholder="KPI Title" required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg" />
-                            <select value={newKpiForm.column} onChange={e => setNewKpiForm({ ...newKpiForm, column: e.target.value })} required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="">Select Column</option>{Object.keys(project.dataSource.data[0] || {}).map(c => <option key={c} value={c}>{c}</option>)}</select>
-                            <select value={newKpiForm.operation} onChange={e => setNewKpiForm({ ...newKpiForm, operation: e.target.value as any })} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="sum">Sum</option><option value="average">Average</option><option value="count_distinct">Count Distinct</option></select>
-                            <select value={newKpiForm.format} onChange={e => setNewKpiForm({ ...newKpiForm, format: e.target.value as any })} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option></select>
-                        </div>
-                        <div className="flex justify-end space-x-2"><button type="button" onClick={() => setIsAddingKpi(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md">Cancel</button><button type="submit" className="px-3 py-1.5 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-md">Add</button></div>
-                    </form>
-                ) : (<button onClick={() => setIsAddingKpi(true)} className="w-full mt-3 p-2 border-2 border-dashed border-primary-300 hover:border-primary-400 hover:bg-primary-100/50 rounded-lg text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center justify-center transition-colors"><PlusCircle size={16} className="mr-2" /> Add Custom KPI</button>)}
-            </div>
-            <div className="border-t border-primary-200/80"></div>
-            <div>
-                <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage Charts</h3>
-                <p className="text-sm text-primary-800/80 mb-3">You are showing <span className="font-bold">{visibleCharts.length}</span> of <span className="font-bold">{analysis.charts.length}</span> AI-generated charts. Your current layout supports up to <span className="font-bold">{layout.totalCharts}</span> charts.</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {analysis.charts.map(chart => (
-                        <button key={chart.id} onClick={() => onChartVisibilityToggle(chart.id)} className={`p-3 border rounded-lg text-left w-full transition-all flex items-center gap-3 ${chart.visible ? 'bg-white border-primary-300 ring-2 ring-primary-100' : 'bg-white/60 hover:bg-white border-slate-200 opacity-70 hover:opacity-100'}`}>
-                            <GripVertical className="text-slate-300 flex-shrink-0 cursor-grab" size={16} />
-                            <div className="flex-1 truncate"><p className="font-medium text-slate-800 truncate">{chart.title}</p></div>
-                            {chart.visible ? <Eye size={16} className="text-primary-500 flex-shrink-0" /> : <EyeOff size={16} className="text-slate-400 flex-shrink-0" />}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        </section>
-    );
-};
-
 const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => void; onRename: () => void }> = ({ project, onFileSelect, onRename }) => (
     <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center gap-4 mb-6">
@@ -200,24 +144,16 @@ const ProjectWorkspace: React.FC<{
     project: Project;
     currentView: 'dashboard' | 'ai-report' | 'data';
     setCurrentView: (view: 'dashboard' | 'ai-report' | 'data') => void;
-    isEditMode: boolean;
-    setIsEditMode: (isEditing: boolean) => void;
+    onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     dashboardLayout: string;
-    isAddingKpi: boolean;
-    setIsAddingKpi: (isAdding: boolean) => void;
-    newKpiForm: Omit<KpiConfig, 'id'>;
-    setNewKpiForm: (form: Omit<KpiConfig, 'id'>) => void;
-    onKpiVisibilityToggle: (kpiId: string) => void;
-    onChartVisibilityToggle: (chartId: string) => void;
-    onAddCustomKpi: (e: React.FormEvent) => void;
     kpiValues: (KpiConfig & { displayValue: string })[];
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
     onGenerateReport: () => void;
     saveStatus: SaveStatus;
-}> = ({ project, currentView, setCurrentView, isEditMode, setIsEditMode, setIsLayoutModalOpen, onGenerateReport, saveStatus, ...props }) => {
+}> = ({ project, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onGenerateReport, saveStatus, ...props }) => {
     
     const { analysis, dataSource } = project;
     const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'ai-report' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
@@ -244,8 +180,8 @@ const ProjectWorkspace: React.FC<{
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                 <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="ai-report" label="AI Report" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
                 <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
-                   <button onClick={() => setIsEditMode(!isEditMode)} className={`px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors ${isEditMode ? 'bg-primary-600 text-white border-primary-600' : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'}`}>
-                        <Edit size={16} className="mr-2" /> {isEditMode ? 'Done' : 'Edit'}
+                   <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
+                        <Edit size={16} className="mr-2" /> Edit
                     </button>
                     <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
                         <LayoutGrid size={16} className="mr-2" /> Layout
@@ -255,7 +191,6 @@ const ProjectWorkspace: React.FC<{
             </div>
             {currentView === 'dashboard' && (
             <>
-                {isEditMode && <DashboardEditMode project={project} {...props} />}
                 <KpiSection kpiValues={props.kpiValues} />
                 <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={dataSource} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} />
             </>
@@ -296,7 +231,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
     const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
     const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
-    const [isEditMode, setIsEditMode] = useState(false);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAddingKpi, setIsAddingKpi] = useState(false);
     const [newKpiForm, setNewKpiForm] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -438,7 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setError(null);
         setCurrentView('dashboard');
         setProgress(null);
-        setIsEditMode(false);
+        setIsSettingsModalOpen(false);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
     };
     
@@ -473,7 +408,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setActiveProject(project);
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
             setCurrentView('dashboard');
-            setIsEditMode(false);
+            setIsSettingsModalOpen(false);
             setSaveStatus('idle');
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -639,17 +574,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         project={activeProject}
                         currentView={currentView}
                         setCurrentView={setCurrentView}
-                        isEditMode={isEditMode}
-                        setIsEditMode={setIsEditMode}
+                        onOpenEditModal={() => setIsSettingsModalOpen(true)}
                         setIsLayoutModalOpen={setIsLayoutModalOpen}
                         dashboardLayout={dashboardLayout}
-                        isAddingKpi={isAddingKpi}
-                        setIsAddingKpi={setIsAddingKpi}
-                        newKpiForm={newKpiForm}
-                        setNewKpiForm={setNewKpiForm}
-                        onKpiVisibilityToggle={handleKpiVisibilityToggle}
-                        onChartVisibilityToggle={handleChartVisibilityToggle}
-                        onAddCustomKpi={handleAddCustomKpi}
                         kpiValues={kpiValues}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
@@ -693,6 +620,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onSelectLayout={handleSelectLayout}
                 layouts={layouts}
             />
+            {activeProject && activeProject.analysis && (
+                <DashboardSettingsModal
+                    isOpen={isSettingsModalOpen}
+                    onClose={() => setIsSettingsModalOpen(false)}
+                    project={activeProject}
+                    dashboardLayout={dashboardLayout}
+                    isAddingKpi={isAddingKpi}
+                    newKpiForm={newKpiForm}
+                    onKpiVisibilityToggle={handleKpiVisibilityToggle}
+                    onChartVisibilityToggle={handleChartVisibilityToggle}
+                    onAddCustomKpi={handleAddCustomKpi}
+                    setIsAddingKpi={setIsAddingKpi}
+                    setNewKpiForm={setNewKpiForm}
+                    layouts={layouts}
+                />
+            )}
         </div>
     );
 };
