@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus } from '../types.ts';
-import { ChartRenderer } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2 } from 'lucide-react';
+import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X } from 'lucide-react';
+import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { FileUploadContainer } from './FileUploadContainer.tsx';
@@ -73,14 +74,100 @@ const structureChartsByLayout = (charts: ChartConfig[], layoutId: string): Chart
     return structuredCharts;
 };
 
-const DEFAULT_KPI: Omit<KpiConfig, 'id'> = { title: '', column: '', operation: 'sum', format: 'number', isCustom: true };
+const KpiCard: React.FC<{
+    kpi: KpiConfig;
+    value: number | null;
+    trend: number | null;
+    sparklineData: { name: string; value: number }[];
+    onClick: () => void;
+}> = ({ kpi, value, trend, sparklineData, onClick }) => {
+    
+    const trendColor = trend === null ? 'slate' : trend > 0 ? (kpi.trendDirection === 'higher-is-better' ? 'green' : 'red') : trend < 0 ? (kpi.trendDirection === 'higher-is-better' ? 'red' : 'green') : 'slate';
+    const TrendIcon = trend === null ? Minus : trend > 0 ? TrendingUp : TrendingDown;
+    const formattedValue = new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value ?? 0);
 
-const KpiSection: React.FC<{ kpiValues: (KpiConfig & { displayValue: string })[] }> = ({ kpiValues }) => {
+    return (
+        <div onClick={onClick} className={`relative p-4 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden group ${kpi.primaryCategory ? 'hover:shadow-lg hover:-translate-y-1 hover:border-primary-300' : 'cursor-default'} ${trendColor === 'green' ? 'bg-green-50/40 border-green-200/60' : trendColor === 'red' ? 'bg-red-50/40 border-red-200/60' : 'bg-white border-slate-200/80 shadow-sm'}`}>
+            <p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p>
+            <p className="text-3xl font-bold text-slate-900">{formattedValue}</p>
+            {trend !== null && (
+                 <div className={`mt-1 flex items-center text-sm font-semibold text-${trendColor}-600`}>
+                    <TrendIcon size={16} className="mr-1"/>
+                    <span>{trend.toFixed(1)}%</span>
+                    <span className="text-xs text-slate-400 font-normal ml-1.5">vs last period</span>
+                </div>
+            )}
+             {sparklineData.length > 1 && (
+                <div className="absolute bottom-0 right-0 h-1/2 w-2/3 opacity-30 group-hover:opacity-60 transition-opacity">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={sparklineData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                            <Line type="monotone" dataKey="value" stroke={trendColor === 'green' ? '#10b981' : trendColor === 'red' ? '#ef4444' : '#64748b'} strokeWidth={2} dot={false}/>
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: string | null, onKpiClick: (kpi: KpiConfig) => void }> = ({ kpis, data, dateColumn, onKpiClick }) => {
+    const kpiValues = useMemo(() => {
+        if (!data || data.length === 0) return [];
+        
+        let historicalData: Record<string, DataRow[]> = {};
+        if (dateColumn) {
+             const sortedData = [...data].sort((a,b) => new Date(a[dateColumn]).getTime() - new Date(b[dateColumn]).getTime());
+             sortedData.forEach(row => {
+                try {
+                    const date = new Date(row[dateColumn]);
+                    if(isNaN(date.getTime())) return;
+                    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    if(!historicalData[monthKey]) historicalData[monthKey] = [];
+                    historicalData[monthKey].push(row);
+                } catch(e) {}
+             });
+        }
+        const periods = Object.keys(historicalData).sort();
+        const lastPeriodKey = periods[periods.length - 1];
+        const prevPeriodKey = periods[periods.length - 2];
+
+        return kpis.map(kpi => {
+            const calculateValue = (dataset: DataRow[]) => {
+                if(!dataset || dataset.length === 0) return 0;
+                let filteredData = dataset;
+                if(kpi.primaryCategory && kpi.primaryCategoryValue) {
+                    filteredData = dataset.filter(r => String(r[kpi.primaryCategory!]) === kpi.primaryCategoryValue);
+                }
+
+                if(kpi.operation === 'sum') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
+                if(kpi.operation === 'average') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (filteredData.length || 1);
+                if(kpi.operation === 'count_distinct') return new Set(filteredData.map(row => row[kpi.column])).size;
+                return 0;
+            };
+
+            const currentValue = calculateValue(data);
+            let trend: number | null = null;
+            if(lastPeriodKey && prevPeriodKey) {
+                const lastPeriodValue = calculateValue(historicalData[lastPeriodKey]);
+                const prevPeriodValue = calculateValue(historicalData[prevPeriodKey]);
+                if(prevPeriodValue !== 0) {
+                    trend = ((lastPeriodValue - prevPeriodValue) / prevPeriodValue) * 100;
+                }
+            }
+
+            const sparklineData = periods.slice(-12).map(p => ({name: p, value: calculateValue(historicalData[p])}));
+            
+            return { ...kpi, displayValue: currentValue, trend, sparklineData };
+        });
+    }, [kpis, data, dateColumn]);
+
     if (kpiValues.length === 0) return null;
     return (
         <section className="mb-8">
             <h2 className="text-xl font-bold text-slate-800 mb-4">Key Metrics</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">{kpiValues.map((kpi) => <div key={kpi.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><div><p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p><p className="text-3xl font-bold text-slate-900">{kpi.displayValue}</p></div></div>)}</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {kpiValues.map(kpi => <KpiCard key={kpi.id} kpi={kpi} value={kpi.displayValue} trend={kpi.trend} sparklineData={kpi.sparklineData} onClick={() => onKpiClick(kpi)} />)}
+            </div>
         </section>
     );
 };
@@ -89,16 +176,21 @@ const DashboardView: React.FC<{
     chartRows: ChartConfig[][];
     getGridColsClass: (count: number) => string;
     dataSource: { data: DataRow[] };
+    allData: DataRow[];
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
-}> = ({ chartRows, getGridColsClass, dataSource, dateColumn, onChartUpdate, onSetMaximizedChart }) => (
+    onGlobalFilterChange: (column: string, values: Set<string>) => void;
+    onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
+    globalFilters: Record<string, Set<string>>;
+    timeFilter: { type: TimeFilterPreset; start?: string; end?: string };
+}> = ({ chartRows, getGridColsClass, dataSource, allData, dateColumn, onChartUpdate, onSetMaximizedChart, onGlobalFilterChange, onTimeFilterChange, globalFilters, timeFilter }) => (
     <section>
         {chartRows.map((row, rowIndex) => (
             <div key={rowIndex} className={`grid grid-cols-1 ${getGridColsClass(row.length)} gap-6 lg:gap-8 mb-6 lg:mb-8`}>
                 {row.map(chart => (
                     <div key={chart.id} className="h-[300px] sm:h-[350px] md:h-[400px] lg:h-[450px]">
-                        <ChartRenderer config={chart} data={dataSource.data} dateColumn={dateColumn} onUpdate={onChartUpdate} onMaximize={onSetMaximizedChart} enableScrollZoom={true} />
+                        <ChartRenderer config={chart} data={dataSource.data} allData={allData} dateColumn={dateColumn} onUpdate={onChartUpdate} onMaximize={onSetMaximizedChart} enableScrollZoom={true} onFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} activeFilters={globalFilters} activeTimeFilter={timeFilter}/>
                     </div>
                 ))}
             </div>
@@ -139,23 +231,48 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
     }
 };
 
+const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = ({ filters, onRemove }) => {
+    const filterEntries = Object.entries(filters).flatMap(([col, values]) => Array.from(values).map(val => ({ col, val })));
+    if (filterEntries.length === 0) return null;
+
+    return (
+        <div className="mb-6 p-3 bg-primary-50 border border-primary-200 rounded-lg flex items-center flex-wrap gap-2">
+            <div className="flex items-center text-sm font-semibold text-primary-800 mr-2"><Filter size={14} className="mr-2" /> Filters Applied:</div>
+            {filterEntries.map(({ col, val }) => (
+                <div key={`${col}-${val}`} className="flex items-center bg-white border border-primary-200 rounded-full px-2.5 py-1 text-sm text-primary-800">
+                    <span className="font-medium mr-1">{col}:</span>
+                    <span>{val}</span>
+                    <button onClick={() => onRemove(col, val)} className="ml-2 text-primary-400 hover:text-primary-600"><X size={14} /></button>
+                </div>
+            ))}
+            <button onClick={() => onRemove('__all__')} className="ml-auto text-xs text-primary-600 hover:underline">Clear All</button>
+        </div>
+    );
+};
+
 
 const ProjectWorkspace: React.FC<{
     project: Project;
+    filteredData: DataRow[];
     currentView: 'dashboard' | 'ai-report' | 'data';
     setCurrentView: (view: 'dashboard' | 'ai-report' | 'data') => void;
     onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     dashboardLayout: string;
-    kpiValues: (KpiConfig & { displayValue: string })[];
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
     onGenerateReport: () => void;
     saveStatus: SaveStatus;
-}> = ({ project, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onGenerateReport, saveStatus, ...props }) => {
+    globalFilters: Record<string, Set<string>>;
+    timeFilter: { type: TimeFilterPreset; start?: string; end?: string };
+    onGlobalFilterChange: (column: string, values: Set<string>) => void;
+    onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
+    onRemoveFilter: (column: string, value?: string) => void;
+    onKpiClick: (kpi: KpiConfig) => void;
+}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onGenerateReport, saveStatus, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
     
-    const { analysis, dataSource } = project;
+    const { analysis } = project;
     const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'ai-report' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const chartRows = structureChartsByLayout(visibleCharts, props.dashboardLayout);
@@ -168,6 +285,8 @@ const ProjectWorkspace: React.FC<{
             default: return 'lg:grid-cols-1';
         }
     };
+    
+    const visibleKpis = useMemo(() => analysis.kpis.filter(kpi => kpi.visible), [analysis.kpis]);
 
     return (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
@@ -191,12 +310,13 @@ const ProjectWorkspace: React.FC<{
             </div>
             {currentView === 'dashboard' && (
             <>
-                <KpiSection kpiValues={props.kpiValues} />
-                <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={dataSource} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} />
+                <GlobalFilterBar filters={globalFilters} onRemove={onRemoveFilter} />
+                <KpiSection kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
+                <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
             </>
             )}
             {currentView === 'ai-report' && <AIReportView project={project} onGenerate={onGenerateReport} />}
-            {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><DataTable data={dataSource.data} /></div>}
+            {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><DataTable data={project.dataSource.data} /></div>}
         </div>
     );
 };
@@ -232,10 +352,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
     const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [isAddingKpi, setIsAddingKpi] = useState(false);
-    const [newKpiForm, setNewKpiForm] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-
+    
+    const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
+    const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
 
     const analysisPromiseRef = useRef<Promise<AnalysisResult> | null>(null);
     const mainContentRef = useRef<HTMLElement>(null);
@@ -292,6 +412,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         });
     };
 
+    const dateColumn = useMemo(() => {
+        const data = activeProject?.dataSource.data;
+        if (!data || data.length < 5) return null;
+        const columns = Object.keys(data[0]);
+        return columns.find(col => !isNaN(Date.parse(String(data[4]?.[col])))) || null;
+    }, [activeProject]);
+
+    const filteredData = useMemo(() => {
+        if (!activeProject) return [];
+        let result = activeProject.dataSource.data;
+
+        if (dateColumn && timeFilter.type !== 'all') {
+            const now = new Date();
+            let startDate: Date | null = null;
+            let endDate: Date | null = new Date(); 
+
+            switch (timeFilter.type) {
+                case '7d': startDate = new Date(); startDate.setDate(now.getDate() - 7); break;
+                case '30d': startDate = new Date(); startDate.setDate(now.getDate() - 30); break;
+                case '90d': startDate = new Date(); startDate.setDate(now.getDate() - 90); break;
+                case 'ytd': startDate = new Date(now.getFullYear(), 0, 1); break;
+                case 'custom':
+                    endDate = null;
+                    if (timeFilter.start) startDate = new Date(timeFilter.start + 'T00:00:00');
+                    if (timeFilter.end) endDate = new Date(timeFilter.end + 'T23:59:59');
+                    break;
+            }
+
+            result = result.filter(row => {
+                const rowDateValue = row[dateColumn!];
+                if (!rowDateValue) return false;
+                const rowDate = new Date(rowDateValue);
+                if (isNaN(rowDate.getTime())) return false;
+                if (startDate && rowDate < startDate) return false;
+                if (endDate && rowDate > endDate) return false;
+                return true;
+            });
+        }
+        
+        Object.entries(globalFilters).forEach(([col, allowedValues]) => {
+            if (allowedValues.size > 0) {
+                result = result.filter(row => allowedValues.has(String(row[col])));
+            }
+        });
+        
+        return result;
+
+    }, [activeProject, globalFilters, timeFilter, dateColumn]);
+
+
     const handleFileSelect = async (file: File) => {
         let projectToUpdate = activeProject;
         
@@ -308,6 +478,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setStatus('parsing');
         setError(null);
         setCurrentView('dashboard');
+        setGlobalFilters({});
+        setTimeFilter({ type: 'all' });
         setProgress({ status: 'Initiating upload...', percentage: 0 });
 
         try {
@@ -372,6 +544,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setStatus('idle');
         setError(null);
         setCurrentView('dashboard');
+        setGlobalFilters({});
+        setTimeFilter({type: 'all'});
         setProgress(null);
         setIsSettingsModalOpen(false);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
@@ -408,6 +582,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setActiveProject(project);
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
             setCurrentView('dashboard');
+            setGlobalFilters({});
+            setTimeFilter({ type: 'all' });
             setIsSettingsModalOpen(false);
             setSaveStatus('idle');
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
@@ -493,16 +669,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         });
     };
 
-    const handleAddCustomKpi = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleAddCustomKpi = (newKpi: Omit<KpiConfig, 'id'>) => {
         updateActiveProject(p => {
             if (!p.analysis) return p;
-            const newKpi = { ...newKpiForm, id: `custom_${Date.now()}`, visible: true };
-            const updatedKpis = [...p.analysis.kpis, newKpi];
+            const fullNewKpi = { ...newKpi, id: `custom_${Date.now()}`, visible: true };
+            const updatedKpis = [...p.analysis.kpis, fullNewKpi];
             return { ...p, analysis: { ...p.analysis, kpis: updatedKpis } };
         });
-        setIsAddingKpi(false);
-        setNewKpiForm(DEFAULT_KPI);
     };
     
     const handleChartVisibilityToggle = (chartId: string) => {
@@ -526,27 +699,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         });
     };
 
-    const dateColumn = useMemo(() => {
-        const data = activeProject?.dataSource.data;
-        if (!data || data.length < 5) return null;
-        const columns = Object.keys(data[0]);
-        return columns.find(col => !isNaN(Date.parse(String(data[4]?.[col])))) || null;
-    }, [activeProject]);
-
-    const kpiValues = useMemo(() => {
-        const data = activeProject?.dataSource.data;
-        const analysis = activeProject?.analysis;
-        if (!analysis || !data) return [];
-        
-        return analysis.kpis.filter(kpi => kpi.visible).map(kpi => {
-            let value = 0;
-            if (kpi.operation === 'sum') value = data.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
-            else if (kpi.operation === 'average') value = data.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (data.length || 1);
-            else if (kpi.operation === 'count_distinct') value = new Set(data.map(row => row[kpi.column])).size;
-            return { ...kpi, displayValue: new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value) };
-        });
-    }, [activeProject]);
-
     const validationTasks = useMemo(() => {
         if (!validationReport) return [];
         return [
@@ -558,6 +710,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         ].filter(Boolean) as string[];
     }, [validationReport]);
     
+    const handleGlobalFilterChange = useCallback((column: string, values: Set<string>) => {
+        setGlobalFilters(prev => {
+            if(column === '__clear__') return {};
+            const newFilters = { ...prev };
+            if (values.size === 0) {
+                delete newFilters[column];
+            } else {
+                newFilters[column] = values;
+            }
+            return newFilters;
+        });
+    }, []);
+
+    const handleTimeFilterChange = useCallback((filter: { type: TimeFilterPreset; start?: string; end?: string }) => {
+        setTimeFilter(filter);
+    }, []);
+
+    const handleRemoveFilter = useCallback((column: string, value?: string) => {
+        if (column === '__all__') {
+            setGlobalFilters({});
+            return;
+        }
+        setGlobalFilters(prev => {
+            const newFilters = { ...prev };
+            if (value && newFilters[column]) {
+                newFilters[column].delete(value);
+                if (newFilters[column].size === 0) {
+                    delete newFilters[column];
+                }
+            } else {
+                 delete newFilters[column];
+            }
+            return newFilters;
+        });
+    }, []);
+    
+    const handleKpiClick = useCallback((kpi: KpiConfig) => {
+        if (kpi.primaryCategory && kpi.primaryCategoryValue) {
+            setGlobalFilters(prev => {
+                const currentSet = prev[kpi.primaryCategory!] || new Set();
+                const newSet = new Set(currentSet);
+                // Toggle behavior: if it's already the only filter for this category, remove it. Otherwise, set it as the only one.
+                if (newSet.has(kpi.primaryCategoryValue!) && newSet.size === 1) {
+                    newSet.delete(kpi.primaryCategoryValue!);
+                } else {
+                    newSet.clear();
+                    newSet.add(kpi.primaryCategoryValue!);
+                }
+                
+                const newFilters = { ...prev };
+                if (newSet.size === 0) {
+                    delete newFilters[kpi.primaryCategory!];
+                } else {
+                    newFilters[kpi.primaryCategory!] = newSet;
+                }
+                return newFilters;
+            });
+        }
+    }, []);
+
     const renderMainContent = () => {
         if (!activeProject) {
             return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
@@ -572,17 +784,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 if (activeProject.analysis) {
                     return <ProjectWorkspace
                         project={activeProject}
+                        filteredData={filteredData}
                         currentView={currentView}
                         setCurrentView={setCurrentView}
                         onOpenEditModal={() => setIsSettingsModalOpen(true)}
                         setIsLayoutModalOpen={setIsLayoutModalOpen}
                         dashboardLayout={dashboardLayout}
-                        kpiValues={kpiValues}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
                         onSetMaximizedChart={setMaximizedChart}
                         onGenerateReport={handleGenerateReport}
                         saveStatus={saveStatus}
+                        globalFilters={globalFilters}
+                        timeFilter={timeFilter}
+                        onGlobalFilterChange={handleGlobalFilterChange}
+                        onTimeFilterChange={handleTimeFilterChange}
+                        onRemoveFilter={handleRemoveFilter}
+                        onKpiClick={handleKpiClick}
                     />;
                 }
                 break;
@@ -612,7 +830,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             <SaveProjectModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveProject} defaultName={activeProject?.name || 'Untitled Project'} />
             <RenameProjectModal isOpen={isRenameModalOpen} onClose={() => setIsRenameModalOpen(false)} onSave={handleRenameProject} currentName={projectToManage?.name || ''} currentDescription={projectToManage?.description || ''} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteProject} projectName={projectToManage?.name || ''} />
-            {maximizedChart && activeProject && <ChartMaximizeModal config={maximizedChart} data={activeProject.dataSource.data} dateColumn={dateColumn} onUpdate={handleChartUpdate} onClose={() => setMaximizedChart(null)} />}
+            {maximizedChart && activeProject && <ChartMaximizeModal 
+                config={maximizedChart} 
+                data={filteredData} 
+                allData={activeProject.dataSource.data}
+                dateColumn={dateColumn} 
+                onUpdate={handleChartUpdate} 
+                onClose={() => setMaximizedChart(null)}
+                onFilterChange={handleGlobalFilterChange}
+                onTimeFilterChange={handleTimeFilterChange}
+                activeFilters={globalFilters}
+                activeTimeFilter={timeFilter}
+            />}
             <LayoutSelectionModal
                 isOpen={isLayoutModalOpen}
                 onClose={() => setIsLayoutModalOpen(false)}
@@ -626,13 +855,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                     onClose={() => setIsSettingsModalOpen(false)}
                     project={activeProject}
                     dashboardLayout={dashboardLayout}
-                    isAddingKpi={isAddingKpi}
-                    newKpiForm={newKpiForm}
                     onKpiVisibilityToggle={handleKpiVisibilityToggle}
                     onChartVisibilityToggle={handleChartVisibilityToggle}
                     onAddCustomKpi={handleAddCustomKpi}
-                    setIsAddingKpi={setIsAddingKpi}
-                    setNewKpiForm={setNewKpiForm}
                     layouts={layouts}
                 />
             )}

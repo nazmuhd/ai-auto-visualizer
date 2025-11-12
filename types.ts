@@ -34,6 +34,9 @@ export interface KpiConfig {
     column: string;
     operation: 'sum' | 'average' | 'count_distinct';
     format: 'number' | 'currency' | 'percent';
+    trendDirection?: 'higher-is-better' | 'lower-is-better'; // For color coding
+    primaryCategory?: string; // e.g., 'Region'
+    primaryCategoryValue?: string; // e.g., 'North America'
     isCustom?: boolean;
     visible?: boolean;
 }

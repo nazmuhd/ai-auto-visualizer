@@ -1,7 +1,3 @@
-
-
-
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../types.ts';
 import { v4 as uuidv4 } from 'uuid';
@@ -39,9 +35,12 @@ const analysisSchema = {
                     title: { type: Type.STRING, description: "User-friendly title (e.g., 'Total Revenue')." },
                     column: { type: Type.STRING, description: "Exact column name to calculate from." },
                     operation: { type: Type.STRING, enum: ['sum', 'average', 'count_distinct'], description: "Aggregation method." },
-                    format: { type: Type.STRING, enum: ['number', 'currency', 'percent'], description: "Best display format for this metric." }
+                    format: { type: Type.STRING, enum: ['number', 'currency', 'percent'], description: "Best display format for this metric." },
+                    trendDirection: { type: Type.STRING, enum: ['higher-is-better', 'lower-is-better'], description: "Is a higher value for this KPI generally good or bad?" },
+                    primaryCategory: { type: Type.STRING, nullable: true, description: "If this KPI is a breakdown by a category (e.g., 'Sales for North America'), provide the category column name here (e.g., 'Region')." },
+                    primaryCategoryValue: { type: Type.STRING, nullable: true, description: "If primaryCategory is set, provide the specific value for this KPI (e.g., 'North America')." }
                 },
-                required: ['title', 'column', 'operation', 'format']
+                required: ['title', 'column', 'operation', 'format', 'trendDirection']
             }
         },
         recommendedCharts: {
@@ -99,7 +98,10 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
 
     REQUIREMENTS:
     1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
-    2. KPIs: Identify between 5 and 10 Key Performance Indicators (KPIs) that are most important for this dataset. Define HOW to calculate them (e.g., SUM of 'Revenue').
+    2. KPIs: Identify between 5 and 10 KPIs. For each KPI:
+        - Define HOW to calculate it (e.g., SUM of 'Revenue').
+        - Determine trend direction: Is a higher value better or worse? (e.g., higher revenue is good, higher costs are bad).
+        - If a KPI represents a specific segment (e.g., "Sales - North America"), identify its category column (e.g., 'Region') and its value (e.g., 'North America').
     3. CHARTS: Map the data to a diverse set of between 5 and 8 chart templates that reveal different aspects of the data. Choose the most insightful charts.
 
     AVAILABLE CHART TEMPLATES:
@@ -159,7 +161,7 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
         // Fallbacks
         const finalSummary = Array.isArray(rawResult.summary) ? rawResult.summary : ["Analysis complete."];
         if (finalKpis.length < 3 && availableColumns.length > 0) {
-            finalKpis.push({ id: uuidv4(), title: 'Total Rows', column: availableColumns[0], operation: 'count_distinct', format: 'number' });
+            finalKpis.push({ id: uuidv4(), title: 'Total Rows', column: availableColumns[0], operation: 'count_distinct', format: 'number', trendDirection: 'higher-is-better' });
         }
 
 

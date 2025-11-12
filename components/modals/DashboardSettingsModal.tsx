@@ -1,19 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Project, KpiConfig, LayoutInfo } from '../../types.ts';
 import { Settings, CheckCircle, Eye, EyeOff, GripVertical, PlusCircle, X } from 'lucide-react';
+
+const DEFAULT_KPI: Omit<KpiConfig, 'id'> = { title: '', column: '', operation: 'sum', format: 'number', isCustom: true };
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
     project: Project;
     dashboardLayout: string;
-    isAddingKpi: boolean;
-    newKpiForm: Omit<KpiConfig, 'id'>;
     onKpiVisibilityToggle: (kpiId: string) => void;
     onChartVisibilityToggle: (chartId: string) => void;
-    onAddCustomKpi: (e: React.FormEvent) => void;
-    setIsAddingKpi: (isAdding: boolean) => void;
-    setNewKpiForm: (form: Omit<KpiConfig, 'id'>) => void;
+    onAddCustomKpi: (newKpi: Omit<KpiConfig, 'id'>) => void;
     layouts: LayoutInfo[];
 }
 
@@ -22,15 +20,12 @@ export const DashboardSettingsModal: React.FC<Props> = ({
     onClose, 
     project, 
     dashboardLayout, 
-    isAddingKpi, 
-    newKpiForm, 
     onKpiVisibilityToggle, 
     onChartVisibilityToggle, 
     onAddCustomKpi, 
-    setIsAddingKpi, 
-    setNewKpiForm,
     layouts
 }) => {
+    
     if (!isOpen || !project.analysis) return null;
 
     const analysis = project.analysis;
@@ -56,18 +51,6 @@ export const DashboardSettingsModal: React.FC<Props> = ({
                                 </button>
                             ))}
                         </div>
-                        {isAddingKpi ? (
-                            <form onSubmit={onAddCustomKpi} className="p-4 border border-primary-200 rounded-lg bg-white mt-4 space-y-3">
-                                <h4 className="font-semibold text-primary-800">Add Custom KPI</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input value={newKpiForm.title} onChange={e => setNewKpiForm({ ...newKpiForm, title: e.target.value })} placeholder="KPI Title" required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg" />
-                                    <select value={newKpiForm.column} onChange={e => setNewKpiForm({ ...newKpiForm, column: e.target.value })} required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="">Select Column</option>{Object.keys(project.dataSource.data[0] || {}).map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                    <select value={newKpiForm.operation} onChange={e => setNewKpiForm({ ...newKpiForm, operation: e.target.value as any })} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="sum">Sum</option><option value="average">Average</option><option value="count_distinct">Count Distinct</option></select>
-                                    <select value={newKpiForm.format} onChange={e => setNewKpiForm({ ...newKpiForm, format: e.target.value as any })} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option></select>
-                                </div>
-                                <div className="flex justify-end space-x-2"><button type="button" onClick={() => setIsAddingKpi(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md">Cancel</button><button type="submit" className="px-3 py-1.5 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-md">Add</button></div>
-                            </form>
-                        ) : (<button onClick={() => setIsAddingKpi(true)} className="w-full mt-3 p-2 border-2 border-dashed border-primary-300 hover:border-primary-400 hover:bg-primary-100/50 rounded-lg text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center justify-center transition-colors"><PlusCircle size={16} className="mr-2" /> Add Custom KPI</button>)}
                     </section>
                     
                     <section>

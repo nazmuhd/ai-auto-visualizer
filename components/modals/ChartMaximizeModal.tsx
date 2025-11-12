@@ -1,17 +1,33 @@
 import React from 'react';
 import { ChartConfig, DataRow } from '../../types.ts';
-import { ChartRenderer } from '../charts/ChartRenderer.tsx';
+import { ChartRenderer, TimeFilterPreset } from '../charts/ChartRenderer.tsx';
 import { X, Maximize } from 'lucide-react';
 
 interface Props {
   config: ChartConfig;
   data: DataRow[];
+  allData: DataRow[];
   dateColumn: string | null;
   onUpdate: (newConfig: ChartConfig) => void;
   onClose: () => void;
+  onFilterChange: (column: string, values: Set<string>) => void;
+  onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
+  activeFilters: Record<string, Set<string>>;
+  activeTimeFilter: { type: TimeFilterPreset; start?: string; end?: string };
 }
 
-export const ChartMaximizeModal: React.FC<Props> = ({ config, data, dateColumn, onUpdate, onClose }) => {
+export const ChartMaximizeModal: React.FC<Props> = ({ 
+    config, 
+    data, 
+    allData,
+    dateColumn, 
+    onUpdate, 
+    onClose, 
+    onFilterChange,
+    onTimeFilterChange,
+    activeFilters,
+    activeTimeFilter 
+}) => {
   if (!config) return null;
 
   return (
@@ -39,10 +55,15 @@ export const ChartMaximizeModal: React.FC<Props> = ({ config, data, dateColumn, 
             <ChartRenderer 
                 config={config} 
                 data={data} 
+                allData={allData}
                 dateColumn={dateColumn} 
                 onUpdate={onUpdate}
                 onMaximize={() => {}} // Disable maximize button inside modal
                 enableScrollZoom={true} // Enable scroll-to-zoom feature
+                onFilterChange={onFilterChange}
+                onTimeFilterChange={onTimeFilterChange}
+                activeFilters={activeFilters}
+                activeTimeFilter={activeTimeFilter}
             />
         </div>
       </div>

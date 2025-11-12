@@ -7,13 +7,20 @@ import { RechartsScatterChart } from './RechartsScatterChart.tsx';
 import { RechartsComboChart } from './RechartsComboChart.tsx';
 import { Loader2, MoreVertical, Edit3, PieChart, BarChart, LineChart, ScatterChart, AreaChart, Info, X, Download, Grid, List, Tag, Calendar, ChevronDown, Filter, Check, ChevronRight, Image as ImageIcon, Palette, Maximize } from 'lucide-react';
 
+export type TimeFilterPreset = 'all' | '7d' | '30d' | '90d' | 'ytd' | 'custom';
+
 interface Props {
     config: ChartConfig;
     data: DataRow[];
     dateColumn: string | null;
+    allData: DataRow[]; // Full unfiltered dataset for calculating filter options
     onUpdate?: (newConfig: ChartConfig) => void;
     onMaximize?: (config: ChartConfig) => void;
     enableScrollZoom?: boolean;
+    onFilterChange: (column: string, values: Set<string>) => void;
+    onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
+    activeFilters: Record<string, Set<string>>;
+    activeTimeFilter: { type: TimeFilterPreset; start?: string; end?: string };
 }
 
 export interface ViewOptions {
@@ -31,9 +38,6 @@ const formatColumnName = (name: string) => {
         .trim()
         .replace(/\b\w/g, char => char.toUpperCase());
 };
-
-
-type TimeFilterPreset = 'all' | '7d' | '30d' | '90d' | 'ytd' | 'custom';
 
 const PALETTES: Record<string, string[]> = {
     'Default': ['#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'],
@@ -60,7 +64,7 @@ const ControlWrapper: React.FC<{ label: string, children: React.ReactNode}> = ({
     </div>
 );
 
-const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onUpdate, onMaximize, enableScrollZoom = false }) => {
+const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateColumn, onUpdate, onMaximize, enableScrollZoom = false, onFilterChange, onTimeFilterChange, activeFilters, activeTimeFilter }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     
@@ -76,12 +80,10 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         showLabels: true
     });
 
-    const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start: string; end: string }>({ type: 'all', start: '', end: '' });
     const [timeGrain, setTimeGrain] = useState<TimeGrain>('daily');
-    const [activeCategoryFilters, setActiveCategoryFilters] = useState<Record<string, Set<string>>>({});
     const [editForm, setEditForm] = useState<ChartConfig>(config);
     
-    const columns = useMemo(() => (data && data.length > 0 ? Object.keys(data[0]) : []), [data]);
+    const columns = useMemo(() => (allData && allData.length > 0 ? Object.keys(allData[0]) : []), [allData]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -100,67 +102,27 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
     }, [config.type, config.mapping.color]);
 
     const filterableColumns = useMemo(() => {
-        if (!data || data.length === 0) return [];
-        const columns = Object.keys(data[0]);
+        if (!allData || allData.length === 0) return [];
+        const columns = Object.keys(allData[0]);
         const candidates: { col: string; values: string[] }[] = [];
         const MAX_UNIQUE_VALUES = 25;
 
         columns.forEach(col => {
             if (col === config.mapping.y || col === dateColumn) return;
-            const uniqueValues = new Set(data.slice(0, 500).map(row => String(row[col] || '')));
+            const uniqueValues = new Set(allData.slice(0, 500).map(row => String(row[col] || '')));
             if (uniqueValues.size > 1 && uniqueValues.size <= MAX_UNIQUE_VALUES) {
-                const fullUnique = Array.from<string>(new Set(data.map(row => String(row[col] || '')))).filter(v => v && v !== 'null' && v !== 'undefined' && v !== 'NaN');
+                const fullUnique = Array.from<string>(new Set(allData.map(row => String(row[col] || '')))).filter(v => v && v !== 'null' && v !== 'undefined' && v !== 'NaN');
                 if (fullUnique.length <= MAX_UNIQUE_VALUES) candidates.push({ col, values: fullUnique.sort() });
             }
         });
         return candidates.slice(0, 4);
-    }, [data, config.mapping.y, dateColumn]);
+    }, [allData, config.mapping.y, dateColumn]);
 
-    const filteredData = useMemo(() => {
-        if (!data) return [];
-        let result = data;
-
-        if (dateColumn && timeFilter.type !== 'all') {
-            const now = new Date();
-            let startDate: Date | null = null;
-            let endDate: Date | null = new Date(); 
-
-            switch (timeFilter.type) {
-                case '7d': startDate = new Date(); startDate.setDate(now.getDate() - 7); break;
-                case '30d': startDate = new Date(); startDate.setDate(now.getDate() - 30); break;
-                case '90d': startDate = new Date(); startDate.setDate(now.getDate() - 90); break;
-                case 'ytd': startDate = new Date(now.getFullYear(), 0, 1); break;
-                case 'custom':
-                    endDate = null;
-                    if (timeFilter.start) startDate = new Date(timeFilter.start + 'T00:00:00');
-                    if (timeFilter.end) endDate = new Date(timeFilter.end + 'T23:59:59');
-                    break;
-            }
-
-            result = result.filter(row => {
-                const rowDateValue = row[dateColumn];
-                if (!rowDateValue) return false;
-                const rowDate = new Date(rowDateValue);
-                if (isNaN(rowDate.getTime())) return false;
-                if (startDate && rowDate < startDate) return false;
-                if (endDate && rowDate > endDate) return false;
-                return true;
-            });
-        }
-
-        Object.entries(activeCategoryFilters).forEach(([col, allowedValues]) => {
-            if ((allowedValues as Set<string>).size > 0) result = result.filter(row => (allowedValues as Set<string>).has(String(row[col])));
-        });
-
-        return result;
-    }, [data, dateColumn, timeFilter, activeCategoryFilters]);
 
     const toggleCategoryFilter = (col: string, val: string) => {
-        setActiveCategoryFilters(prev => {
-            const currentSet = new Set(prev[col] || []);
-            currentSet.has(val) ? currentSet.delete(val) : currentSet.add(val);
-            return { ...prev, [col]: currentSet };
-        });
+        const currentSet = new Set(activeFilters[col] || []);
+        currentSet.has(val) ? currentSet.delete(val) : currentSet.add(val);
+        onFilterChange(col, currentSet);
     };
 
     const handleSaveEdit = () => {
@@ -199,9 +161,9 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
     };
 
     const handleDownloadCSV = () => {
-        if (!filteredData || filteredData.length === 0) return;
-        const headers = Object.keys(filteredData[0]);
-        const csvContent = [headers.join(','), ...filteredData.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','))].join('\n');
+        if (!data || data.length === 0) return;
+        const headers = Object.keys(data[0]);
+        const csvContent = [headers.join(','), ...data.map(row => headers.map(h => JSON.stringify(row[h] ?? '')).join(','))].join('\n');
         const url = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8' }));
         const link = document.createElement('a');
         link.href = url;
@@ -211,8 +173,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
     };
 
     const availableChartTypes = useMemo(() => {
-        if (!data || data.length === 0) return [];
-        const sample = data[0];
+        if (!allData || allData.length === 0) return [];
+        const sample = allData[0];
         const xVal = sample[config.mapping.x], yVal = sample[config.mapping.y];
         const isXNumeric = !isNaN(Number(xVal)), isYNumeric = !isNaN(Number(yVal));
         const isXDate = !isNaN(Date.parse(xVal)) && isNaN(Number(xVal));
@@ -229,16 +191,16 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         }
         if (isXNumeric && isYNumeric) types.push({ type: 'scatter', label: 'Scatter Plot', icon: ScatterChart, recommended: true });
         return types.filter(t => t.type !== config.type);
-    }, [data, config.mapping, config.type]);
+    }, [allData, config.mapping, config.type]);
     
     const isTimeBased = useMemo(() => {
-         if (!data || data.length === 0) return false;
-         const sampleX = data[0][config.mapping.x];
+         if (!allData || allData.length === 0) return false;
+         const sampleX = allData[0][config.mapping.x];
          return !isNaN(Date.parse(sampleX)) && isNaN(Number(sampleX));
-    }, [data, config.mapping.x]);
+    }, [allData, config.mapping.x]);
 
     const renderChart = () => {
-        const commonProps = { data: filteredData, mapping: config.mapping, viewOptions, colors: config.colors || PALETTES['Default'], formatLabel: formatColumnName };
+        const commonProps = { data, mapping: config.mapping, viewOptions, colors: config.colors || PALETTES['Default'], formatLabel: formatColumnName };
         switch (config.type) {
             case 'bar': return <RechartsBarChart {...commonProps} />;
             case 'stacked-bar': return <RechartsBarChart {...commonProps} isStacked={true} />;
@@ -253,10 +215,10 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
     };
 
     const renderPreviewChart = () => {
-        if (!data || data.length === 0) return <div className="flex items-center justify-center h-full text-slate-500">No data to preview.</div>;
+        if (!allData || allData.length === 0) return <div className="flex items-center justify-center h-full text-slate-500">No data to preview.</div>;
         
         const previewViewOptions: ViewOptions = { showGrid: true, showLegend: true, showLabels: false };
-        const commonProps = { data: data, mapping: editForm.mapping, viewOptions: previewViewOptions, colors: editForm.colors || PALETTES['Default'], formatLabel: formatColumnName };
+        const commonProps = { data: allData, mapping: editForm.mapping, viewOptions: previewViewOptions, colors: editForm.colors || PALETTES['Default'], formatLabel: formatColumnName };
 
         switch (editForm.type) {
             case 'bar': return <RechartsBarChart {...commonProps} />;
@@ -287,7 +249,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         </button>
     );
 
-    const hasActiveFilters = timeFilter.type !== 'all' || Object.values(activeCategoryFilters).some(s => (s as Set<string>).size > 0);
+    const hasActiveFilters = activeTimeFilter.type !== 'all' || Object.values(activeFilters).some(s => s.size > 0);
     const AccordionTrigger = ({ label, icon: Icon, isActive, onClick, hasActiveChild }: { label: string, icon: React.ElementType, isActive: boolean, onClick: () => void, hasActiveChild: boolean }) => (
         <button onClick={onClick} className={`w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between ${hasActiveChild ? 'bg-primary-50/50' : ''}`}>
             <div className="flex items-center">
@@ -337,21 +299,21 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                                             <div>
                                                 <div className="flex justify-between items-center">
                                                     <AccordionTrigger label="Filter Data" icon={Filter} isActive={expandedMenuGroup === 'filter'} onClick={() => setExpandedMenuGroup(g => g === 'filter' ? null : 'filter')} hasActiveChild={hasActiveFilters} />
-                                                    {hasActiveFilters && expandedMenuGroup !== 'filter' && <button onClick={() => { setTimeFilter({ type: 'all', start: '', end: '' }); setActiveCategoryFilters({}); }} className="absolute right-12 text-[10px] text-primary-600 hover:text-primary-700">Clear</button>}
+                                                    {hasActiveFilters && expandedMenuGroup !== 'filter' && <button onClick={() => { onTimeFilterChange({type: 'all'}); onFilterChange('__clear__', new Set()); }} className="absolute right-12 text-[10px] text-primary-600 hover:text-primary-700">Clear</button>}
                                                 </div>
                                                 {expandedMenuGroup === 'filter' && (
                                                     <div className="bg-slate-50 border-y border-slate-100">
-                                                        {hasActiveFilters && <div className="px-4 pt-3 pb-1"><button onClick={() => { setTimeFilter({ type: 'all', start: '', end: '' }); setActiveCategoryFilters({}); }} className="w-full text-center text-xs py-1 text-primary-600 bg-primary-100 hover:bg-primary-200 rounded">Clear All Filters</button></div>}
+                                                        {hasActiveFilters && <div className="px-4 pt-3 pb-1"><button onClick={() => { onTimeFilterChange({type: 'all'}); onFilterChange('__clear__', new Set()); }} className="w-full text-center text-xs py-1 text-primary-600 bg-primary-100 hover:bg-primary-200 rounded">Clear All Filters</button></div>}
                                                         {dateColumn && (
                                                             <div>
-                                                                <button onClick={() => setExpandedFilterItem(s => s === 'time' ? null : 'time')} className={`w-full text-left px-8 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between ${timeFilter.type !== 'all' ? 'bg-primary-50/50' : ''}`}>
-                                                                    <div className="flex items-center"><Calendar size={14} className={`mr-2 ${timeFilter.type !== 'all' ? 'text-primary-600' : 'text-slate-400'}`} /> <span className={timeFilter.type !== 'all' ? 'font-medium text-primary-900' : ''}>Time Period</span></div>
+                                                                <button onClick={() => setExpandedFilterItem(s => s === 'time' ? null : 'time')} className={`w-full text-left px-8 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between ${activeTimeFilter.type !== 'all' ? 'bg-primary-50/50' : ''}`}>
+                                                                    <div className="flex items-center"><Calendar size={14} className={`mr-2 ${activeTimeFilter.type !== 'all' ? 'text-primary-600' : 'text-slate-400'}`} /> <span className={activeTimeFilter.type !== 'all' ? 'font-medium text-primary-900' : ''}>Time Period</span></div>
                                                                     <ChevronRight size={14} className={`text-slate-400 transition-transform ${expandedFilterItem === 'time' ? 'rotate-90' : ''}`} />
                                                                 </button>
                                                                 {expandedFilterItem === 'time' && (
                                                                     <div className="bg-slate-100 px-4 py-3 border-y border-slate-200 space-y-3">
-                                                                        <div className="grid grid-cols-3 gap-2">{['all', '7d', '30d', '90d', 'ytd'].map(p => <button key={p} onClick={() => setTimeFilter({ type: p as TimeFilterPreset, start: '', end: '' })} className={`px-2 py-1.5 text-xs font-medium rounded border transition-colors ${timeFilter.type === p ? 'bg-primary-100 border-primary-300 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>{p === 'all' ? 'All' : p.toUpperCase()}</button>)}</div>
-                                                                        <div className="flex items-center space-x-2"><input type="date" className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-primary-500 disabled:bg-slate-200" value={timeFilter.start} onChange={e => setTimeFilter({ type: 'custom', start: e.target.value, end: timeFilter.end })} /><span className="text-slate-400">-</span><input type="date" className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-primary-500 disabled:bg-slate-200" value={timeFilter.end} onChange={e => setTimeFilter({ type: 'custom', start: timeFilter.start, end: e.target.value })} /></div>
+                                                                        <div className="grid grid-cols-3 gap-2">{['all', '7d', '30d', '90d', 'ytd'].map(p => <button key={p} onClick={() => onTimeFilterChange({type: p as TimeFilterPreset})} className={`px-2 py-1.5 text-xs font-medium rounded border transition-colors ${activeTimeFilter.type === p ? 'bg-primary-100 border-primary-300 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>{p === 'all' ? 'All' : p.toUpperCase()}</button>)}</div>
+                                                                        <div className="flex items-center space-x-2"><input type="date" className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-primary-500 disabled:bg-slate-200" value={activeTimeFilter.start || ''} onChange={e => onTimeFilterChange({type:'custom', start: e.target.value, end: activeTimeFilter.end})} /><span className="text-slate-400">-</span><input type="date" className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-primary-500 disabled:bg-slate-200" value={activeTimeFilter.end || ''} onChange={e => onTimeFilterChange({type:'custom', start:activeTimeFilter.start, end: e.target.value})} /></div>
                                                                         {isTimeBased && (
                                                                              <div className="pt-2">
                                                                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Group By</label>
@@ -365,7 +327,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                                                             </div>
                                                         )}
                                                         {filterableColumns.map((colData) => {
-                                                            const activeCount = activeCategoryFilters[colData.col]?.size || 0;
+                                                            const activeCount = activeFilters[colData.col]?.size || 0;
                                                             const isExpanded = expandedFilterItem === `cat_${colData.col}`;
                                                             return (
                                                                 <div key={colData.col}>
@@ -374,7 +336,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                                                                         <ChevronRight size={14} className={`text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                                                                     </button>
                                                                     {isExpanded && (
-                                                                        <div className="bg-slate-100 max-h-48 overflow-y-auto custom-scrollbar border-y border-slate-200">{colData.values.map(val => <button key={val} onClick={(e) => { e.stopPropagation(); toggleCategoryFilter(colData.col, val); }} className={`w-full text-left px-10 py-2 text-xs flex items-center justify-between hover:bg-slate-200/50 ${activeCategoryFilters[colData.col]?.has(val) ? 'text-primary-700 font-medium bg-primary-50/50' : 'text-slate-600'}`}><span className="truncate mr-2">{val}</span>{activeCategoryFilters[colData.col]?.has(val) && <Check size={14} className="text-primary-600" />}</button>)}</div>
+                                                                        <div className="bg-slate-100 max-h-48 overflow-y-auto custom-scrollbar border-y border-slate-200">{colData.values.map(val => <button key={val} onClick={(e) => { e.stopPropagation(); toggleCategoryFilter(colData.col, val); }} className={`w-full text-left px-10 py-2 text-xs flex items-center justify-between hover:bg-slate-200/50 ${activeFilters[colData.col]?.has(val) ? 'text-primary-700 font-medium bg-primary-50/50' : 'text-slate-600'}`}><span className="truncate mr-2">{val}</span>{activeFilters[colData.col]?.has(val) && <Check size={14} className="text-primary-600" />}</button>)}</div>
                                                                     )}
                                                                 </div>
                                                             );
@@ -425,13 +387,13 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                     </div>
                     
                     <div ref={chartContainerRef} className="flex-1 px-4 pb-4 min-h-0 relative z-0">
-                        {filteredData.length > 0 ? renderChart() : <div className="flex items-center justify-center h-full text-slate-500">No data available for the selected filters.</div>}
+                        {data.length > 0 ? renderChart() : <div className="flex items-center justify-center h-full text-slate-500">No data available for the selected filters.</div>}
                     </div>
                 </div>
             </div>
             {isEditModalOpen && (
-                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm duration-200" onClick={() => setIsEditModalOpen(false)}>
-                    <div role="dialog" aria-modal="true" aria-labelledby="edit-chart-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] duration-200 relative flex flex-col" onClick={(e) => e.stopPropagation()}>
+                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-chart-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] relative flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 pb-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
                             <h3 id="edit-chart-modal-title" className="text-xl font-bold text-slate-900 flex items-center"><Edit3 size={20} className="mr-3 text-primary-600" />Edit Chart</h3>
                             <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full"><X size={20} /></button>
