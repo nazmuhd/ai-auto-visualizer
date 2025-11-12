@@ -10,7 +10,6 @@ const comparisonData = [
     { feature: "Sharing & Collaboration", icon: Share2, us: true, them: false, us_text: "Built-in", them_text: "Manual Export" },
 ];
 
-// FIX: Changed component definition to use React.FC for better type safety with special props like 'key'.
 const ComparisonRowDesktop: React.FC<{ feature: string; icon: React.ElementType; us: boolean; them: boolean }> = ({ feature, icon: Icon, us, them }) => (
     <div className="grid grid-cols-3 gap-4 items-center py-4 border-b border-slate-100 last:border-b-0">
         <div className="flex items-center">
@@ -36,7 +35,6 @@ export const ComparisonSection: React.FC = () => {
                     <p className="text-lg text-slate-600 mt-2">See how AI Insights stacks up against traditional methods.</p>
                 </div>
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6">
-                    {/* Desktop Table View */}
                     <div className="hidden sm:block">
                         <div className="grid grid-cols-3 gap-4 pb-4 border-b-2 border-slate-200">
                             <div className="font-semibold text-slate-800">Feature</div>
@@ -47,7 +45,6 @@ export const ComparisonSection: React.FC = () => {
                            {comparisonData.map((item) => <ComparisonRowDesktop key={item.feature} feature={item.feature} icon={item.icon} us={item.us} them={item.them} />)}
                         </div>
                     </div>
-                    {/* Mobile Card View */}
                     <div className="sm:hidden space-y-4">
                         {comparisonData.map(({ feature, icon: Icon, us, them, us_text, them_text }) => (
                             <div key={feature} className="p-4 rounded-lg border border-slate-200">

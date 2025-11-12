@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// Fix: Added .tsx extension to be explicit, which helps resolve module loading issues.
 import App from './App.tsx';
 
 const rootElement = document.getElementById('root');

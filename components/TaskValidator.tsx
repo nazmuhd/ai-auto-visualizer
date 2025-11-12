@@ -20,16 +20,14 @@ export const TaskValidator: React.FC<Props> = ({
 
     useEffect(() => {
         const runSteps = async () => {
-            setIsAllComplete(false); // Reset on new validation
+            setIsAllComplete(false);
             for (let i = 0; i < tasks.length; i++) {
                 setInProgressTask(i);
-                // Stagger the animation to give a sense of active validation for each step.
                 await new Promise(resolve => setTimeout(resolve, 400));
                 setCompletedTasks(prev => new Set(prev).add(i));
             }
             setInProgressTask(null);
-            setIsAllComplete(true); // Signal all tasks are done
-            // Wait a moment after all checks before completing
+            setIsAllComplete(true);
             await new Promise(resolve => setTimeout(resolve, 500));
             onComplete();
         };

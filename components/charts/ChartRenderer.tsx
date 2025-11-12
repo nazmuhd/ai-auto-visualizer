@@ -1,5 +1,4 @@
-import React, { Suspense, useState, useRef, useEffect, useMemo, memo } from 'react';
-// Fix: Imported TimeGrain from the central types.ts file.
+import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { ChartConfig, DataRow, ChartType, TimeGrain } from '../../types.ts';
 import { RechartsBarChart } from './RechartsBarChart.tsx';
 import { RechartsLineChart } from './RechartsLineChart.tsx';
@@ -23,15 +22,14 @@ export interface ViewOptions {
     showLabels: boolean;
 }
 
-// Utility to format raw column names into human-readable labels
 const formatColumnName = (name: string) => {
     if (!name || typeof name !== 'string') return '';
     return name
         .replace(/_/g, ' ')
         .replace(/-/g, ' ')
-        .replace(/([A-Z])/g, ' $1') // Add space before uppercase letters
+        .replace(/([A-Z])/g, ' $1')
         .trim()
-        .replace(/\b\w/g, char => char.toUpperCase()); // Capitalize each word
+        .replace(/\b\w/g, char => char.toUpperCase());
 };
 
 
@@ -111,7 +109,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         if (dateColumn && timeFilter.type !== 'all') {
             const now = new Date();
             let startDate: Date | null = null;
-            let endDate: Date | null = new Date(); // Default end date to today for presets
+            let endDate: Date | null = new Date(); 
 
             switch (timeFilter.type) {
                 case '7d': startDate = new Date(); startDate.setDate(now.getDate() - 7); break;
@@ -119,7 +117,6 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                 case '90d': startDate = new Date(); startDate.setDate(now.getDate() - 90); break;
                 case 'ytd': startDate = new Date(now.getFullYear(), 0, 1); break;
                 case 'custom':
-                    // For custom, clear default end date
                     endDate = null;
                     if (timeFilter.start) startDate = new Date(timeFilter.start + 'T00:00:00');
                     if (timeFilter.end) endDate = new Date(timeFilter.end + 'T23:59:59');
@@ -221,7 +218,6 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         return types.filter(t => t.type !== config.type);
     }, [data, config.mapping, config.type]);
     
-    // Determine if the current chart is time-based to show time grain options
     const isTimeBased = useMemo(() => {
          if (!data || data.length === 0) return false;
          const sampleX = data[0][config.mapping.x];
@@ -236,8 +232,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
             case 'line': return <RechartsLineChart {...commonProps} timeGrain={timeGrain} enableScrollZoom={enableScrollZoom} />;
             case 'area': return <RechartsLineChart {...commonProps} isArea={true} timeGrain={timeGrain} enableScrollZoom={enableScrollZoom} />;
             case 'pie': return <RechartsPieChart {...commonProps} />;
-            case 'scatter': return <RechartsScatterChart {...commonProps} />;
-            case 'bubble': return <RechartsScatterChart {...commonProps} isBubble={true} />;
+            case 'scatter': return <RechartsScatterChart {...commonProps} enableScrollZoom={enableScrollZoom} />;
+            case 'bubble': return <RechartsScatterChart {...commonProps} isBubble={true} enableScrollZoom={enableScrollZoom} />;
             case 'combo': return <RechartsComboChart {...commonProps} />;
             default: return <div className="flex items-center justify-center h-full text-slate-500">Unsupported chart type.</div>;
         }
@@ -387,9 +383,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                     </div>
                     
                     <div ref={chartContainerRef} className="flex-1 px-4 pb-4 min-h-0 relative z-0">
-                        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-primary-500" size={32} /></div>}>
-                            {filteredData.length > 0 ? renderChart() : <div className="flex items-center justify-center h-full text-slate-500">No data available for the selected filters.</div>}
-                        </Suspense>
+                        {filteredData.length > 0 ? renderChart() : <div className="flex items-center justify-center h-full text-slate-500">No data available for the selected filters.</div>}
                     </div>
                 </div>
             </div>

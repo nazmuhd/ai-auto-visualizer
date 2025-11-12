@@ -10,7 +10,6 @@ interface Props {
 export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
   return (
     <footer className="bg-black text-slate-300">
-      {/* Pre-footer CTA */}
       <div className="bg-slate-800">
          <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl font-extrabold text-white">Ready to Unlock Your Data's Potential?</h2>
@@ -27,17 +26,14 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
         </div>
       </div>
       
-       {/* Decorative Wave Separator */}
       <div className="bg-slate-800 leading-none">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 32" className="block fill-black">
             <path d="M0,32L1440,0L1440,32L0,32Z"></path>
         </svg>
       </div>
 
-      {/* Main Footer Content */}
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {/* Column 1: Brand */}
           <div className="space-y-4 col-span-2 md:col-span-1">
             <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('landing')}} className="flex items-center">
               <div className="bg-white/10 backdrop-blur-sm text-white p-2 rounded-lg">
@@ -51,7 +47,6 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
               <a href="#" className="text-slate-400 hover:text-white"><Linkedin size={20}/></a>
             </div>
           </div>
-          {/* Column 2: Product */}
           <div>
             <h3 className="text-sm font-semibold text-slate-200 tracking-wider uppercase">Product</h3>
             <ul className="mt-4 space-y-3">
@@ -59,7 +54,6 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
               <li><a href="#" onClick={(e) => {e.preventDefault(); onNavigate('pricing')}} className="text-base text-slate-400 hover:text-white">Pricing</a></li>
             </ul>
           </div>
-          {/* Column 3: Company */}
           <div>
             <h3 className="text-sm font-semibold text-slate-200 tracking-wider uppercase">Company</h3>
             <ul className="mt-4 space-y-3">
@@ -67,7 +61,6 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
               <li><a href="#" onClick={(e) => {e.preventDefault(); onContactClick()}} className="text-base text-slate-400 hover:text-white">Contact</a></li>
             </ul>
           </div>
-          {/* Column 4: Legal */}
           <div>
             <h3 className="text-sm font-semibold text-slate-200 tracking-wider uppercase">Legal</h3>
             <ul className="mt-4 space-y-3">

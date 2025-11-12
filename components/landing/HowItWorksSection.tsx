@@ -1,8 +1,6 @@
-
 import React from 'react';
 import { UploadCloud, BrainCircuit, BarChart3 } from 'lucide-react';
 
-// FIX: Changed component definition to use React.FC and an interface for props to improve type safety and resolve inference issues with the `children` prop.
 interface StepCardProps {
     number: string;
     title: string;
@@ -35,21 +33,18 @@ export const HowItWorksSection: React.FC = () => {
                 <style>{`
                     @keyframes march {
                         to {
-                            stroke-dashoffset: -44; /* Adjusted for the new dash array pattern */
+                            stroke-dashoffset: -44;
                         }
                     }
                     .animate-path-dots {
                         animation: march 2s linear infinite;
                     }
                 `}</style>
-                {/* SVG Wave and Animation Path */}
                 <svg width="120%" height="100%" viewBox="0 -40 1200 200" preserveAspectRatio="xMidYMid slice" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
                     <defs>
-                        {/* The new path starts at the first card, goes through the second, and ends at the third. */}
                         <path id="wavy-path" d="M 270 -28 Q 435 150, 600 61 T 930 -28" fill="none" />
                     </defs>
                     
-                    {/* The animated, rounded-circle line */}
                     <use 
                         href="#wavy-path" 
                         strokeDasharray="0 22" 
@@ -60,7 +55,6 @@ export const HowItWorksSection: React.FC = () => {
                     />
                 </svg>
 
-                {/* Positioned Step Cards for Desktop, aligned to the wave */}
                 <div className="absolute w-full h-full">
                     <div className="absolute top-[5%]" style={{left: '17%', transform: 'translateX(-50%)'}}><StepCard number="1" title="Upload Your Data" className="transform -rotate-6">Securely upload your CSV or Excel file. Your data is processed directly in your browser.</StepCard></div>
                     <div className="absolute top-[42%]" style={{left: '50%', transform: 'translateX(-50%) translateY(-50%)'}}><StepCard number="2" title="AI-Powered Analysis" className="transform rotate-2">Our AI analyzes your data to identify key metrics and suggest effective visualizations.</StepCard></div>
@@ -68,7 +62,6 @@ export const HowItWorksSection: React.FC = () => {
                 </div>
             </div>
 
-            {/* Mobile/Tablet Fallback view */}
             <div className="lg:hidden grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
                     <div className="flex items-center mb-3"><div className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-100 text-primary-600 font-bold text-lg">1</div></div>

@@ -27,7 +27,6 @@ interface Props {
   onLogout: () => void;
 }
 
-// Sub-component for a single project link. It now manages its own outside-click detection.
 const ProjectLink: React.FC<{
   proj: Project;
   isActive: boolean;
@@ -43,7 +42,6 @@ const ProjectLink: React.FC<{
   const projectLinkRef = useRef<HTMLLIElement>(null);
   const isMenuOpenForThis = contextMenuOpen === proj.id;
 
-  // This effect correctly handles closing the menu when clicking outside this specific component
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (isMenuOpenForThis && projectLinkRef.current && !projectLinkRef.current.contains(event.target as Node)) {
@@ -57,7 +55,6 @@ const ProjectLink: React.FC<{
   const showThreeDots = isOpen;
 
   const handleCombinedClick = () => {
-    // For collapsed desktop view: only select the project.
     onSelectProject(proj.id);
   };
   
@@ -155,7 +152,6 @@ export const Sidebar: React.FC<Props> = ({
 
   return (
     <>
-        {/* Mobile Backdrop */}
         {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-300" />}
 
         <aside

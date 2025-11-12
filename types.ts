@@ -1,7 +1,3 @@
-
-
-
-
 export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
@@ -10,7 +6,6 @@ export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'combo' | 
 
 export type AggregationType = 'sum' | 'average' | 'count' | 'none';
 
-// Fix: Moved TimeGrain here to be shared across chart components.
 export type TimeGrain = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export interface ChartMapping {

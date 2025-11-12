@@ -20,17 +20,11 @@ interface Props {
   colors: string[];
 }
 
-// FIX: Added a new component for Combo charts to handle dual-axis rendering.
 export const RechartsComboChart: React.FC<Props> = ({ data, mapping, viewOptions, colors }) => {
   const processedData = useMemo(() => {
-    // This assumes data is structured with one X-axis column and two Y-axis columns.
-    // The first Y-axis column from the mapping is treated as the Bar, the second as the Line.
-    // This logic may need refinement based on how the AI provides dual-Y mappings.
     return data.map(row => ({
       ...row,
       [mapping.y]: Number(row[mapping.y]),
-      // Assuming the second metric is stored in the 'color' field for now
-      // This is a simplification; a more robust solution would adapt the 'mapping' type.
       lineData: Number(row[mapping.color as any]),
     }));
   }, [data, mapping]);

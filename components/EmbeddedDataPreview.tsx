@@ -23,7 +23,6 @@ export const EmbeddedDataPreview: React.FC<Props> = ({ data, report, onConfirm, 
 
     return (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-            {/* Action Header */}
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900">Confirm Your Data</h2>
@@ -48,7 +47,6 @@ export const EmbeddedDataPreview: React.FC<Props> = ({ data, report, onConfirm, 
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Validation Report */}
                 <div className="lg:col-span-1 space-y-6">
                      {report && (
                         <div className={`p-6 rounded-2xl border ${isHighQuality ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
@@ -105,7 +103,6 @@ export const EmbeddedDataPreview: React.FC<Props> = ({ data, report, onConfirm, 
                     </div>
                 </div>
 
-                {/* Right Column: Data Table */}
                 <div className="lg:col-span-2 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden">
                      <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
                         <h3 className="font-semibold text-slate-900">Data Sample</h3>

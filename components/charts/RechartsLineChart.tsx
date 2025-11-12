@@ -89,22 +89,34 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
     }, [data, mapping, timeGrain]);
 
     const [brushDomain, setBrushDomain] = useState<{ startIndex?: number, endIndex?: number }>({});
+    const [chartKey, setChartKey] = useState(0);
     const chartWrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => { setBrushDomain({}); }, [processedData]);
+
+    const xAxisDomain = useMemo(() => {
+        if (processedData.length === 0) return [undefined, undefined];
+        const { startIndex, endIndex } = brushDomain;
+        if (startIndex !== undefined && endIndex !== undefined) {
+            const startValue = processedData[startIndex][mapping.x];
+            const endValue = processedData[endIndex][mapping.x];
+            return [startValue, endValue];
+        }
+        return [undefined, undefined];
+    }, [brushDomain, processedData, mapping.x]);
     
     const handleWheelZoom = useCallback((e: WheelEvent) => {
         e.preventDefault();
         setBrushDomain(prevDomain => {
             const { startIndex = 0, endIndex = processedData.length - 1 } = prevDomain;
             const range = endIndex - startIndex;
-            if (range <= 1 && e.deltaY < 0) return prevDomain;
+            if (range <= 1 && e.deltaY < 0) return prevDomain; // Don't zoom in further than 2 points
 
             const zoomFactor = 0.1;
             const change = Math.ceil(range * zoomFactor);
             
             if (e.deltaY < 0) { // Zoom in
-                const newStart = Math.min(endIndex - 1, startIndex + change);
+                const newStart = Math.min(endIndex - 2, startIndex + change); // ensure range is at least 2
                 const newEnd = Math.max(newStart + 1, endIndex - change);
                 return { startIndex: newStart, endIndex: newEnd };
             } else { // Zoom out
@@ -114,6 +126,11 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
             }
         });
     }, [processedData.length]);
+    
+    const handleResetZoom = () => {
+        setBrushDomain({});
+        setChartKey(k => k + 1);
+    };
 
     useEffect(() => {
         const chartElement = chartWrapperRef.current;
@@ -131,12 +148,13 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
     return (
         <div className="w-full h-full relative" ref={chartWrapperRef}>
              {isZoomed && enableScrollZoom && (
-                <button onClick={() => setBrushDomain({})} className="absolute top-0 right-8 z-20 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium px-2.5 py-1 rounded-md flex items-center shadow-sm">
+                <button onClick={handleResetZoom} className="absolute top-0 right-8 z-20 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium px-2.5 py-1 rounded-md flex items-center shadow-sm">
                     <RotateCcw size={12} className="mr-1.5"/> Reset Zoom
                 </button>
             )}
             <ResponsiveContainer width="100%" height="100%">
                 <ChartComponent
+                    key={chartKey}
                     data={processedData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                 >
@@ -145,6 +163,8 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                     )}
                     <XAxis 
                         dataKey={mapping.x}
+                        domain={xAxisDomain as any}
+                        allowDataOverflow={true}
                         tickFormatter={(val) => {
                             if (!isTemporal) return val;
                             const date = new Date(val);
@@ -165,6 +185,7 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                         tickFormatter={(value) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)}
                         width={40}
                         domain={[0, 'dataMax']}
+                        allowDataOverflow={true}
                     />
                     <Tooltip 
                         labelFormatter={(val) => isTemporal ? new Date(val).toLocaleDateString() : val}

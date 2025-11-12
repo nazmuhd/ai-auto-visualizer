@@ -1,8 +1,6 @@
-
 import React from 'react';
 import { Target, BarChart, Settings } from 'lucide-react';
 
-// FIX: Changed component definition to use React.FC and an interface for props to improve type safety and resolve inference issues with the `children` prop.
 interface SolutionCardProps {
     icon: React.ElementType;
     title: string;

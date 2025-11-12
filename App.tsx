@@ -29,7 +29,7 @@ function App() {
   };
 
   const handleNavigate = (newPage: Page) => {
-    window.scrollTo(0, 0); // Scroll to top on page change
+    window.scrollTo(0, 0);
     setPage(newPage);
   };
 

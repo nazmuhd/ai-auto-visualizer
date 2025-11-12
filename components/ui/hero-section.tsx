@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { Page } from '../../types.ts';
 import { Sparkles, ArrowRight, Video, Menu, X } from 'lucide-react';
@@ -20,7 +18,6 @@ export default function HeroSection({ onNavigate, onContactClick }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Close on ESC & click outside (mobile overlay)
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setMenuOpen(false);
