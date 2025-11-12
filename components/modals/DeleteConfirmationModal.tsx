@@ -12,8 +12,8 @@ export const DeleteConfirmationModal: React.FC<Props> = ({ isOpen, onClose, onCo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm duration-200" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md duration-200 relative" onClick={(e) => e.stopPropagation()}>
         <div className="p-6">
             <div className="flex items-start">
                 <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">

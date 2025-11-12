@@ -16,14 +16,14 @@ export const ChartMaximizeModal: React.FC<Props> = ({ config, data, dateColumn, 
 
   return (
     <div 
-        className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+        className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm duration-200"
         onClick={onClose}
     >
       <div 
         role="dialog" 
         aria-modal="true" 
         aria-labelledby="maximize-chart-title" 
-        className="bg-slate-50 rounded-2xl shadow-2xl w-[95vw] h-[90vh] animate-in zoom-in-95 duration-200 relative flex flex-col"
+        className="bg-slate-50 rounded-2xl shadow-2xl w-[95vw] h-[90vh] duration-200 relative flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">

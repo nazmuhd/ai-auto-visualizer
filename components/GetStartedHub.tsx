@@ -27,7 +27,7 @@ export const GetStartedHub: React.FC<Props> = ({ onAnalyzeFile, onCreateProject,
     }
     
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 sm:p-8 animate-in fade-in duration-300">
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 sm:p-8 duration-300">
              <div className="w-full max-w-md text-center">
                  <div className="p-4 bg-primary-100 text-primary-600 rounded-full mb-6 inline-block">
                     <FolderPlus size={40} />

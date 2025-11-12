@@ -68,7 +68,7 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-40 bg-white md:hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-40 bg-white md:hidden duration-200">
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between h-16 px-4 border-b border-slate-200">
                 <a href="#" onClick={(e) => { e.preventDefault(); handleNav('landing'); }} className="flex items-center">

@@ -22,7 +22,7 @@ export const EmbeddedDataPreview: React.FC<Props> = ({ data, report, onConfirm, 
     const isHighQuality = report ? report.score > 85 : true;
 
     return (
-        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900">Confirm Your Data</h2>

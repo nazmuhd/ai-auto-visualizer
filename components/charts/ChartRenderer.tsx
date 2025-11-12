@@ -42,6 +42,24 @@ const PALETTES: Record<string, string[]> = {
     'Forest': ['#166534', '#22c55e', '#86efac', '#dcfce7', '#15803d', '#14532d']
 };
 
+const CHART_TYPE_OPTIONS: { value: ChartType; label: string }[] = [
+    { value: 'bar', label: 'Bar Chart' },
+    { value: 'stacked-bar', label: 'Stacked Bar Chart' },
+    { value: 'line', label: 'Line Chart' },
+    { value: 'area', label: 'Area Chart' },
+    { value: 'pie', label: 'Pie Chart' },
+    { value: 'scatter', label: 'Scatter Plot' },
+    { value: 'bubble', label: 'Bubble Chart' },
+    { value: 'combo', label: 'Combo Chart' },
+];
+
+const ControlWrapper: React.FC<{ label: string, children: React.ReactNode}> = ({ label, children }) => (
+    <div className="mb-4">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+        {children}
+    </div>
+);
+
 const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onUpdate, onMaximize, enableScrollZoom = false }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -61,7 +79,9 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start: string; end: string }>({ type: 'all', start: '', end: '' });
     const [timeGrain, setTimeGrain] = useState<TimeGrain>('daily');
     const [activeCategoryFilters, setActiveCategoryFilters] = useState<Record<string, Set<string>>>({});
-    const [editForm, setEditForm] = useState({ title: config.title, description: config.description, type: config.type });
+    const [editForm, setEditForm] = useState<ChartConfig>(config);
+    
+    const columns = useMemo(() => (data && data.length > 0 ? Object.keys(data[0]) : []), [data]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -74,13 +94,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    useEffect(() => {
-        if (isEditModalOpen) {
-            setEditForm({ title: config.title, description: config.description, type: config.type });
-        }
-    }, [isEditModalOpen, config]);
-
+    
     useEffect(() => {
         setViewOptions(prev => ({ ...prev, showGrid: config.type !== 'pie' && prev.showGrid, showLegend: (!!config.mapping.color || ['pie', 'stacked-bar', 'combo'].includes(config.type)) || prev.showLegend }));
     }, [config.type, config.mapping.color]);
@@ -149,9 +163,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         });
     };
 
-    const handleSaveEdit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (onUpdate) onUpdate({ ...config, ...editForm });
+    const handleSaveEdit = () => {
+        if (onUpdate) onUpdate(editForm);
         setIsEditModalOpen(false);
         setIsMenuOpen(false);
     };
@@ -239,6 +252,35 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
         }
     };
 
+    const renderPreviewChart = () => {
+        if (!data || data.length === 0) return <div className="flex items-center justify-center h-full text-slate-500">No data to preview.</div>;
+        
+        const previewViewOptions: ViewOptions = { showGrid: true, showLegend: true, showLabels: false };
+        const commonProps = { data: data, mapping: editForm.mapping, viewOptions: previewViewOptions, colors: editForm.colors || PALETTES['Default'], formatLabel: formatColumnName };
+
+        switch (editForm.type) {
+            case 'bar': return <RechartsBarChart {...commonProps} />;
+            case 'stacked-bar': return <RechartsBarChart {...commonProps} isStacked={true} />;
+            case 'line': return <RechartsLineChart {...commonProps} timeGrain={'daily'} enableScrollZoom={false} />;
+            case 'area': return <RechartsLineChart {...commonProps} isArea={true} timeGrain={'daily'} enableScrollZoom={false} />;
+            case 'pie': return <RechartsPieChart {...commonProps} />;
+            case 'scatter': return <RechartsScatterChart {...commonProps} enableScrollZoom={false} />;
+            case 'bubble': return <RechartsScatterChart {...commonProps} isBubble={true} enableScrollZoom={false} />;
+            case 'combo': return <RechartsComboChart {...commonProps} />;
+            default: return <div className="flex items-center justify-center h-full text-slate-500">Select a valid chart type.</div>;
+        }
+    };
+    
+    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        if (name.startsWith('mapping.')) {
+            const mappingKey = name.split('.')[1];
+            setEditForm(prev => ({ ...prev, mapping: { ...prev.mapping, [mappingKey]: value } }));
+        } else {
+            setEditForm(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
     const ToggleButton = ({ icon: Icon, label, isActive, onClick }: { icon: React.ElementType, label: string, isActive: boolean, onClick: () => void }) => (
         <button onClick={onClick} title={label} className={`p-1.5 rounded-md transition-all duration-200 flex items-center space-x-1.5 ${isActive ? 'bg-primary-50 text-primary-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}>
             <Icon size={14} /><span className="text-[11px] font-medium">{label}</span>
@@ -258,7 +300,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
 
     return (
         <>
-            <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-sm border border-slate-100 overflow-visible hover:shadow-md transition-all duration-300 relative group">
+            <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all duration-300 relative group">
                 <div className="px-6 pt-5 pb-0 flex justify-between items-start relative z-10 flex-shrink-0">
                     <div className="flex-1 pr-8">
                         <h3 className="text-lg font-semibold text-slate-900 leading-tight">{config.title}</h3>
@@ -277,8 +319,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                                     {hasActiveFilters && !isMenuOpen && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-primary-500 border-2 border-white rounded-full"></span>}
                                 </button>
                                 {isMenuOpen && (
-                                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right max-h-[80vh] overflow-y-auto custom-scrollbar">
-                                        <button onClick={() => setIsEditModalOpen(true)} className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center transition-colors"><Edit3 size={16} className="mr-3 text-slate-400" /> Edit Title & Description</button>
+                                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 duration-100 origin-top-right max-h-[80vh] overflow-y-auto custom-scrollbar">
+                                        <button onClick={() => { setIsEditModalOpen(true); setEditForm(config); }} className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center transition-colors"><Edit3 size={16} className="mr-3 text-slate-400" /> Edit Chart</button>
                                         <div className="my-2 border-t border-slate-100" />
                                         
                                         <div>
@@ -388,14 +430,64 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, dateColumn, onU
                 </div>
             </div>
             {isEditModalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div role="dialog" aria-modal="true" aria-labelledby="edit-chart-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 relative" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 pb-0 flex justify-between items-center"><h3 id="edit-chart-modal-title" className="text-xl font-bold text-slate-900">Edit Chart Metadata</h3><button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button></div>
-                        <form onSubmit={handleSaveEdit} className="p-6 space-y-5">
-                            <div><label className="block text-sm font-medium text-slate-700 mb-1">Chart Title</label><input type="text" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" required /></div>
-                            <div><div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-slate-700">Insight Description</label><Info size={14} className="text-slate-400" /></div><textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none h-32" required /></div>
-                            <div className="flex justify-end space-x-3 pt-4"><button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-medium">Cancel</button><button type="submit" className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm">Save Changes</button></div>
-                        </form>
+                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm duration-200" onClick={() => setIsEditModalOpen(false)}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-chart-modal-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] duration-200 relative flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 pb-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+                            <h3 id="edit-chart-modal-title" className="text-xl font-bold text-slate-900 flex items-center"><Edit3 size={20} className="mr-3 text-primary-600" />Edit Chart</h3>
+                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full"><X size={20} /></button>
+                        </div>
+                        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 min-h-0">
+                            <div className="lg:col-span-1 p-6 border-r border-slate-200 overflow-y-auto custom-scrollbar space-y-5">
+                                <ControlWrapper label="Chart Title">
+                                    <input type="text" name="title" value={editForm.title} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" required />
+                                </ControlWrapper>
+                                <ControlWrapper label="Insight Description">
+                                    <textarea name="description" value={editForm.description} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none h-24" required />
+                                </ControlWrapper>
+                                <div className="border-t border-slate-200 my-6" />
+                                <ControlWrapper label="Chart Type">
+                                     <select name="type" value={editForm.type} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none">
+                                        {CHART_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                </ControlWrapper>
+                                 <ControlWrapper label="X-Axis (Category)">
+                                    <select name="mapping.x" value={editForm.mapping.x} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none">
+                                        {columns.map(col => <option key={col} value={col}>{col}</option>)}
+                                    </select>
+                                </ControlWrapper>
+                                <ControlWrapper label="Y-Axis (Value)">
+                                    <select name="mapping.y" value={editForm.mapping.y} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none">
+                                        {columns.map(col => <option key={col} value={col}>{col}</option>)}
+                                    </select>
+                                </ControlWrapper>
+                                {(['stacked-bar', 'combo'].includes(editForm.type)) && (
+                                    <ControlWrapper label="Color / Line Metric">
+                                        <select name="mapping.color" value={editForm.mapping.color || ''} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none">
+                                            <option value="">None</option>
+                                            {columns.map(col => <option key={col} value={col}>{col}</option>)}
+                                        </select>
+                                    </ControlWrapper>
+                                )}
+                                 {editForm.type === 'bubble' && (
+                                    <ControlWrapper label="Bubble Size (Z-Axis)">
+                                        <select name="mapping.z" value={editForm.mapping.z || ''} onChange={handleFormChange} className="w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none">
+                                            <option value="">None</option>
+                                            {columns.map(col => <option key={col} value={col}>{col}</option>)}
+                                        </select>
+                                    </ControlWrapper>
+                                )}
+                            </div>
+                            <div className="lg:col-span-2 p-6 flex flex-col">
+                                <h4 className="text-sm font-semibold text-slate-600 mb-4 flex-shrink-0">Live Preview</h4>
+                                <div className="flex-1 min-h-0 bg-slate-50 rounded-lg p-2 border border-slate-200">
+                                    {renderPreviewChart()}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 pt-4 border-t border-slate-200 flex justify-end space-x-3 flex-shrink-0">
+                            <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-medium">Cancel</button>
+                            <button type="button" onClick={handleSaveEdit} className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm">Save Changes</button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -25,12 +25,12 @@ export const LayoutSelectionModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm duration-200" onClick={onClose}>
       <div 
         role="dialog" 
         aria-modal="true" 
         aria-labelledby="layout-modal-title" 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] animate-in zoom-in-95 duration-200 relative flex flex-col" 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] duration-200 relative flex flex-col" 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 pb-4 border-b border-slate-200 flex justify-between items-center flex-shrink-0">

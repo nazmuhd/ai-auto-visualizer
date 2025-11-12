@@ -38,7 +38,7 @@ export const TaskValidator: React.FC<Props> = ({
     }, [tasks, onComplete]);
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-slate-50 animate-in fade-in duration-300">
+        <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-slate-50 duration-300">
             <div className="w-full max-w-md text-center">
                  <div className="mx-auto p-4 bg-primary-100 text-primary-600 rounded-full mb-6 w-fit">
                     <ScanSearch size={40} />
@@ -61,7 +61,7 @@ export const TaskValidator: React.FC<Props> = ({
                                 `}>
                                 <div className="mr-4 flex-shrink-0 w-6 h-6 flex items-center justify-center">
                                     {isComplete ? (
-                                        <CheckCircle2 className="w-full h-full text-green-500 animate-in zoom-in-75" />
+                                        <CheckCircle2 className="w-full h-full text-green-500" />
                                     ) : isInProgress ? (
                                         <Loader2 className="w-full h-full text-primary-500 animate-spin" />
                                     ) : (

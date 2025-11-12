@@ -96,7 +96,7 @@ const DashboardView: React.FC<{
         {chartRows.map((row, rowIndex) => (
             <div key={rowIndex} className={`grid grid-cols-1 ${getGridColsClass(row.length)} gap-6 lg:gap-8 mb-6 lg:mb-8`}>
                 {row.map(chart => (
-                    <div key={chart.id} className="min-h-[300px] sm:min-h-[350px] md:min-h-[400px] lg:min-h-[450px]">
+                    <div key={chart.id} className="h-[300px] sm:h-[350px] md:h-[400px] lg:h-[450px]">
                         <ChartRenderer config={chart} data={dataSource.data} dateColumn={dateColumn} onUpdate={onChartUpdate} onMaximize={onSetMaximizedChart} enableScrollZoom={true} />
                     </div>
                 ))}
@@ -120,7 +120,7 @@ const DashboardEditMode: React.FC<{
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const layout = layouts.find(l => l.id === dashboardLayout) || layouts[0];
     return (
-        <section className="mb-8 p-6 bg-primary-50 border-2 border-dashed border-primary-200 rounded-2xl space-y-6 animate-in fade-in duration-300">
+        <section className="mb-8 p-6 bg-primary-50 border-2 border-dashed border-primary-200 rounded-2xl space-y-6 duration-300">
             <div>
                 <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage KPIs</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -234,7 +234,7 @@ const ProjectWorkspace: React.FC<{
     };
 
     return (
-        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{project.name}</h2>
