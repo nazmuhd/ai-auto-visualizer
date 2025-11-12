@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig } from '../types.ts';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo } from '../types.ts';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Trash2, Settings, AlertCircle, Eye, EyeOff, GripVertical } from 'lucide-react';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { FileUploadContainer } from './FileUploadContainer.tsx';
@@ -12,7 +12,6 @@ import { SaveProjectModal } from './modals/SaveProjectModal.tsx';
 import { RenameProjectModal } from './modals/RenameProjectModal.tsx';
 import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal.tsx';
 import { ChartMaximizeModal } from './modals/ChartMaximizeModal.tsx';
-import { KpiManagerModal } from './modals/KpiManagerModal.tsx';
 import { DataTable } from './DataTable.tsx';
 import { AIReportView } from './AIReportView.tsx';
 import { processFile } from '../services/dataParser.ts';
@@ -23,6 +22,14 @@ interface Props {
     userEmail: string;
     onLogout: () => void;
 }
+
+const layouts: LayoutInfo[] = [
+  { id: '2-2-2', name: 'Consulting Standard', rows: [2, 2, 2], totalCharts: 6, description: 'A balanced view, ideal for standard executive reporting.', usedBy: 'McKinsey, BCG, Bain' },
+  { id: '3-3', name: 'Compact Grid', rows: [3, 3], totalCharts: 6, description: 'High-density for comparing multiple metrics side-by-side.', usedBy: 'Deloitte, Accenture, PwC' },
+  { id: '1-2-2', name: 'Story Mode', rows: [1, 2, 2], totalCharts: 5, description: 'Guides a narrative, starting with a key summary chart.', usedBy: 'McKinsey, Bain' },
+  { id: '2-3-2', name: 'Pyramid Layout', rows: [2, 3, 2], totalCharts: 7, description: 'Flexible layout that highlights a central row of key charts.', usedBy: 'BCG, Bain' },
+  { id: '3-4', name: 'High-Density', rows: [3, 4], totalCharts: 7, description: 'Maximizes information for complex, data-rich dashboards.', usedBy: 'Accenture, Deloitte' },
+];
 
 const useResponsiveSidebar = () => {
     const getInitialState = () => window.innerWidth >= 1024;
@@ -46,14 +53,11 @@ const useResponsiveSidebar = () => {
     return [isSidebarOpen, setIsSidebarOpen] as const;
 };
 
-const structureChartsByLayout = (charts: ChartConfig[], layout: string): ChartConfig[][] => {
-    if (!charts) return [];
+const structureChartsByLayout = (charts: ChartConfig[], layoutId: string): ChartConfig[][] => {
+    if (!charts || charts.length === 0) return [];
     
-    // The first number in layouts like '1-2-2-2' often refers to a full-width KPI row, not a chart row.
-    // We adjust the layout string to only consider chart rows.
-    const layoutParts = layout.split('-');
-    const chartLayoutParts = layout.startsWith('1-') ? layoutParts.slice(1) : layoutParts;
-    const layoutRows = chartLayoutParts.map(Number);
+    const layout = layouts.find(l => l.id === layoutId) || layouts[0];
+    const layoutRows = layout.rows;
     
     const structuredCharts: ChartConfig[][] = [];
     let chartIndex = 0;
@@ -65,19 +69,11 @@ const structureChartsByLayout = (charts: ChartConfig[], layout: string): ChartCo
         chartIndex += rowSize;
     }
 
-    // If there are leftover charts, continue arranging them using the last row's size.
-    if (chartIndex < charts.length && layoutRows.length > 0) {
-        const lastRowSize = layoutRows[layoutRows.length - 1];
-        while (chartIndex < charts.length) {
-            const rowCharts = charts.slice(chartIndex, chartIndex + lastRowSize);
-            structuredCharts.push(rowCharts);
-            chartIndex += lastRowSize;
-        }
-    }
-
     return structuredCharts;
 };
 
+
+const DEFAULT_KPI: Omit<KpiConfig, 'id'> = { title: '', column: '', operation: 'sum', format: 'number', isCustom: true };
 
 export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [activeProject, setActiveProject] = useState<Project | null>(null);
@@ -87,7 +83,6 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [progress, setProgress] = useState<{ status: string, percentage: number } | null>(null);
     const [savedProjects, setSavedProjects] = useState<Project[]>([]);
     
-    // UI state
     const [isSidebarOpen, setIsSidebarOpen] = useResponsiveSidebar();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -96,17 +91,16 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [projectToManage, setProjectToManage] = useState<Project | null>(null);
     const [currentView, setCurrentView] = useState<'dashboard' | 'ai-report' | 'data'>('dashboard');
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
-    const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
-    const [visibleKpiIds, setVisibleKpiIds] = useState<Set<string>>(new Set());
-    const [dashboardLayout, setDashboardLayout] = useState<string>('1-2-2-2');
+    const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
     const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [isAddingKpi, setIsAddingKpi] = useState(false);
+    const [newKpiForm, setNewKpiForm] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
 
 
     const analysisPromiseRef = useRef<Promise<AnalysisResult> | null>(null);
     const mainContentRef = useRef<HTMLElement>(null);
     
-    // --- Data Processing & Analysis Flow ---
-
     const handleFileSelect = async (file: File) => {
         let projectToUpdate = activeProject;
         
@@ -152,9 +146,20 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         setProgress({ status: 'AI is generating insights...', percentage: 50 });
         try {
             const result = await analysisPromiseRef.current!;
-            setActiveProject(p => p ? { ...p, analysis: result } : null);
-            // Set initial visible KPIs to the first 5
-            setVisibleKpiIds(new Set(result.kpis.slice(0, 5).map(k => k.id)));
+            const layoutDef = layouts.find(l => l.id === dashboardLayout) || layouts[0];
+            const maxCharts = layoutDef.totalCharts;
+
+            const chartsWithVisibility: ChartConfig[] = result.charts.map((chart, index) => ({
+                ...chart,
+                visible: index < maxCharts,
+            }));
+
+            const initialKpis = result.kpis.map((kpi, index) => ({
+                 ...kpi,
+                 visible: index < 5 // Show first 5 KPIs by default
+            }));
+
+            setActiveProject(p => p ? { ...p, analysis: { ...result, charts: chartsWithVisibility, kpis: initialKpis } } : null);
             setStatus('complete');
         } catch (err: any) {
              setError(err.message || "Failed to analyze data.");
@@ -171,11 +176,10 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         setError(null);
         setCurrentView('dashboard');
         setProgress(null);
+        setIsEditMode(false);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
     };
     
-    // --- Project Management ---
-
     const handleCreateProject = (name: string, description: string) => {
         const newProject: Project = {
             id: new Date().toISOString(), name, description, createdAt: new Date(), isUnsaved: false,
@@ -202,11 +206,8 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         if (project) {
             setActiveProject(project);
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
-            // When loading a saved project, re-initialize visible KPIs
-            if (project.analysis) {
-                 setVisibleKpiIds(new Set(project.analysis.kpis.slice(0, 5).map(k => k.id)));
-            }
             setCurrentView('dashboard');
+            setIsEditMode(false);
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -238,11 +239,9 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         if (activeProject?.id === projectToManage.id) handleReset();
     };
     
-    // --- UI Handlers & Memoized Values ---
-    const handleChartUpdate = (updatedChart: ChartConfig) => {
+    const handleChartUpdate = useCallback((updatedChart: ChartConfig) => {
         if (!activeProject || !activeProject.analysis) return;
         
-        // Update the main project state
         const updatedAnalysis = {
             ...activeProject.analysis,
             charts: activeProject.analysis.charts.map(c => c.id === updatedChart.id ? updatedChart : c)
@@ -250,44 +249,85 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         const updatedProject = { ...activeProject, analysis: updatedAnalysis, isUnsaved: true };
         setActiveProject(updatedProject);
         
-        // If the chart is maximized, update the modal's state as well
         if (maximizedChart && maximizedChart.id === updatedChart.id) {
             setMaximizedChart(updatedChart);
         }
         
-        // Mark the saved project as having unsaved changes
         if (!updatedProject.id.startsWith('unsaved_')) {
              setSavedProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, isUnsaved: true } : p));
         }
-    };
-
-    const handleKpiUpdate = (newVisibleIds: Set<string>, newKpis: KpiConfig[]) => {
-         if (!activeProject || !activeProject.analysis) return;
-         
-         const updatedAnalysis = { ...activeProject.analysis };
-         let needsUnsave = false;
-
-         if (newKpis.length > 0) {
-            updatedAnalysis.kpis = [...updatedAnalysis.kpis, ...newKpis];
-            needsUnsave = true;
-         }
-
-         setVisibleKpiIds(newVisibleIds);
-         
-         if (needsUnsave) {
-             const updatedProject = { ...activeProject, analysis: updatedAnalysis, isUnsaved: true };
-             setActiveProject(updatedProject);
-             if (!updatedProject.id.startsWith('unsaved_')) {
-                 setSavedProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, isUnsaved: true } : p));
-             }
-         }
-    };
+    }, [activeProject, maximizedChart]);
 
     const handleSelectLayout = (layoutId: string) => {
         setDashboardLayout(layoutId);
         setIsLayoutModalOpen(false);
+        if (!activeProject?.analysis) return;
+
+        const newLayout = layouts.find(l => l.id === layoutId) || layouts[0];
+        const maxCharts = newLayout.totalCharts;
+        let visibleCount = 0;
+        
+        const updatedCharts = activeProject.analysis.charts.map(chart => {
+            const shouldBeVisible = chart.visible && visibleCount < maxCharts;
+            if (shouldBeVisible) visibleCount++;
+            return { ...chart, visible: shouldBeVisible };
+        });
+
+        // If after checking existing visible charts, we are still under capacity,
+        // turn on more charts until the capacity is met.
+        if (visibleCount < maxCharts) {
+            for (let chart of updatedCharts) {
+                if (visibleCount >= maxCharts) break;
+                if (!chart.visible) {
+                    chart.visible = true;
+                    visibleCount++;
+                }
+            }
+        }
+
+        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, charts: updatedCharts }, isUnsaved: true } : null);
     };
     
+    const handleKpiVisibilityToggle = (kpiId: string) => {
+        if (!activeProject?.analysis) return;
+        const updatedKpis = activeProject.analysis.kpis.map(kpi => 
+            kpi.id === kpiId ? { ...kpi, visible: !kpi.visible } : kpi
+        );
+        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, kpis: updatedKpis }, isUnsaved: true } : null);
+    };
+
+    const handleAddCustomKpi = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!activeProject?.analysis) return;
+        const newKpi = { ...newKpiForm, id: `custom_${Date.now()}`, visible: true };
+        const updatedKpis = [...activeProject.analysis.kpis, newKpi];
+        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, kpis: updatedKpis }, isUnsaved: true } : null);
+        setIsAddingKpi(false);
+        setNewKpiForm(DEFAULT_KPI);
+    };
+    
+    const handleChartVisibilityToggle = (chartId: string) => {
+        if (!activeProject?.analysis) return;
+        
+        const targetChart = activeProject.analysis.charts.find(c => c.id === chartId);
+        if (!targetChart) return;
+
+        const layout = layouts.find(l => l.id === dashboardLayout) || layouts[0];
+        const maxCharts = layout.totalCharts;
+        const currentVisibleCount = activeProject.analysis.charts.filter(c => c.visible).length;
+
+        // Prevent adding more charts than the layout allows
+        if (!targetChart.visible && currentVisibleCount >= maxCharts) {
+            alert(`This layout supports a maximum of ${maxCharts} charts.`);
+            return;
+        }
+
+        const updatedCharts = activeProject.analysis.charts.map(chart => 
+            chart.id === chartId ? { ...chart, visible: !chart.visible } : chart
+        );
+        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, charts: updatedCharts }, isUnsaved: true } : null);
+    };
+
     const dateColumn = useMemo(() => {
         const data = activeProject?.dataSource.data;
         if (!data || data.length < 5) return null;
@@ -298,16 +338,16 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const kpiValues = useMemo(() => {
         const data = activeProject?.dataSource.data;
         const analysis = activeProject?.analysis;
-        if (!analysis || !data || !visibleKpiIds) return [];
+        if (!analysis || !data) return [];
         
-        return analysis.kpis.filter(kpi => visibleKpiIds.has(kpi.id)).map(kpi => {
+        return analysis.kpis.filter(kpi => kpi.visible).map(kpi => {
             let value = 0;
             if (kpi.operation === 'sum') value = data.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
             else if (kpi.operation === 'average') value = data.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (data.length || 1);
             else if (kpi.operation === 'count_distinct') value = new Set(data.map(row => row[kpi.column])).size;
             return { ...kpi, displayValue: new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value) };
         });
-    }, [activeProject, visibleKpiIds]);
+    }, [activeProject]);
 
     const validationTasks = useMemo(() => {
         if (!validationReport) return [];
@@ -319,8 +359,6 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             'Prepared smart sample for AI analysis'
         ].filter(Boolean) as string[];
     }, [validationReport]);
-
-    // --- Main Render Logic ---
     
     const renderMainContent = () => {
         if (!activeProject) return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
@@ -332,7 +370,8 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         if (status === 'complete' && activeProject.analysis) {
             const { analysis, dataSource } = activeProject;
             const TabButton = ({ view, label, icon: Icon }: { view: typeof currentView, label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
-            const chartRows = structureChartsByLayout(analysis.charts, dashboardLayout);
+            const visibleCharts = analysis.charts.filter(c => c.visible);
+            const chartRows = structureChartsByLayout(visibleCharts, dashboardLayout);
             const getGridColsClass = (count: number) => {
                 switch(count) {
                     case 1: return 'lg:grid-cols-1';
@@ -350,25 +389,71 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                         <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="ai-report" label="AI Report" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
                         <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
-                            <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
+                           <button onClick={() => setIsEditMode(p => !p)} className={`px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors ${isEditMode ? 'bg-primary-600 text-white border-primary-600' : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'}`}>
+                                <Edit size={16} className="mr-2" /> {isEditMode ? 'Done' : 'Edit'}
+                            </button>
                             <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
                                 <LayoutGrid size={16} className="mr-2" /> Layout
                             </button>
+                             <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
                         </div>
                     </div>
                     {currentView === 'dashboard' && (
                     <>
-                        
+                         {isEditMode && (
+                            <section className="mb-8 p-6 bg-primary-50 border-2 border-dashed border-primary-200 rounded-2xl space-y-6 animate-in fade-in duration-300">
+                                {/* Manage KPIs */}
+                                <div>
+                                    <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage KPIs</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {analysis.kpis.map(kpi => (
+                                            <button key={kpi.id} onClick={() => handleKpiVisibilityToggle(kpi.id)} className={`p-3 border rounded-lg text-left flex items-center justify-between w-full transition-all ${kpi.visible ? 'bg-white border-primary-300 ring-2 ring-primary-100' : 'bg-white/60 hover:bg-white border-slate-200 opacity-70 hover:opacity-100'}`}>
+                                                <div>
+                                                    <p className={`font-medium ${kpi.visible ? 'text-primary-800' : 'text-slate-800'}`}>{kpi.title}</p>
+                                                    <p className={`text-xs ${kpi.visible ? 'text-primary-600' : 'text-slate-500'}`}> {kpi.operation.replace('_', ' ')} of "{kpi.column}"</p>
+                                                </div>
+                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${kpi.visible ? 'bg-primary-600 border-primary-600' : 'border-slate-300'}`}>{kpi.visible && <CheckCircle className="w-4 h-4 text-white" />}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {isAddingKpi ? (
+                                        <form onSubmit={handleAddCustomKpi} className="p-4 border border-primary-200 rounded-lg bg-white mt-4 space-y-3">
+                                            <h4 className="font-semibold text-primary-800">Add Custom KPI</h4>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <input value={newKpiForm.title} onChange={e => setNewKpiForm(f => ({...f, title: e.target.value}))} placeholder="KPI Title" required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"/>
+                                                <select value={newKpiForm.column} onChange={e => setNewKpiForm(f => ({...f, column: e.target.value}))} required className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="">Select Column</option>{Object.keys(dataSource.data[0] || {}).map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                                <select value={newKpiForm.operation} onChange={e => setNewKpiForm(f => ({...f, operation: e.target.value as any}))} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="sum">Sum</option><option value="average">Average</option><option value="count_distinct">Count Distinct</option></select>
+                                                <select value={newKpiForm.format} onChange={e => setNewKpiForm(f => ({...f, format: e.target.value as any}))} className="w-full px-3 py-2 text-sm border bg-white border-slate-300 rounded-lg"><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option></select>
+                                            </div>
+                                            <div className="flex justify-end space-x-2"><button type="button" onClick={() => setIsAddingKpi(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-md">Cancel</button><button type="submit" className="px-3 py-1.5 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-md">Add</button></div>
+                                        </form>
+                                    ) : ( <button onClick={() => setIsAddingKpi(true)} className="w-full mt-3 p-2 border-2 border-dashed border-primary-300 hover:border-primary-400 hover:bg-primary-100/50 rounded-lg text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center justify-center transition-colors"><PlusCircle size={16} className="mr-2"/> Add Custom KPI</button>)}
+                                </div>
+                                <div className="border-t border-primary-200/80"></div>
+                                {/* Manage Charts */}
+                                <div>
+                                    <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage Charts</h3>
+                                    <p className="text-sm text-primary-800/80 mb-3">You are showing <span className="font-bold">{visibleCharts.length}</span> of <span className="font-bold">{analysis.charts.length}</span> AI-generated charts. Your current layout supports up to <span className="font-bold">{(layouts.find(l=>l.id===dashboardLayout) || layouts[0]).totalCharts}</span> charts.</p>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {analysis.charts.map(chart => (
+                                            <button key={chart.id} onClick={() => handleChartVisibilityToggle(chart.id)} className={`p-3 border rounded-lg text-left w-full transition-all flex items-center gap-3 ${chart.visible ? 'bg-white border-primary-300 ring-2 ring-primary-100' : 'bg-white/60 hover:bg-white border-slate-200 opacity-70 hover:opacity-100'}`}>
+                                                <GripVertical className="text-slate-300 flex-shrink-0 cursor-grab" size={16}/>
+                                                <div className="flex-1 truncate"><p className="font-medium text-slate-800 truncate">{chart.title}</p></div>
+                                                {chart.visible ? <Eye size={16} className="text-primary-500 flex-shrink-0" /> : <EyeOff size={16} className="text-slate-400 flex-shrink-0" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
                         {kpiValues.length > 0 && (
                             <section className="mb-8">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-xl font-bold text-slate-800">Key Metrics</h2>
-                                    <button onClick={() => setIsKpiModalOpen(true)} className="flex items-center text-sm font-medium text-slate-500 hover:text-primary-600 bg-slate-100 hover:bg-primary-50 px-3 py-1.5 rounded-lg"><Edit size={14} className="mr-1.5" /> Edit KPIs</button>
-                                </div>
+                                <h2 className="text-xl font-bold text-slate-800 mb-4">Key Metrics</h2>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">{kpiValues.map((kpi, i) => <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><div><p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p><p className="text-3xl font-bold text-slate-900">{kpi.displayValue}</p></div></div>)}</div>
                             </section>
                         )}
-                        <section key={dashboardLayout}>
+                        <section>
                            {chartRows.map((row, rowIndex) => (
                                 <div key={rowIndex} className={`grid grid-cols-1 ${getGridColsClass(row.length)} gap-6 lg:gap-8 mb-6 lg:mb-8`}>
                                     {row.map(chart => (
@@ -403,12 +488,12 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             <RenameProjectModal isOpen={isRenameModalOpen} onClose={() => setIsRenameModalOpen(false)} onSave={handleRenameProject} currentName={projectToManage?.name || ''} currentDescription={projectToManage?.description || ''} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteProject} projectName={projectToManage?.name || ''} />
             {maximizedChart && activeProject && <ChartMaximizeModal config={maximizedChart} data={activeProject.dataSource.data} dateColumn={dateColumn} onUpdate={handleChartUpdate} onClose={() => setMaximizedChart(null)} />}
-            {isKpiModalOpen && activeProject?.analysis && <KpiManagerModal isOpen={isKpiModalOpen} onClose={() => setIsKpiModalOpen(false)} allKpis={activeProject.analysis.kpis} visibleKpiIds={visibleKpiIds} onSave={handleKpiUpdate} availableColumns={Object.keys(activeProject.dataSource.data[0] || {})} />}
             <LayoutSelectionModal
                 isOpen={isLayoutModalOpen}
                 onClose={() => setIsLayoutModalOpen(false)}
                 currentLayout={dashboardLayout}
                 onSelectLayout={handleSelectLayout}
+                layouts={layouts}
             />
         </div>
     );

@@ -1,6 +1,7 @@
 
 
 
+
 export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
@@ -27,6 +28,7 @@ export interface ChartConfig {
     description: string;
     mapping: ChartMapping;
     colors?: string[];
+    visible?: boolean;
 }
 
 export interface KpiConfig {
@@ -78,3 +80,12 @@ export interface Project {
 
 
 export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';
+
+export interface LayoutInfo {
+  id: string;
+  name: string;
+  rows: number[];
+  totalCharts: number;
+  description: string;
+  usedBy: string;
+}

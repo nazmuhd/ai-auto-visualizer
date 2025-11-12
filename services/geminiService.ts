@@ -1,5 +1,7 @@
 
 
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../types.ts';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,7 +46,7 @@ const analysisSchema = {
         },
         recommendedCharts: {
             type: Type.ARRAY,
-            description: "Up to 6 diverse chart configurations matching data to templates. Prioritize quality over quantity.",
+            description: "Between 5 and 8 diverse chart configurations matching data to templates. Prioritize quality over quantity and aim for a variety of chart types.",
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -98,7 +100,7 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
     REQUIREMENTS:
     1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
     2. KPIs: Identify between 5 and 10 Key Performance Indicators (KPIs) that are most important for this dataset. Define HOW to calculate them (e.g., SUM of 'Revenue').
-    3. CHARTS: Map the data to a diverse set of up to 6 chart templates that reveal different aspects of the data. Choose the most insightful charts.
+    3. CHARTS: Map the data to a diverse set of between 5 and 8 chart templates that reveal different aspects of the data. Choose the most insightful charts.
 
     AVAILABLE CHART TEMPLATES:
     - tmpl_bar_comparison (Good for: Ranking)
@@ -171,7 +173,7 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
         return {
             summary: finalSummary,
             kpis: finalKpis,
-            charts: finalCharts.slice(0, 6)
+            charts: finalCharts
         };
 
     } catch (error) {
