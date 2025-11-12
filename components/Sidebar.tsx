@@ -82,7 +82,6 @@ const ProjectLink: React.FC<{
             {isOpen && (
               <span className="transition-opacity duration-200 truncate pr-2">
                 {proj.name}
-                {proj.isUnsaved && <span className="text-amber-500 font-bold ml-1">*</span>}
               </span>
             )}
           </div>
@@ -101,7 +100,7 @@ const ProjectLink: React.FC<{
       
       {!isOpen && (
         <span className="absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-white group-hover/item:block z-50">
-          {proj.name}{proj.isUnsaved ? '*' : ''}
+          {proj.name}
         </span>
       )}
 

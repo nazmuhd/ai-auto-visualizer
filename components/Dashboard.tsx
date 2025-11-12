@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus } from '../types.ts';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2 } from 'lucide-react';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { FileUploadContainer } from './FileUploadContainer.tsx';
@@ -182,6 +182,20 @@ const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => v
     </div>
 );
 
+const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
+    switch (status) {
+        case 'unsaved':
+            return <div className="flex items-center text-xs text-amber-600"><div className="w-2 h-2 rounded-full bg-amber-400 mr-2 animate-pulse"></div>Unsaved changes</div>;
+        case 'saving':
+            return <div className="flex items-center text-xs text-slate-500"><Loader2 size={12} className="mr-2 animate-spin" /> Saving...</div>;
+        case 'saved':
+            return <div className="flex items-center text-xs text-green-600"><CheckCircle size={12} className="mr-2" /> All changes saved</div>;
+        default:
+            return null;
+    }
+};
+
+
 const ProjectWorkspace: React.FC<{
     project: Project;
     currentView: 'dashboard' | 'ai-report' | 'data';
@@ -202,7 +216,8 @@ const ProjectWorkspace: React.FC<{
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
     onGenerateReport: () => void;
-}> = ({ project, currentView, setCurrentView, isEditMode, setIsEditMode, setIsLayoutModalOpen, onGenerateReport, ...props }) => {
+    saveStatus: SaveStatus;
+}> = ({ project, currentView, setCurrentView, isEditMode, setIsEditMode, setIsLayoutModalOpen, onGenerateReport, saveStatus, ...props }) => {
     
     const { analysis, dataSource } = project;
     const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'ai-report' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
@@ -221,7 +236,10 @@ const ProjectWorkspace: React.FC<{
     return (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <div><h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{project.name}</h2><p className="text-sm text-slate-500">Last saved: {new Date(project.createdAt).toLocaleString()}</p></div>
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{project.name}</h2>
+                    <div className="h-4 mt-1"><SaveStatusIndicator status={saveStatus} /></div>
+                </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                 <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="ai-report" label="AI Report" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
@@ -248,6 +266,18 @@ const ProjectWorkspace: React.FC<{
     );
 };
 
+const useDebouncedCallback = (callback: (...args: any[]) => void, delay: number) => {
+    const timeoutRef = useRef<number | null>(null);
+    return useCallback((...args: any[]) => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = window.setTimeout(() => {
+            callback(...args);
+        }, delay);
+    }, [callback, delay]);
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => {
     const [activeProject, setActiveProject] = useState<Project | null>(null);
     const [status, setStatus] = useState<LoadingState>('idle');
@@ -269,20 +299,72 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isEditMode, setIsEditMode] = useState(false);
     const [isAddingKpi, setIsAddingKpi] = useState(false);
     const [newKpiForm, setNewKpiForm] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
 
     const analysisPromiseRef = useRef<Promise<AnalysisResult> | null>(null);
     const mainContentRef = useRef<HTMLElement>(null);
+    const saveStatusTimeoutRef = useRef<number | null>(null);
+
+    // Load projects from local storage on initial mount
+    useEffect(() => {
+        try {
+            const storedProjects = localStorage.getItem('ai-insights-projects');
+            if (storedProjects) {
+                 const projects: Project[] = JSON.parse(storedProjects, (key, value) => {
+                    if (key === 'createdAt' && typeof value === 'string') {
+                        return new Date(value);
+                    }
+                    return value;
+                });
+                setSavedProjects(projects);
+            }
+        } catch (e) {
+            console.error("Failed to load projects from local storage", e);
+        }
+    }, []);
+
+    const saveProjectsToLocalStorage = (projects: Project[]) => {
+        try {
+            localStorage.setItem('ai-insights-projects', JSON.stringify(projects));
+        } catch (e) {
+            console.error("Failed to save projects to local storage", e);
+        }
+    };
     
+     const debouncedSave = useDebouncedCallback((project: Project, allProjects: Project[]) => {
+        setSaveStatus('saving');
+        const updatedProjects = allProjects.map(p => p.id === project.id ? project : p);
+        saveProjectsToLocalStorage(updatedProjects);
+        setSavedProjects(updatedProjects);
+
+        setTimeout(() => {
+            setSaveStatus('saved');
+            if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
+            saveStatusTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
+        }, 500);
+    }, 1500);
+
+    const updateActiveProject = (updater: (prev: Project) => Project) => {
+        setActiveProject(prev => {
+            if (!prev) return null;
+            if (prev.id.startsWith('unsaved_')) return updater(prev);
+            
+            const updatedProject = updater(prev);
+            setSaveStatus('unsaved');
+            debouncedSave(updatedProject, savedProjects);
+            return updatedProject;
+        });
+    };
+
     const handleFileSelect = async (file: File) => {
         let projectToUpdate = activeProject;
         
         if (projectToUpdate && projectToUpdate.dataSource.data.length === 0) {
-            setActiveProject(p => p ? { ...p, dataSource: { ...p.dataSource, name: file.name }, isUnsaved: true } : null);
-             setSavedProjects(prev => prev.map(p => p.id === projectToUpdate!.id ? { ...p, dataSource: { ...p.dataSource, name: file.name }, isUnsaved: true } : p));
+            setActiveProject(p => p ? { ...p, dataSource: { ...p.dataSource, name: file.name } } : null);
         } else {
             projectToUpdate = {
-                id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(), isUnsaved: true,
+                id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
                 dataSource: { name: file.name, data: [] }, analysis: null, aiReport: null,
             };
             setActiveProject(projectToUpdate);
@@ -331,8 +413,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                  ...kpi,
                  visible: index < 5
             }));
+            
+            const projectWithAnalysis = { ...activeProject, analysis: { ...result, charts: chartsWithVisibility, kpis: initialKpis } };
 
-            setActiveProject(p => p ? { ...p, analysis: { ...result, charts: chartsWithVisibility, kpis: initialKpis } } : null);
+            setActiveProject(projectWithAnalysis);
+            
+            if (projectWithAnalysis.id.startsWith('unsaved_')) {
+                 setIsSaveModalOpen(true);
+            }
+
             setStatus('complete');
         } catch (err: any) {
              setError(err.message || "Failed to analyze data.");
@@ -355,21 +444,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     const handleCreateProject = (name: string, description: string) => {
         const newProject: Project = {
-            id: new Date().toISOString(), name, description, createdAt: new Date(), isUnsaved: false,
+            id: new Date().toISOString(), name, description, createdAt: new Date(),
             dataSource: { name: 'No data source', data: [] }, analysis: null, aiReport: null,
         };
-        setSavedProjects([newProject, ...savedProjects]);
+        const updatedProjects = [newProject, ...savedProjects];
+        setSavedProjects(updatedProjects);
+        saveProjectsToLocalStorage(updatedProjects);
         setActiveProject(newProject);
         setIsCreateModalOpen(false);
     };
 
     const handleSaveProject = (name: string, description: string) => {
         if (!activeProject) return;
-        const isUpdating = !activeProject.id.startsWith('unsaved_');
-        const finalId = isUpdating ? activeProject.id : new Date().toISOString();
-        const finalProject: Project = { ...activeProject, id: finalId, name, description, isUnsaved: false };
-        if (isUpdating) setSavedProjects(savedProjects.map(p => p.id === finalId ? finalProject : p));
-        else setSavedProjects([finalProject, ...savedProjects]);
+        const finalId = new Date().toISOString();
+        const finalProject: Project = { ...activeProject, id: finalId, name, description, createdAt: new Date() };
+
+        const updatedProjects = [finalProject, ...savedProjects];
+        setSavedProjects(updatedProjects);
+        saveProjectsToLocalStorage(updatedProjects);
+        
         setActiveProject(finalProject);
         setIsSaveModalOpen(false);
     };
@@ -381,6 +474,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
             setCurrentView('dashboard');
             setIsEditMode(false);
+            setSaveStatus('idle');
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -388,12 +482,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     const handleGenerateReport = async () => {
         if (!activeProject?.dataSource.data || !activeProject.analysis) return;
-        setActiveProject(p => p ? { ...p, aiReport: { content: '', status: 'generating' } } : null);
+        updateActiveProject(p => ({ ...p, aiReport: { content: '', status: 'generating' } }));
         try {
             const reportContent = await generateAiReport(activeProject.dataSource.data, activeProject.analysis);
-            setActiveProject(p => p ? { ...p, aiReport: { content: reportContent, status: 'complete' } } : null);
+            updateActiveProject(p => ({ ...p, aiReport: { content: reportContent, status: 'complete' } }));
         } catch(err: any) {
-            setActiveProject(p => p ? { ...p, aiReport: null } : null);
+            updateActiveProject(p => ({ ...p, aiReport: null }));
         }
     };
 
@@ -401,85 +495,83 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleRenameProject = (name: string, description: string) => {
         if (!projectToManage) return;
         const updatedProject = { ...projectToManage, name, description };
-        setSavedProjects(savedProjects.map(p => p.id === projectToManage.id ? updatedProject : p));
+        const updatedProjects = savedProjects.map(p => p.id === projectToManage.id ? updatedProject : p);
+        setSavedProjects(updatedProjects);
+        saveProjectsToLocalStorage(updatedProjects);
         if (activeProject?.id === projectToManage.id) setActiveProject(updatedProject);
     };
 
     const handleOpenDeleteModal = (project: Project) => { setProjectToManage(project); setIsDeleteModalOpen(true); };
     const handleDeleteProject = () => {
         if (!projectToManage) return;
-        setSavedProjects(savedProjects.filter(p => p.id !== projectToManage.id));
+        const updatedProjects = savedProjects.filter(p => p.id !== projectToManage.id);
+        setSavedProjects(updatedProjects);
+        saveProjectsToLocalStorage(updatedProjects);
         if (activeProject?.id === projectToManage.id) handleReset();
     };
     
     const handleChartUpdate = useCallback((updatedChart: ChartConfig) => {
-        if (!activeProject || !activeProject.analysis) return;
-        
-        const updatedAnalysis = {
-            ...activeProject.analysis,
-            charts: activeProject.analysis.charts.map(c => c.id === updatedChart.id ? updatedChart : c)
-        };
-        const updatedProject = { ...activeProject, analysis: updatedAnalysis, isUnsaved: true };
-        setActiveProject(updatedProject);
-        
-        if (maximizedChart && maximizedChart.id === updatedChart.id) {
-            setMaximizedChart(updatedChart);
-        }
-        
-        if (!updatedProject.id.startsWith('unsaved_')) {
-             setSavedProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, isUnsaved: true } : p));
-        }
+        updateActiveProject(p => {
+            if (!p.analysis) return p;
+            const updatedAnalysis = {
+                ...p.analysis,
+                charts: p.analysis.charts.map(c => c.id === updatedChart.id ? updatedChart : c)
+            };
+            if (maximizedChart && maximizedChart.id === updatedChart.id) {
+                setMaximizedChart(updatedChart);
+            }
+            return { ...p, analysis: updatedAnalysis };
+        });
     }, [activeProject, maximizedChart]);
 
     const handleSelectLayout = (layoutId: string) => {
         setDashboardLayout(layoutId);
         setIsLayoutModalOpen(false);
-        if (!activeProject?.analysis) return;
-
-        const newLayout = layouts.find(l => l.id === layoutId) || layouts[0];
-        const maxCharts = newLayout.totalCharts;
-        let visibleCount = 0;
-        
-        const updatedCharts = activeProject.analysis.charts.map(chart => {
-            const shouldBeVisible = chart.visible && visibleCount < maxCharts;
-            if (shouldBeVisible) visibleCount++;
-            return { ...chart, visible: shouldBeVisible };
-        });
-
-        if (visibleCount < maxCharts) {
-            for (let chart of updatedCharts) {
-                if (visibleCount >= maxCharts) break;
-                if (!chart.visible) {
-                    chart.visible = true;
-                    visibleCount++;
+        updateActiveProject(p => {
+            if (!p.analysis) return p;
+            const newLayout = layouts.find(l => l.id === layoutId) || layouts[0];
+            const maxCharts = newLayout.totalCharts;
+            let visibleCount = 0;
+            const updatedCharts = p.analysis.charts.map(chart => {
+                const shouldBeVisible = chart.visible && visibleCount < maxCharts;
+                if (shouldBeVisible) visibleCount++;
+                return { ...chart, visible: shouldBeVisible };
+            });
+            if (visibleCount < maxCharts) {
+                for (let chart of updatedCharts) {
+                    if (visibleCount >= maxCharts) break;
+                    if (!chart.visible) {
+                        chart.visible = true;
+                        visibleCount++;
+                    }
                 }
             }
-        }
-
-        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, charts: updatedCharts }, isUnsaved: true } : null);
+            return { ...p, analysis: { ...p.analysis, charts: updatedCharts } };
+        });
     };
     
     const handleKpiVisibilityToggle = (kpiId: string) => {
-        if (!activeProject?.analysis) return;
-        const updatedKpis = activeProject.analysis.kpis.map(kpi => 
-            kpi.id === kpiId ? { ...kpi, visible: !kpi.visible } : kpi
-        );
-        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, kpis: updatedKpis }, isUnsaved: true } : null);
+        updateActiveProject(p => {
+            if (!p.analysis) return p;
+            const updatedKpis = p.analysis.kpis.map(kpi => kpi.id === kpiId ? { ...kpi, visible: !kpi.visible } : kpi);
+            return { ...p, analysis: { ...p.analysis, kpis: updatedKpis } };
+        });
     };
 
     const handleAddCustomKpi = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!activeProject?.analysis) return;
-        const newKpi = { ...newKpiForm, id: `custom_${Date.now()}`, visible: true };
-        const updatedKpis = [...activeProject.analysis.kpis, newKpi];
-        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, kpis: updatedKpis }, isUnsaved: true } : null);
+        updateActiveProject(p => {
+            if (!p.analysis) return p;
+            const newKpi = { ...newKpiForm, id: `custom_${Date.now()}`, visible: true };
+            const updatedKpis = [...p.analysis.kpis, newKpi];
+            return { ...p, analysis: { ...p.analysis, kpis: updatedKpis } };
+        });
         setIsAddingKpi(false);
         setNewKpiForm(DEFAULT_KPI);
     };
     
     const handleChartVisibilityToggle = (chartId: string) => {
         if (!activeProject?.analysis) return;
-        
         const targetChart = activeProject.analysis.charts.find(c => c.id === chartId);
         if (!targetChart) return;
 
@@ -492,10 +584,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             return;
         }
 
-        const updatedCharts = activeProject.analysis.charts.map(chart => 
-            chart.id === chartId ? { ...chart, visible: !chart.visible } : chart
-        );
-        setActiveProject(p => p ? { ...p, analysis: { ...p.analysis!, charts: updatedCharts }, isUnsaved: true } : null);
+        updateActiveProject(p => {
+            if (!p.analysis) return p;
+            const updatedCharts = p.analysis.charts.map(chart => chart.id === chartId ? { ...chart, visible: !chart.visible } : chart);
+            return { ...p, analysis: { ...p.analysis, charts: updatedCharts } };
+        });
     };
 
     const dateColumn = useMemo(() => {
@@ -562,6 +655,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         onChartUpdate={handleChartUpdate}
                         onSetMaximizedChart={setMaximizedChart}
                         onGenerateReport={handleGenerateReport}
+                        saveStatus={saveStatus}
                     />;
                 }
                 break;

@@ -2,6 +2,8 @@ export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
 
+export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved';
+
 export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'combo' | 'stacked-bar' | 'bubble';
 
 export type AggregationType = 'sum' | 'average' | 'count' | 'none';
@@ -27,12 +29,13 @@ export interface ChartConfig {
 }
 
 export interface KpiConfig {
-    id: string;
+    id:string;
     title: string;
     column: string;
     operation: 'sum' | 'average' | 'count_distinct';
     format: 'number' | 'currency' | 'percent';
     isCustom?: boolean;
+    visible?: boolean;
 }
 
 export interface AnalysisResult {
@@ -61,7 +64,6 @@ export interface Project {
     name: string;
     description: string;
     createdAt: Date;
-    isUnsaved?: boolean;
     dataSource: {
         name: string;
         data: DataRow[];
