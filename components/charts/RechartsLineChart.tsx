@@ -89,19 +89,10 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
     }, [data, mapping, timeGrain]);
 
     const [brushDomain, setBrushDomain] = useState<{ startIndex?: number, endIndex?: number }>({});
-    const [chartKey, setChartKey] = useState(0); // Key to force remount on reset
     const chartWrapperRef = useRef<HTMLDivElement>(null);
 
-    // When data changes, reset zoom and force a remount of the chart
-    useEffect(() => {
-        handleResetZoom();
-    }, [processedData]);
+    useEffect(() => { setBrushDomain({}); }, [processedData]);
     
-    const handleResetZoom = () => {
-        setBrushDomain({});
-        setChartKey(k => k + 1); // Changing the key forces a full remount
-    };
-
     const handleWheelZoom = useCallback((e: WheelEvent) => {
         e.preventDefault();
         setBrushDomain(prevDomain => {
@@ -139,18 +130,13 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
 
     return (
         <div className="w-full h-full relative" ref={chartWrapperRef}>
-             {isZoomed && (
-                <button 
-                    onClick={handleResetZoom} 
-                    title="Reset Zoom"
-                    className="absolute top-2 left-8 z-20 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium px-2.5 py-1 rounded-md flex items-center shadow-sm"
-                >
+             {isZoomed && enableScrollZoom && (
+                <button onClick={() => setBrushDomain({})} className="absolute top-0 right-8 z-20 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium px-2.5 py-1 rounded-md flex items-center shadow-sm">
                     <RotateCcw size={12} className="mr-1.5"/> Reset Zoom
                 </button>
             )}
             <ResponsiveContainer width="100%" height="100%">
                 <ChartComponent
-                    key={chartKey}
                     data={processedData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                 >

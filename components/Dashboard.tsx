@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig } from '../types.ts';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
-import { Sparkles, Save, Download, Check, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid } from 'lucide-react';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { FileUploadContainer } from './FileUploadContainer.tsx';
@@ -17,6 +17,7 @@ import { DataTable } from './DataTable.tsx';
 import { AIReportView } from './AIReportView.tsx';
 import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
+import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
 
 interface Props {
     userEmail: string;
@@ -45,6 +46,39 @@ const useResponsiveSidebar = () => {
     return [isSidebarOpen, setIsSidebarOpen] as const;
 };
 
+const structureChartsByLayout = (charts: ChartConfig[], layout: string): ChartConfig[][] => {
+    if (!charts) return [];
+    
+    // The first number in layouts like '1-2-2-2' often refers to a full-width KPI row, not a chart row.
+    // We adjust the layout string to only consider chart rows.
+    const layoutParts = layout.split('-');
+    const chartLayoutParts = layout.startsWith('1-') ? layoutParts.slice(1) : layoutParts;
+    const layoutRows = chartLayoutParts.map(Number);
+    
+    const structuredCharts: ChartConfig[][] = [];
+    let chartIndex = 0;
+
+    for (const rowSize of layoutRows) {
+        if (chartIndex >= charts.length) break;
+        const rowCharts = charts.slice(chartIndex, chartIndex + rowSize);
+        structuredCharts.push(rowCharts);
+        chartIndex += rowSize;
+    }
+
+    // If there are leftover charts, continue arranging them using the last row's size.
+    if (chartIndex < charts.length && layoutRows.length > 0) {
+        const lastRowSize = layoutRows[layoutRows.length - 1];
+        while (chartIndex < charts.length) {
+            const rowCharts = charts.slice(chartIndex, chartIndex + lastRowSize);
+            structuredCharts.push(rowCharts);
+            chartIndex += lastRowSize;
+        }
+    }
+
+    return structuredCharts;
+};
+
+
 export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [activeProject, setActiveProject] = useState<Project | null>(null);
     const [status, setStatus] = useState<LoadingState>('idle');
@@ -64,6 +98,8 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
     const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
     const [visibleKpiIds, setVisibleKpiIds] = useState<Set<string>>(new Set());
+    const [dashboardLayout, setDashboardLayout] = useState<string>('1-2-2-2');
+    const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
 
 
     const analysisPromiseRef = useRef<Promise<AnalysisResult> | null>(null);
@@ -246,6 +282,11 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
              }
          }
     };
+
+    const handleSelectLayout = (layoutId: string) => {
+        setDashboardLayout(layoutId);
+        setIsLayoutModalOpen(false);
+    };
     
     const dateColumn = useMemo(() => {
         const data = activeProject?.dataSource.data;
@@ -280,15 +321,7 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     }, [validationReport]);
 
     // --- Main Render Logic ---
-    const renderSaveButton = () => {
-        if (!activeProject) return null;
-        if (activeProject.isUnsaved) {
-            const isNew = activeProject.id.startsWith('unsaved_');
-            return <button onClick={() => isNew ? setIsSaveModalOpen(true) : handleSaveProject(activeProject.name, activeProject.description)} className={`px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center shadow-sm ${isNew ? 'bg-primary-600 hover:bg-primary-700' : 'bg-amber-500 hover:bg-amber-600'}`}><Save size={16} className="mr-2" /> {isNew ? 'Save Project' : 'Save Changes'}</button>;
-        }
-        return <button disabled className="px-4 py-2 text-sm font-medium text-green-800 bg-green-100 rounded-lg flex items-center cursor-default"><Check size={16} className="mr-2" /> Saved</button>;
-    };
-
+    
     const renderMainContent = () => {
         if (!activeProject) return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
         if (activeProject.dataSource.data.length === 0 && status === 'idle') return <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8"><div className="flex justify-between items-center gap-4 mb-6"><div className="flex-1 min-w-0"><h2 className="text-2xl font-bold text-slate-900 truncate">{activeProject.name}</h2><p className="text-sm text-slate-500 truncate">{activeProject.description || "No description provided."}</p></div><div className="flex-shrink-0"><button onClick={() => handleOpenRenameModal(activeProject)} className="p-2 text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Edit3 size={16} /></button></div></div><div className="p-8 bg-white rounded-2xl border-2 border-dashed border-slate-300 text-center"><div className="p-3 bg-primary-100 text-primary-600 rounded-full mb-4 inline-block"><UploadCloud size={32} /></div><h3 className="text-xl font-semibold text-slate-900 mb-1">Add a Data Source</h3><p className="text-slate-500 mb-6 max-w-md mx-auto">To get started, please upload the data file for your project "{activeProject.name}".</p><FileUploadContainer onFileSelect={handleFileSelect} /></div></div>;
@@ -299,6 +332,16 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         if (status === 'complete' && activeProject.analysis) {
             const { analysis, dataSource } = activeProject;
             const TabButton = ({ view, label, icon: Icon }: { view: typeof currentView, label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
+            const chartRows = structureChartsByLayout(analysis.charts, dashboardLayout);
+            const getGridColsClass = (count: number) => {
+                switch(count) {
+                    case 1: return 'lg:grid-cols-1';
+                    case 2: return 'lg:grid-cols-2';
+                    case 3: return 'lg:grid-cols-3';
+                    case 4: return 'lg:grid-cols-4';
+                    default: return 'lg:grid-cols-1';
+                }
+            };
             return (
                 <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -306,10 +349,16 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                     </div>
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                         <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="ai-report" label="AI Report" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
-                        <div className="flex items-center space-x-2 w-full justify-end sm:w-auto"><button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>{renderSaveButton()}</div>
+                        <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
+                            <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
+                            <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
+                                <LayoutGrid size={16} className="mr-2" /> Layout
+                            </button>
+                        </div>
                     </div>
                     {currentView === 'dashboard' && (
                     <>
+                        
                         {kpiValues.length > 0 && (
                             <section className="mb-8">
                                 <div className="flex items-center justify-between mb-4">
@@ -319,7 +368,17 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">{kpiValues.map((kpi, i) => <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm"><div><p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p><p className="text-3xl font-bold text-slate-900">{kpi.displayValue}</p></div></div>)}</div>
                             </section>
                         )}
-                        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">{analysis.charts.map((chart) => <div key={chart.id} className="min-h-[300px] sm:min-h-[350px] md:min-h-[400px] lg:min-h-[450px]"><ChartRenderer config={chart} data={dataSource.data} dateColumn={dateColumn} onUpdate={handleChartUpdate} onMaximize={setMaximizedChart} enableScrollZoom={['line', 'area'].includes(chart.type)} /></div>)}</section>
+                        <section key={dashboardLayout}>
+                           {chartRows.map((row, rowIndex) => (
+                                <div key={rowIndex} className={`grid grid-cols-1 ${getGridColsClass(row.length)} gap-6 lg:gap-8 mb-6 lg:mb-8`}>
+                                    {row.map(chart => (
+                                        <div key={chart.id} className="min-h-[300px] sm:min-h-[350px] md:min-h-[400px] lg:min-h-[450px]">
+                                            <ChartRenderer config={chart} data={dataSource.data} dateColumn={dateColumn} onUpdate={handleChartUpdate} onMaximize={setMaximizedChart} />
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </section>
                     </>
                     )}
                     {currentView === 'ai-report' && <AIReportView project={activeProject} onGenerate={handleGenerateReport} />}
@@ -345,6 +404,12 @@ export const Dashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteProject} projectName={projectToManage?.name || ''} />
             {maximizedChart && activeProject && <ChartMaximizeModal config={maximizedChart} data={activeProject.dataSource.data} dateColumn={dateColumn} onUpdate={handleChartUpdate} onClose={() => setMaximizedChart(null)} />}
             {isKpiModalOpen && activeProject?.analysis && <KpiManagerModal isOpen={isKpiModalOpen} onClose={() => setIsKpiModalOpen(false)} allKpis={activeProject.analysis.kpis} visibleKpiIds={visibleKpiIds} onSave={handleKpiUpdate} availableColumns={Object.keys(activeProject.dataSource.data[0] || {})} />}
+            <LayoutSelectionModal
+                isOpen={isLayoutModalOpen}
+                onClose={() => setIsLayoutModalOpen(false)}
+                currentLayout={dashboardLayout}
+                onSelectLayout={handleSelectLayout}
+            />
         </div>
     );
 };
