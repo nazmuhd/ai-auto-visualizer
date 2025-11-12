@@ -24,8 +24,8 @@ export const SignupPage: React.FC<Props> = ({ onSignup, onNavigate }) => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
             <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('landing'); }} className="inline-flex items-center justify-center">
-              <div className="bg-primary-600 text-white p-2 rounded-lg">
-                <Sparkles size={20} className="fill-primary-400 text-white" />
+              <div className="bg-slate-900 text-white p-2 rounded-lg">
+                <Sparkles size={20} className="fill-slate-400 text-white" />
               </div>
               <h1 className="ml-3 text-2xl font-bold text-slate-900">AI Insights</h1>
             </a>
@@ -57,7 +57,7 @@ export const SignupPage: React.FC<Props> = ({ onSignup, onNavigate }) => {
                 <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-3 py-2.5 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" required />
               </div>
             </div>
-            <button type="submit" className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm transition-transform transform hover:scale-[1.02]">
+            <button type="submit" className="w-full py-3 text-white rounded-lg font-medium shadow-sm transition-transform transform hover:scale-[1.02] bg-slate-900 hover:bg-black">
               Create Account
             </button>
           </form>

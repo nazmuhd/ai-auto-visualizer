@@ -1,7 +1,7 @@
 import React from 'react';
-import { Header } from './landing/Header.tsx';
-import { HeroSection } from './landing/HeroSection.tsx';
+import HeroSection from './ui/hero-section.tsx';
 import { HowItWorksSection } from './landing/HowItWorksSection.tsx';
+import { AboutSection } from './landing/AboutSection.tsx';
 import { SolutionsSection } from './landing/SolutionsSection.tsx';
 import { ComparisonSection } from './landing/ComparisonSection.tsx';
 import { TestimonialsSection } from './landing/TestimonialsSection.tsx';
@@ -17,10 +17,10 @@ interface Props {
 export const LandingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => {
   return (
     <div className="bg-white">
-      <Header onNavigate={onNavigate} onContactClick={onContactClick} />
+      <HeroSection onNavigate={onNavigate} onContactClick={onContactClick} />
       <main>
-        <HeroSection onNavigate={onNavigate} />
         <HowItWorksSection />
+        <AboutSection onNavigate={onNavigate} />
         <SolutionsSection />
         <ComparisonSection />
         <TestimonialsSection />

@@ -23,8 +23,8 @@ export const LoginPage: React.FC<Props> = ({ onLogin, onNavigate }) => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
             <a href="#" onClick={(e) => { e.preventDefault(); onNavigate('landing'); }} className="inline-flex items-center justify-center">
-              <div className="bg-primary-600 text-white p-2 rounded-lg">
-                <Sparkles size={20} className="fill-primary-400 text-white" />
+              <div className="bg-slate-900 text-white p-2 rounded-lg">
+                <Sparkles size={20} className="fill-slate-400 text-white" />
               </div>
               <h1 className="ml-3 text-2xl font-bold text-slate-900">AI Insights</h1>
             </a>
@@ -65,7 +65,7 @@ export const LoginPage: React.FC<Props> = ({ onLogin, onNavigate }) => {
             </div>
             <button
               type="submit"
-              className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm transition-transform transform hover:scale-[1.02]"
+              className="w-full py-3 text-white rounded-lg font-medium shadow-sm transition-transform transform hover:scale-[1.02] bg-slate-900 hover:bg-black"
             >
               Login
             </button>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Menu, X } from 'lucide-react';
 import { Page } from '../../types.ts';
@@ -39,8 +38,8 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <a href="#" onClick={(e) => { e.preventDefault(); handleNav('landing'); }} className="flex items-center">
-                <div className="bg-primary-600 text-white p-2 rounded-lg">
-                  <Sparkles size={20} className="fill-primary-400 text-white" />
+                <div className="bg-slate-900 text-white p-2 rounded-lg">
+                  <Sparkles size={20} className="fill-slate-400 text-white" />
                 </div>
                 <h1 className="ml-3 text-lg font-bold text-slate-900">AI Insights</h1>
               </a>
@@ -52,7 +51,7 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
             </nav>
             <div className="flex items-center">
               <div className="hidden md:block">
-                <button onClick={() => handleNav('login')} className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-lg shadow-sm transition-transform transform hover:scale-105">
+                <button onClick={() => handleNav('login')} className="px-5 py-2 text-sm font-medium text-white bg-slate-900 hover:bg-black rounded-lg shadow-sm transition-transform transform hover:scale-105">
                   Login
                 </button>
               </div>
@@ -73,8 +72,8 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between h-16 px-4 border-b border-slate-200">
                 <a href="#" onClick={(e) => { e.preventDefault(); handleNav('landing'); }} className="flex items-center">
-                  <div className="bg-primary-600 text-white p-2 rounded-lg">
-                    <Sparkles size={20} className="fill-primary-400 text-white" />
+                  <div className="bg-slate-900 text-white p-2 rounded-lg">
+                    <Sparkles size={20} className="fill-slate-400 text-white" />
                   </div>
                   <h1 className="ml-3 text-lg font-bold text-slate-900">AI Insights</h1>
                 </a>
@@ -87,7 +86,7 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('about')}} className="text-xl font-medium text-slate-700 hover:text-primary-600">About Us</a>
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('pricing')}} className="text-xl font-medium text-slate-700 hover:text-primary-600">Pricing</a>
               <a href="#" onClick={(e) => {e.preventDefault(); handleContact()}} className="text-xl font-medium text-slate-700 hover:text-primary-600">Contact Us</a>
-               <button onClick={() => handleNav('login')} className="px-8 py-3 text-lg font-medium text-white bg-gradient-to-r from-primary-500 to-primary-600 rounded-lg shadow-sm">
+               <button onClick={() => handleNav('login')} className="px-8 py-3 text-lg font-medium text-white bg-slate-900 hover:bg-black rounded-lg shadow-sm">
                   Login
                 </button>
             </nav>

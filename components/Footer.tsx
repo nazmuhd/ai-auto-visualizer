@@ -9,16 +9,16 @@ interface Props {
 
 export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
   return (
-    <footer className="bg-slate-900 text-slate-300">
+    <footer className="bg-black text-slate-300">
       {/* Pre-footer CTA */}
       <div className="bg-slate-800">
          <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl font-extrabold text-white">Ready to Unlock Your Data's Potential?</h2>
-            <p className="mt-4 text-lg text-slate-300">Get started for free. No credit card required.</p>
+            <p className="mt-4 text-lg text-slate-200">Get started for free. No credit card required.</p>
             <div className="mt-8">
                  <button
                     onClick={() => onNavigate('signup')}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-primary-600 hover:bg-primary-700 transition-transform transform hover:scale-105"
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-slate-900 hover:bg-black transition-transform transform hover:scale-105"
                 >
                     Start Analyzing Now
                     <ArrowRight className="ml-2 -mr-1 h-5 w-5" />
@@ -29,7 +29,7 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
       
        {/* Decorative Wave Separator */}
       <div className="bg-slate-800 leading-none">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 32" className="block fill-slate-900">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 32" className="block fill-black">
             <path d="M0,32L1440,0L1440,32L0,32Z"></path>
         </svg>
       </div>
@@ -40,8 +40,8 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
           {/* Column 1: Brand */}
           <div className="space-y-4 col-span-2 md:col-span-1">
             <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('landing')}} className="flex items-center">
-              <div className="bg-primary-600 text-white p-2 rounded-lg">
-                <Sparkles size={20} className="fill-primary-400 text-white" />
+              <div className="bg-white/10 backdrop-blur-sm text-white p-2 rounded-lg">
+                <Sparkles size={20} className="fill-slate-400 text-white" />
               </div>
               <h1 className="ml-3 text-lg font-bold text-white">AI Insights</h1>
             </a>
@@ -76,7 +76,7 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
             </ul>
           </div>
         </div>
-        <div className="mt-8 border-t border-slate-800 pt-8 text-center">
+        <div className="mt-8 border-t border-slate-700/50 pt-8 text-center">
            <p className="text-sm text-slate-400">&copy; {new Date().getFullYear()} AI Insights. All rights reserved.</p>
         </div>
       </div>

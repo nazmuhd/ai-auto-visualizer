@@ -25,7 +25,7 @@ const PricingCard = ({ plan, price, description, features, isPopular }: { plan: 
                 ))}
             </ul>
         </div>
-        <button className={`w-full py-3 mt-8 text-sm font-semibold rounded-lg transition-colors ${isPopular ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+        <button className={`w-full py-3 mt-8 text-sm font-semibold rounded-lg transition-transform transform hover:scale-105 ${isPopular ? 'text-white bg-slate-900 hover:bg-black shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
             {plan === 'Enterprise' ? 'Contact Sales' : 'Get Started'}
         </button>
     </div>
