@@ -1,9 +1,8 @@
 
 
-
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, DataRow, ChartConfig, ChartType, AggregationType, KpiConfig } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../types.ts';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialize the Gemini API client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -14,11 +13,13 @@ const CHART_TEMPLATES: Record<string, any> = {
     'tmpl_line_trend': { type: 'line', defaultTitle: 'Trend Over Time', defaultDescription: 'Tracking key metrics over a time period.', allowedAggregations: ['sum', 'average', 'count'] },
     'tmpl_area_volume': { type: 'area', defaultTitle: 'Volume Trend', defaultDescription: 'Visualizing the magnitude of cumulative change.', allowedAggregations: ['sum'] },
     'tmpl_pie_distribution': { type: 'pie', defaultTitle: 'Proportional Distribution', defaultDescription: 'Showing how the total is divided among categories.', allowedAggregations: ['sum', 'count'] },
-    'tmpl_scatter_correlation': { type: 'scatter', defaultTitle: 'Correlation Analysis', defaultDescription: 'Investigating the relationship between two numerical variables.' }
+    'tmpl_scatter_correlation': { type: 'scatter', defaultTitle: 'Correlation Analysis', defaultDescription: 'Investigating the relationship between two numerical variables.' },
+    'tmpl_stacked_bar': { type: 'stacked-bar', defaultTitle: 'Composition Over Category', defaultDescription: 'Showing how a total is divided into parts across categories.', allowedAggregations: ['sum', 'count'] },
+    'tmpl_combo_line_bar': { type: 'combo', defaultTitle: 'Dual Metric Analysis', defaultDescription: 'Comparing two different metrics across a shared category.', allowedAggregations: ['sum', 'count', 'average'] },
+    'tmpl_bubble_plot': { type: 'bubble', defaultTitle: 'Multi-dimensional Analysis', defaultDescription: 'Relating three numerical variables simultaneously.' }
 };
 
 // --- 2. Optimized Schema for Template Matching ---
-// FIX: The `Schema` type is not exported from @google/genai. Let TypeScript infer the type.
 const analysisSchema = {
     type: Type.OBJECT,
     properties: {
@@ -29,7 +30,7 @@ const analysisSchema = {
         },
         kpis: {
             type: Type.ARRAY,
-            description: "Exactly 3 key performance indicators to display at the top.",
+            description: "Between 5 and 10 key performance indicators (KPIs) that are most critical to understanding this dataset. Prioritize strategic metrics.",
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -55,7 +56,8 @@ const analysisSchema = {
                         properties: {
                             x: { type: Type.STRING },
                             y: { type: Type.STRING },
-                            color: { type: Type.STRING, nullable: true },
+                            z: { type: Type.STRING, nullable: true, description: "For bubble charts, the column for bubble size." },
+                            color: { type: Type.STRING, nullable: true, description: "For multi-series charts, the column for color category." },
                             aggregation: { type: Type.STRING, enum: ['sum', 'average', 'count', 'none'], nullable: true }
                         },
                         required: ['x', 'y']
@@ -95,15 +97,18 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
 
     REQUIREMENTS:
     1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
-    2. KPIs: Identify exactly 3 Key Performance Indicators (KPIs) that are most important for this dataset. Define HOW to calculate them (e.g., SUM of 'Revenue', AVERAGE of 'CSAT', COUNT_DISTINCT of 'OrderID').
-    3. CHARTS: Map the data to a diverse set of up to 6 chart templates that reveal different aspects of the data. Choose the most insightful charts; do not add charts just to reach the maximum.
+    2. KPIs: Identify between 5 and 10 Key Performance Indicators (KPIs) that are most important for this dataset. Define HOW to calculate them (e.g., SUM of 'Revenue').
+    3. CHARTS: Map the data to a diverse set of up to 6 chart templates that reveal different aspects of the data. Choose the most insightful charts.
 
     AVAILABLE CHART TEMPLATES:
     - tmpl_bar_comparison (Good for: Ranking)
     - tmpl_line_trend (Good for: Time series)
-    - tmpl_area_volume (Good for: Cumulative totals)
+    - tmpl_area_volume (Good for: Cumulative totals over time)
     - tmpl_pie_distribution (Good for: Part-to-whole, <10 categories)
     - tmpl_scatter_correlation (Good for: Numeric relationships)
+    - tmpl_stacked_bar (Good for: Composition across categories. Requires 'color' mapping.)
+    - tmpl_combo_line_bar (Good for: Comparing two different Y metrics. The line and bar must share the same X-axis.)
+    - tmpl_bubble_plot (Good for: 3 numeric variables. Requires 'z' mapping for bubble size.)
     `;
 
     try {
@@ -129,11 +134,12 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
                 if (!tmpl) return;
                 if (!availableColumns.includes(rec.mapping.x) || !availableColumns.includes(rec.mapping.y)) return;
 
-                // Gracefully handle if AI hallucinates a non-existent column for color coding
                 const validatedMapping = { ...rec.mapping };
-                if (validatedMapping.color && !availableColumns.includes(validatedMapping.color)) {
-                    validatedMapping.color = undefined;
-                }
+                if (validatedMapping.color && !availableColumns.includes(validatedMapping.color)) validatedMapping.color = undefined;
+                if (validatedMapping.z && !availableColumns.includes(validatedMapping.z)) validatedMapping.z = undefined;
+                
+                // For stacked bar, color is essential. If AI misses it, don't create the chart.
+                if (tmpl.type === 'stacked-bar' && !validatedMapping.color) return;
 
                 finalCharts.push({
                     id: `chart_${index}_${rec.templateId}`,
@@ -144,10 +150,16 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
                 });
             });
         }
+        
+        const finalKpis: KpiConfig[] = (Array.isArray(rawResult.kpis) ? rawResult.kpis : []).map(kpi => ({...kpi, id: uuidv4()}));
+
 
         // Fallbacks
         const finalSummary = Array.isArray(rawResult.summary) ? rawResult.summary : ["Analysis complete."];
-        const finalKpis = Array.isArray(rawResult.kpis) ? rawResult.kpis : [];
+        if (finalKpis.length < 3 && availableColumns.length > 0) {
+            finalKpis.push({ id: uuidv4(), title: 'Total Rows', column: availableColumns[0], operation: 'count_distinct', format: 'number' });
+        }
+
 
         if (finalCharts.length === 0 && availableColumns.length >= 2) {
              finalCharts.push({
@@ -164,7 +176,7 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
 
     } catch (error) {
         console.error("Gemini Analysis Error:", error);
-        throw new Error("Failed to analyze data. Please try again.");
+        throw new Error("Failed to analyze data. The AI model may be experiencing issues. Please try again.");
     }
 };
 

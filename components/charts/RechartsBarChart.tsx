@@ -1,6 +1,5 @@
-
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush, Legend, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
 import { DataRow, ChartMapping } from '../../types.ts';
 import { ViewOptions } from './ChartRenderer.tsx';
 
@@ -8,109 +7,131 @@ interface Props {
     data: DataRow[];
     mapping: ChartMapping;
     viewOptions: ViewOptions;
+    isStacked?: boolean;
+    colors: string[];
+    formatLabel: (label: string) => string;
 }
 
-export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions }) => {
-    const processedData = useMemo(() => {
-        if (!data || data.length === 0) return [];
+export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, isStacked = false, colors, formatLabel }) => {
+    const { processedData, dataKeys, yAxisWidth, leftMargin } = useMemo(() => {
+        if (!data || data.length === 0) return { processedData: [], dataKeys: [], yAxisWidth: 80, leftMargin: 20 };
 
-        // If no aggregation is specified, assume data is pre-aggregated and just sort it.
-        if (mapping.aggregation === 'none') {
-            return [...data].sort((a, b) => Number(b[mapping.y]) - Number(a[mapping.y]));
-        }
-
-        // 1. Aggregate by X category
-        const map = new Map<string, { sum: number, count: number, values: number[] }>();
+        const aggMap = new Map<string, any>();
+        const keys = mapping.color ? Array.from(new Set(data.map(row => String(row[mapping.color!])))) : [mapping.y];
         
         data.forEach(row => {
-            const key = String(row[mapping.x] || 'Unknown');
-            const val = Number(row[mapping.y]) || 0;
+            const xKey = String(row[mapping.x] || 'Unknown');
+            if (!aggMap.has(xKey)) aggMap.set(xKey, { [mapping.x]: xKey });
             
-            if (!map.has(key)) map.set(key, { sum: 0, count: 0, values: [] });
-            const entry = map.get(key)!;
-            entry.sum += val;
-            entry.count += 1;
-            entry.values.push(val);
+            const entry = aggMap.get(xKey)!;
+            const yVal = Number(row[mapping.y]) || 0;
+            const seriesKey = mapping.color ? String(row[mapping.color]) : mapping.y;
+
+            entry[seriesKey] = (entry[seriesKey] || 0) + yVal;
         });
 
-        // 2. Apply specific aggregation and format for Chart
-        const result = Array.from(map, ([key, stats]) => {
-            let finalVal = stats.sum;
-            if (mapping.aggregation === 'average') finalVal = stats.sum / stats.count;
-            else if (mapping.aggregation === 'count') finalVal = stats.count;
+        let result = Array.from(aggMap.values());
+        
+        // Sort data for better presentation
+        if (keys.length > 1) { // Multi-series
+             result.sort((a, b) => {
+                const totalA = keys.reduce((sum, k) => sum + (Number(a[k]) || 0), 0);
+                const totalB = keys.reduce((sum, k) => sum + (Number(b[k]) || 0), 0);
+                return totalB - totalA;
+            });
+        } else { // Single-series
+             result.sort((a, b) => Number(b[mapping.y]) - Number(a[mapping.y]));
+        }
 
-            return { [mapping.x]: key, [mapping.y]: finalVal };
+        // Dynamically adjust Y-axis width based on label length to prevent overlap
+        let maxLabelLength = 0;
+        result.forEach(d => {
+            const labelLength = String(d[mapping.x]).length;
+            if (labelLength > maxLabelLength) maxLabelLength = labelLength;
         });
+        
+        const newYAxisWidth = Math.min(200, Math.max(80, maxLabelLength * 6));
+        const newLeftMargin = Math.max(20, newYAxisWidth - 60);
 
-        // 3. Sort descending to show "Top" items first
-        return result.sort((a, b) => Number(b[mapping.y]) - Number(a[mapping.y]));
+        return { processedData: result, dataKeys: keys, yAxisWidth: newYAxisWidth, leftMargin: newLeftMargin };
 
-    }, [data, mapping]);
+    }, [data, mapping, isStacked]);
+
+    const isSingleSeries = dataKeys.length === 1;
 
     return (
         <ResponsiveContainer width="100%" height="100%">
             <BarChart
                 data={processedData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                margin={{ top: 20, right: 30, left: leftMargin, bottom: 20 }}
+                layout="vertical"
             >
                 {viewOptions.showGrid && (
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                 )}
-                <XAxis 
+                <YAxis 
+                    type="category"
                     dataKey={mapping.x} 
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={{ stroke: '#cbd5e1' }}
                     tickLine={false}
                     interval={0}
-                    angle={-30}
-                    textAnchor="end"
-                    height={60}
+                    width={yAxisWidth}
                     tickFormatter={(val) => {
                         const str = String(val);
-                        return str.length > 14 ? str.substring(0, 12) + '...' : str;
+                        return str.length > 30 ? str.substring(0, 27) + '...' : str;
                     }}
                 />
-                <YAxis 
+                <XAxis 
+                    type="number"
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(value) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)}
-                    width={40}
+                    domain={[0, 'dataMax']}
                 />
                 <Tooltip 
                     cursor={{ fill: '#f1f5f9' }}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                    formatter={(value: number) => [new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(value), mapping.y]}
+                    formatter={(value: number, name: string) => [new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(value), formatLabel(name)]}
                 />
                 {viewOptions.showLegend && (
-                    <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}} />
+                    <Legend 
+                        wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}
+                        formatter={(value) => formatLabel(value)}
+                    />
                 )}
-                <Bar 
-                    dataKey={mapping.y} 
-                    fill="#0ea5e9" 
-                    radius={[4, 4, 0, 0]} 
-                    maxBarSize={60}
-                    name={mapping.y} // For legend
-                >
-                    {viewOptions.showLabels && (
-                        <LabelList 
-                            dataKey={mapping.y} 
-                            position="top" 
-                            formatter={(val: number) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(val)}
-                            style={{ fontSize: '10px', fill: '#64748b' }} 
+                {isSingleSeries ? (
+                    <Bar 
+                        dataKey={dataKeys[0]} 
+                        radius={[0, 4, 4, 0]} 
+                        maxBarSize={60}
+                    >
+                        {processedData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                        ))}
+                        {viewOptions.showLabels && (
+                            <LabelList 
+                                dataKey={dataKeys[0]} 
+                                position="right" 
+                                formatter={(val: number) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(val)}
+                                style={{ fontSize: '10px', fill: '#64748b' }} 
+                            />
+                        )}
+                    </Bar>
+                ) : (
+                    dataKeys.map((key, i) => (
+                        <Bar 
+                            key={key}
+                            dataKey={key} 
+                            fill={colors[i % colors.length]} 
+                            radius={[0, 4, 4, 0]} 
+                            maxBarSize={60}
+                            stackId={isStacked ? "a" : undefined}
+                            name={formatLabel(key)}
                         />
-                    )}
-                </Bar>
-                {/* Responsive Brush: Hidden on small screens */}
-                <Brush 
-                    dataKey={mapping.x}
-                    height={25}
-                    stroke="#cbd5e1"
-                    fill="#f8fafc"
-                    tickFormatter={() => ''}
-                    travellerWidth={10}
-                    className="hidden md:block"
-                />
+                    ))
+                )}
             </BarChart>
         </ResponsiveContainer>
     );
