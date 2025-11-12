@@ -19,6 +19,7 @@ import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
 import { DashboardSettingsModal } from './modals/DashboardSettingsModal.tsx';
+import { KpiDetailModal } from './modals/KpiDetailModal.tsx';
 
 interface DashboardProps {
     userEmail: string;
@@ -87,7 +88,7 @@ const KpiCard: React.FC<{
     const formattedValue = new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value ?? 0);
 
     return (
-        <div onClick={onClick} className={`relative p-4 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden group ${kpi.primaryCategory ? 'hover:shadow-lg hover:-translate-y-1 hover:border-primary-300' : 'cursor-default'} ${trendColor === 'green' ? 'bg-green-50/40 border-green-200/60' : trendColor === 'red' ? 'bg-red-50/40 border-red-200/60' : 'bg-white border-slate-200/80 shadow-sm'}`}>
+        <div onClick={onClick} className={`relative p-4 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden group hover:shadow-lg hover:-translate-y-1 hover:border-primary-300 ${trendColor === 'green' ? 'bg-green-50/40 border-green-200/60' : trendColor === 'red' ? 'bg-red-50/40 border-red-200/60' : 'bg-white border-slate-200/80 shadow-sm'}`}>
             <p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p>
             <p className="text-3xl font-bold text-slate-900">{formattedValue}</p>
             {trend !== null && (
@@ -349,6 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [projectToManage, setProjectToManage] = useState<Project | null>(null);
     const [currentView, setCurrentView] = useState<'dashboard' | 'ai-report' | 'data'>('dashboard');
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
+    const [selectedKpi, setSelectedKpi] = useState<KpiConfig | null>(null);
     const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
     const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -767,6 +769,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 }
                 return newFilters;
             });
+        } else {
+            setSelectedKpi(kpi);
         }
     }, []);
 
@@ -841,6 +845,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onTimeFilterChange={handleTimeFilterChange}
                 activeFilters={globalFilters}
                 activeTimeFilter={timeFilter}
+            />}
+            {activeProject && <KpiDetailModal
+                isOpen={!!selectedKpi}
+                onClose={() => setSelectedKpi(null)}
+                kpi={selectedKpi}
+                project={activeProject}
+                dateColumn={dateColumn}
             />}
             <LayoutSelectionModal
                 isOpen={isLayoutModalOpen}
