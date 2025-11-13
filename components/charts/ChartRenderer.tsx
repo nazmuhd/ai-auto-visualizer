@@ -249,7 +249,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
         </button>
     );
 
-    const hasActiveFilters = activeTimeFilter.type !== 'all' || Object.values(activeFilters).some(s => s.size > 0);
+    // FIX: Explicitly type `s` as `Set<string>` to help TypeScript infer the type from Object.values, resolving the `.size` property access error.
+    const hasActiveFilters = activeTimeFilter.type !== 'all' || Object.values(activeFilters).some((s: Set<string>) => s.size > 0);
     const AccordionTrigger = ({ label, icon: Icon, isActive, onClick, hasActiveChild }: { label: string, icon: React.ElementType, isActive: boolean, onClick: () => void, hasActiveChild: boolean }) => (
         <button onClick={onClick} className={`w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between ${hasActiveChild ? 'bg-primary-50/50' : ''}`}>
             <div className="flex items-center">

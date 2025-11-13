@@ -101,9 +101,14 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         onUpdateLayout(newLayouts.page1, newLayouts.page2);
     };
     
-    const handleDrop = (pageIndex: 0 | 1, layout: ReportLayoutItem[], item: any) => {
-        const componentId = item.i;
-        if (layout.some(l => l.i === componentId)) return; // prevent duplicates
+    const usedComponentIds = useMemo(() => new Set([...layouts.page1.map(l => l.i), ...layouts.page2.map(l => l.i)]), [layouts]);
+    
+    const handleDrop = (pageIndex: 0 | 1, layout: ReportLayoutItem[], item: ReportLayoutItem, e: React.DragEvent) => {
+        const componentId = e.dataTransfer.getData('text/plain');
+        if (!componentId) return;
+
+        // Use the memoized set of used IDs for a more robust check across both pages
+        if (usedComponentIds.has(componentId)) return;
         
         const componentType = allComponents.get(componentId)?.type;
         let h = 2, w = 4;
@@ -112,7 +117,8 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         if(componentType === 'summary') { w = 12; h = 2; }
         if(componentType === 'title') { w = 12; h = 1; }
 
-        const newLayoutItem = { ...item, w, h };
+        // Combine positional data from `item` with the real `i` and our calculated `w` and `h`
+        const newLayoutItem: ReportLayoutItem = { ...item, i: componentId, w, h };
         const key = pageIndex === 0 ? 'page1' : 'page2';
         
         setLayouts(prev => {
@@ -199,7 +205,6 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         </div>
     );
     
-    const usedComponentIds = useMemo(() => new Set([...layouts.page1.map(l => l.i), ...layouts.page2.map(l => l.i)]), [layouts]);
 
     if (!project.analysis) return <div>No analysis data available.</div>;
 
@@ -250,7 +255,7 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                             rowHeight={80}
                             onLayoutChange={(layout) => handleLayoutChange(pageIndex as 0 | 1, layout)}
                             isDroppable={true}
-                            onDrop={(layout, item) => handleDrop(pageIndex as 0 | 1, layout, item)}
+                            onDrop={(layout, item, e) => handleDrop(pageIndex as 0 | 1, layout, item as ReportLayoutItem, e)}
                             droppingItem={{ i: 'new-item-' + Date.now(), w: 4, h: 2}}
                             useCSSTransforms={true}
                         >
@@ -265,7 +270,8 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                     <ResponsiveGridLayout
                         className="layout"
                         layouts={{ lg: layouts.page1 }}
-                        breakpoints={{ lg: 1 }}
+                        // FIX: Added breakpoints and cols to satisfy react-grid-layout requirements and prevent crashes.
+                        breakpoints={{ lg: 1200 }}
                         cols={{ lg: 12 }}
                         rowHeight={80}
                         width={794} // 210mm at ~96dpi
@@ -278,7 +284,8 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                     <ResponsiveGridLayout
                         className="layout"
                         layouts={{ lg: layouts.page2 }}
-                        breakpoints={{ lg: 1 }}
+                        // FIX: Added breakpoints and cols to satisfy react-grid-layout requirements and prevent crashes.
+                        breakpoints={{ lg: 1200 }}
                         cols={{ lg: 12 }}
                         rowHeight={80}
                         width={794}
