@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -14,7 +14,7 @@ import { RenameProjectModal } from './modals/RenameProjectModal.tsx';
 import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal.tsx';
 import { ChartMaximizeModal } from './modals/ChartMaximizeModal.tsx';
 import { DataTable } from './DataTable.tsx';
-import { AIReportView } from './AIReportView.tsx';
+import { ReportStudio } from './AIReportView.tsx';
 import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
@@ -142,7 +142,10 @@ const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: str
 
                 if(kpi.operation === 'sum') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
                 if(kpi.operation === 'average') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (filteredData.length || 1);
-                if(kpi.operation === 'count_distinct') return new Set(filteredData.map(row => row[kpi.column])).size;
+                if (kpi.operation === 'count_distinct') {
+                    const values = filteredData.map(row => row[kpi.column]);
+                    return new Set(values).size;
+                }
                 return 0;
             };
 
@@ -233,7 +236,8 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
 };
 
 const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = ({ filters, onRemove }) => {
-    const filterEntries = Object.entries(filters).flatMap(([col, values]) => Array.from(values).map(val => ({ col, val })));
+    // FIX: Explicitly type `values` to ensure it is treated as a Set, resolving potential type inference issues.
+    const filterEntries = Object.entries(filters).flatMap(([col, values]: [string, Set<string>]) => Array.from(values).map(val => ({ col, val })));
     if (filterEntries.length === 0) return null;
 
     return (
@@ -255,15 +259,15 @@ const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove
 const ProjectWorkspace: React.FC<{
     project: Project;
     filteredData: DataRow[];
-    currentView: 'dashboard' | 'ai-report' | 'data';
-    setCurrentView: (view: 'dashboard' | 'ai-report' | 'data') => void;
+    currentView: 'dashboard' | 'report-studio' | 'data';
+    setCurrentView: (view: 'dashboard' | 'report-studio' | 'data') => void;
     onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     dashboardLayout: string;
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
-    onGenerateReport: () => void;
+    onUpdateReportLayout: (page1: ReportLayoutItem[], page2: ReportLayoutItem[]) => void;
     saveStatus: SaveStatus;
     globalFilters: Record<string, Set<string>>;
     timeFilter: { type: TimeFilterPreset; start?: string; end?: string };
@@ -271,10 +275,11 @@ const ProjectWorkspace: React.FC<{
     onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
-}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onGenerateReport, saveStatus, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
+}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, saveStatus, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
     
     const { analysis } = project;
-    const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'ai-report' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
+    if (!analysis) return null;
+    const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'report-studio' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const chartRows = structureChartsByLayout(visibleCharts, props.dashboardLayout);
     const getGridColsClass = (count: number) => {
@@ -298,7 +303,7 @@ const ProjectWorkspace: React.FC<{
                 </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-                <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="ai-report" label="AI Report" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
+                <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
                 <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
                    <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
                         <Edit size={16} className="mr-2" /> Edit
@@ -306,7 +311,6 @@ const ProjectWorkspace: React.FC<{
                     <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
                         <LayoutGrid size={16} className="mr-2" /> Layout
                     </button>
-                     <button onClick={() => window.print()} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center"><Download size={16} className="mr-2" /> Export PDF</button>
                 </div>
             </div>
             {currentView === 'dashboard' && (
@@ -316,7 +320,7 @@ const ProjectWorkspace: React.FC<{
                 <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
             </>
             )}
-            {currentView === 'ai-report' && <AIReportView project={project} onGenerate={onGenerateReport} />}
+            {currentView === 'report-studio' && <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} />}
             {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><DataTable data={project.dataSource.data} /></div>}
         </div>
     );
@@ -348,7 +352,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [projectToManage, setProjectToManage] = useState<Project | null>(null);
-    const [currentView, setCurrentView] = useState<'dashboard' | 'ai-report' | 'data'>('dashboard');
+    const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
     const [selectedKpi, setSelectedKpi] = useState<KpiConfig | null>(null);
     const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
@@ -453,7 +457,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             });
         }
         
-        Object.entries(globalFilters).forEach(([col, allowedValues]) => {
+        // FIX: Explicitly type `allowedValues` to ensure it is treated as a Set, resolving potential type inference issues.
+        Object.entries(globalFilters).forEach(([col, allowedValues]: [string, Set<string>]) => {
             if (allowedValues.size > 0) {
                 result = result.filter(row => allowedValues.has(String(row[col])));
             }
@@ -525,6 +530,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             
             const projectWithAnalysis = { ...activeProject, analysis: { ...result, charts: chartsWithVisibility, kpis: initialKpis } };
 
+            // Also pre-generate the AI report content
+            if (projectWithAnalysis.dataSource.data && projectWithAnalysis.analysis) {
+                 const reportContent = await generateAiReport(projectWithAnalysis.dataSource.data, projectWithAnalysis.analysis);
+                 projectWithAnalysis.aiReport = { content: reportContent, status: 'complete' };
+            }
+
             setActiveProject(projectWithAnalysis);
             
             if (projectWithAnalysis.id.startsWith('unsaved_')) {
@@ -592,17 +603,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
+    
+    const handleUpdateReportLayout = useCallback((page1: ReportLayoutItem[], page2: ReportLayoutItem[]) => {
+         updateActiveProject(p => ({
+            ...p,
+            reportLayout: { page1, page2 }
+        }));
+    }, [activeProject]);
 
-    const handleGenerateReport = async () => {
-        if (!activeProject?.dataSource.data || !activeProject.analysis) return;
-        updateActiveProject(p => ({ ...p, aiReport: { content: '', status: 'generating' } }));
-        try {
-            const reportContent = await generateAiReport(activeProject.dataSource.data, activeProject.analysis);
-            updateActiveProject(p => ({ ...p, aiReport: { content: reportContent, status: 'complete' } }));
-        } catch(err: any) {
-            updateActiveProject(p => ({ ...p, aiReport: null }));
-        }
-    };
 
     const handleOpenRenameModal = (project: Project) => { setProjectToManage(project); setIsRenameModalOpen(true); };
     const handleRenameProject = (name: string, description: string) => {
@@ -737,9 +745,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setGlobalFilters(prev => {
             const newFilters = { ...prev };
             if (value && newFilters[column]) {
-                newFilters[column].delete(value);
-                if (newFilters[column].size === 0) {
+                const newSet = new Set(newFilters[column]);
+                newSet.delete(value);
+                if (newSet.size === 0) {
                     delete newFilters[column];
+                } else {
+                    newFilters[column] = newSet;
                 }
             } else {
                  delete newFilters[column];
@@ -751,7 +762,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleKpiClick = useCallback((kpi: KpiConfig) => {
         if (kpi.primaryCategory && kpi.primaryCategoryValue) {
             setGlobalFilters(prev => {
-                const currentSet = prev[kpi.primaryCategory!] || new Set();
+                const currentSet = prev[kpi.primaryCategory!] || new Set<string>();
                 const newSet = new Set(currentSet);
                 // Toggle behavior: if it's already the only filter for this category, remove it. Otherwise, set it as the only one.
                 if (newSet.has(kpi.primaryCategoryValue!) && newSet.size === 1) {
@@ -797,7 +808,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
                         onSetMaximizedChart={setMaximizedChart}
-                        onGenerateReport={handleGenerateReport}
+                        onUpdateReportLayout={handleUpdateReportLayout}
                         saveStatus={saveStatus}
                         globalFilters={globalFilters}
                         timeFilter={timeFilter}
@@ -844,6 +855,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onFilterChange={handleGlobalFilterChange}
                 onTimeFilterChange={handleTimeFilterChange}
                 activeFilters={globalFilters}
+                // FIX: Corrected variable name from 'activeTimeFilter' to 'timeFilter'.
                 activeTimeFilter={timeFilter}
             />}
             {activeProject && <KpiDetailModal

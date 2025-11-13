@@ -109,7 +109,7 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
 
         columns.forEach(col => {
             if (col === config.mapping.y || col === dateColumn) return;
-            const uniqueValues = new Set(allData.slice(0, 500).map(row => String(row[col] || '')));
+            const uniqueValues: Set<string> = new Set(allData.slice(0, 500).map(row => String(row[col] || '')));
             if (uniqueValues.size > 1 && uniqueValues.size <= MAX_UNIQUE_VALUES) {
                 const fullUnique = Array.from<string>(new Set(allData.map(row => String(row[col] || '')))).filter(v => v && v !== 'null' && v !== 'undefined' && v !== 'NaN');
                 if (fullUnique.length <= MAX_UNIQUE_VALUES) candidates.push({ col, values: fullUnique.sort() });
@@ -327,7 +327,8 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
                                                             </div>
                                                         )}
                                                         {filterableColumns.map((colData) => {
-                                                            const activeCount = activeFilters[colData.col]?.size || 0;
+                                                            // FIX: Explicitly cast to Set to resolve a potential type inference issue with Record index access.
+                                                            const activeCount = (activeFilters[colData.col] as Set<string> | undefined)?.size || 0;
                                                             const isExpanded = expandedFilterItem === `cat_${colData.col}`;
                                                             return (
                                                                 <div key={colData.col}>

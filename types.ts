@@ -62,6 +62,17 @@ export interface DataQualityReport {
     isClean: boolean;
 }
 
+
+export interface ReportLayoutItem {
+    i: string; // Unique identifier for the grid item (e.g., chart id, kpi id)
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    isDraggable?: boolean;
+    isResizable?: boolean;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -76,6 +87,10 @@ export interface Project {
         content: string;
         status: 'idle' | 'generating' | 'complete';
     } | null;
+    reportLayout?: {
+        page1: ReportLayoutItem[];
+        page2: ReportLayoutItem[];
+    }
 }
 
 

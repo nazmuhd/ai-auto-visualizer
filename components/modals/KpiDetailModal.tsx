@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-// FIX: Import ChartMapping type.
 import { Project, KpiConfig, DataRow, ChartMapping } from '../../types.ts';
 import { X, BarChart3 } from 'lucide-react';
 import { RechartsLineChart } from '../charts/RechartsLineChart.tsx';
@@ -74,7 +73,6 @@ export const KpiDetailModal: React.FC<Props> = ({ isOpen, onClose, kpi, project,
     compactDisplay: 'short'
   }).format(fullValue ?? 0);
 
-  // FIX: Explicitly type chartMapping to match ChartMapping type.
   const chartMapping: ChartMapping = { x: dateColumn!, y: kpi.column, aggregation: 'none' };
   const viewOptions = { showGrid: true, showLegend: false, showLabels: false };
   const colors = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
