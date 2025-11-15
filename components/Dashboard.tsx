@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem } from '../types.ts';
+import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
@@ -13,13 +13,15 @@ import { SaveProjectModal } from './modals/SaveProjectModal.tsx';
 import { RenameProjectModal } from './modals/RenameProjectModal.tsx';
 import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal.tsx';
 import { ChartMaximizeModal } from './modals/ChartMaximizeModal.tsx';
-import { DataTable } from './DataTable.tsx';
-import { ReportStudio } from './AIReportView.tsx';
-import { processFile } from '../services/dataParser.ts';
-import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
 import { DashboardSettingsModal } from './modals/DashboardSettingsModal.tsx';
 import { KpiDetailModal } from './modals/KpiDetailModal.tsx';
+import { ReportTemplateSelectionModal } from './modals/ReportTemplateSelectionModal.tsx';
+import { processFile } from '../services/dataParser.ts';
+import { analyzeData, generateAiReport } from '../services/geminiService.ts';
+
+const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
+const DataTable = lazy(() => import('./DataTable.tsx').then(m => ({ default: m.DataTable })));
 
 interface DashboardProps {
     userEmail: string;
@@ -81,7 +83,7 @@ const KpiCard: React.FC<{
     trend: number | null;
     sparklineData: { name: string; value: number }[];
     onClick: () => void;
-}> = ({ kpi, value, trend, sparklineData, onClick }) => {
+}> = memo(({ kpi, value, trend, sparklineData, onClick }) => {
     
     const trendColor = trend === null ? 'slate' : trend > 0 ? (kpi.trendDirection === 'higher-is-better' ? 'green' : 'red') : trend < 0 ? (kpi.trendDirection === 'higher-is-better' ? 'red' : 'green') : 'slate';
     const TrendIcon = trend === null ? Minus : trend > 0 ? TrendingUp : TrendingDown;
@@ -109,9 +111,9 @@ const KpiCard: React.FC<{
             )}
         </div>
     );
-};
+});
 
-const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: string | null, onKpiClick: (kpi: KpiConfig) => void }> = ({ kpis, data, dateColumn, onKpiClick }) => {
+const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: string | null, onKpiClick: (kpi: KpiConfig) => void }> = memo(({ kpis, data, dateColumn, onKpiClick }) => {
     const kpiValues = useMemo(() => {
         if (!data || data.length === 0) return [];
         
@@ -176,7 +178,7 @@ const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: str
             </div>
         </section>
     );
-};
+});
 
 const DashboardView: React.FC<{
     chartRows: ChartConfig[][];
@@ -190,7 +192,7 @@ const DashboardView: React.FC<{
     onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
     globalFilters: Record<string, Set<string>>;
     timeFilter: { type: TimeFilterPreset; start?: string; end?: string };
-}> = ({ chartRows, getGridColsClass, dataSource, allData, dateColumn, onChartUpdate, onSetMaximizedChart, onGlobalFilterChange, onTimeFilterChange, globalFilters, timeFilter }) => (
+}> = memo(({ chartRows, getGridColsClass, dataSource, allData, dateColumn, onChartUpdate, onSetMaximizedChart, onGlobalFilterChange, onTimeFilterChange, globalFilters, timeFilter }) => (
     <section>
         {chartRows.map((row, rowIndex) => (
             <div key={rowIndex} className={`grid grid-cols-1 ${getGridColsClass(row.length)} gap-6 lg:gap-8 mb-6 lg:mb-8`}>
@@ -202,7 +204,7 @@ const DashboardView: React.FC<{
             </div>
         ))}
     </section>
-);
+));
 
 const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => void; onRename: () => void }> = ({ project, onFileSelect, onRename }) => (
     <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -237,7 +239,7 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
     }
 };
 
-const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = ({ filters, onRemove }) => {
+const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = memo(({ filters, onRemove }) => {
     // FIX: Explicitly type `values` to ensure it is treated as a Set, resolving potential type inference issues.
     const filterEntries = Object.entries(filters).flatMap(([col, values]: [string, Set<string>]) => Array.from(values).map(val => ({ col, val })));
     if (filterEntries.length === 0) return null;
@@ -255,16 +257,37 @@ const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove
             <button onClick={() => onRemove('__all__')} className="ml-auto text-xs text-primary-600 hover:underline">Clear All</button>
         </div>
     );
-};
+});
+
+
+const ReportStartScreen: React.FC<{ onCreateReport: () => void }> = memo(({ onCreateReport }) => {
+    return (
+        <div className="text-center py-16">
+            <div className="p-4 bg-primary-100 text-primary-600 rounded-full mb-6 inline-block">
+                <Bot size={40} />
+            </div>
+            <h2 className="text-3xl font-bold text-slate-900">Create your report instantly</h2>
+            <p className="text-lg text-slate-500 mt-2 mb-10">Let AI help you build a professional report from your dashboard.</p>
+            <button 
+                onClick={onCreateReport} 
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center mx-auto"
+            >
+                <PlusCircle size={20} className="mr-2" />
+                Create a Report
+            </button>
+        </div>
+    );
+});
 
 
 const ProjectWorkspace: React.FC<{
     project: Project;
     filteredData: DataRow[];
     currentView: 'dashboard' | 'report-studio' | 'data';
-    setCurrentView: (view: 'dashboard' | 'report-studio' | 'data') => void;
+    onSetCurrentView: (view: 'dashboard' | 'report-studio' | 'data') => void;
     onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
+    onCreateReport: () => void;
     dashboardLayout: string;
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
@@ -278,7 +301,7 @@ const ProjectWorkspace: React.FC<{
     onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
-}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
+}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
     
     const { analysis } = project;
     if (!analysis) return null;
@@ -296,6 +319,7 @@ const ProjectWorkspace: React.FC<{
     };
     
     const visibleKpis = useMemo(() => analysis.kpis.filter(kpi => kpi.visible), [analysis.kpis]);
+    const ViewLoader = () => <div className="h-[calc(100vh-280px)] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
 
     return (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
@@ -333,8 +357,16 @@ const ProjectWorkspace: React.FC<{
                 <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
             </>
             )}
-            {currentView === 'report-studio' && <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} />}
-            {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><DataTable data={project.dataSource.data} /></div>}
+            {currentView === 'report-studio' && (
+                project.reportLayout ? (
+                     <Suspense fallback={<ViewLoader />}>
+                        <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} />
+                    </Suspense>
+                ) : (
+                    <ReportStartScreen onCreateReport={onCreateReport} />
+                )
+            )}
+            {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><Suspense fallback={<ViewLoader />}><DataTable data={project.dataSource.data} /></Suspense></div>}
         </div>
     );
 };
@@ -360,6 +392,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+    const [isReportTemplateModalOpen, setIsReportTemplateModalOpen] = useState(false);
+    const [preselectedReportFormat, setPreselectedReportFormat] = useState<ReportFormat | null>(null);
     
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
@@ -394,7 +428,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         }
     };
     
-    const handleManualSave = () => {
+    const updateActiveProject = useCallback((updater: (prev: Project) => Project) => {
+        setActiveProject(prev => {
+            if (!prev) return null;
+            const updatedProject = updater(prev);
+            if (!prev.id.startsWith('unsaved_')) {
+                setSaveStatus('unsaved');
+            }
+            return updatedProject;
+        });
+    }, []);
+    
+    const handleManualSave = useCallback(() => {
         if (!activeProject || saveStatus !== 'unsaved') return;
         setSaveStatus('saving');
         const updatedProjects = savedProjects.map(p => p.id === activeProject.id ? activeProject : p);
@@ -406,18 +451,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
             saveStatusTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
         }, 500);
-    };
+    }, [activeProject, saveStatus, savedProjects]);
 
-    const updateActiveProject = (updater: (prev: Project) => Project) => {
-        setActiveProject(prev => {
-            if (!prev) return null;
-            const updatedProject = updater(prev);
-            if (!prev.id.startsWith('unsaved_')) {
-                setSaveStatus('unsaved');
-            }
-            return updatedProject;
-        });
-    };
 
     const dateColumn = useMemo(() => {
         const data = activeProject?.dataSource.data;
@@ -470,7 +505,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     }, [activeProject, globalFilters, timeFilter, dateColumn]);
 
 
-    const handleFileSelect = async (file: File) => {
+    const handleFileSelect = useCallback(async (file: File) => {
         let projectToUpdate = activeProject;
         
         if (projectToUpdate && projectToUpdate.dataSource.data.length === 0) {
@@ -506,11 +541,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setActiveProject(null);
             setProgress(null);
         }
-    };
+    }, [activeProject]);
 
-    const handleValidationComplete = () => setStatus('validated');
+    const handleValidationComplete = useCallback(() => setStatus('validated'), []);
 
-    const handleConfirmPreview = async () => {
+    const handleConfirmPreview = useCallback(async () => {
         if (!activeProject) return;
         setStatus('analyzing');
         setProgress({ status: 'AI is generating insights...', percentage: 50 });
@@ -551,9 +586,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             analysisPromiseRef.current = null;
             setProgress(null);
         }
-    };
+    }, [activeProject, dashboardLayout]);
 
-    const handleReset = () => {
+    const handleReset = useCallback(() => {
         setActiveProject(null);
         setStatus('idle');
         setError(null);
@@ -563,9 +598,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setProgress(null);
         setIsSettingsModalOpen(false);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
-    };
+    }, [setIsSidebarOpen]);
     
-    const handleCreateProject = (name: string, description: string) => {
+    const handleCreateProject = useCallback((name: string, description: string) => {
         const newProject: Project = {
             id: new Date().toISOString(), name, description, createdAt: new Date(),
             dataSource: { name: 'No data source', data: [] }, analysis: null, aiReport: null,
@@ -575,9 +610,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         saveProjectsToLocalStorage(updatedProjects);
         setActiveProject(newProject);
         setIsCreateModalOpen(false);
-    };
+    }, [savedProjects]);
 
-    const handleSaveProject = (name: string, description: string) => {
+    const handleSaveProject = useCallback((name: string, description: string) => {
         if (!activeProject) return;
         const finalId = new Date().toISOString();
         const finalProject: Project = { ...activeProject, id: finalId, name, description, createdAt: new Date() };
@@ -588,9 +623,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         
         setActiveProject(finalProject);
         setIsSaveModalOpen(false);
-    };
+    }, [activeProject, savedProjects]);
 
-    const handleSelectProject = (projectId: string) => {
+    const handleSelectProject = useCallback((projectId: string) => {
         const project = savedProjects.find(p => p.id === projectId);
         if (project) {
             setActiveProject(project);
@@ -603,34 +638,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
-    };
+    }, [savedProjects, setIsSidebarOpen]);
     
     const handleUpdateReportLayout = useCallback((pages: ReportLayoutItem[][]) => {
          updateActiveProject(p => ({
             ...p,
             reportLayout: pages
         }));
-    }, [activeProject]);
+    }, [updateActiveProject]);
 
 
-    const handleOpenRenameModal = (project: Project) => { setProjectToManage(project); setIsRenameModalOpen(true); };
-    const handleRenameProject = (name: string, description: string) => {
+    const handleOpenRenameModal = useCallback((project: Project) => { setProjectToManage(project); setIsRenameModalOpen(true); }, []);
+    
+    const handleRenameProject = useCallback((name: string, description: string) => {
         if (!projectToManage) return;
         const updatedProject = { ...projectToManage, name, description };
         const updatedProjects = savedProjects.map(p => p.id === projectToManage.id ? updatedProject : p);
         setSavedProjects(updatedProjects);
         saveProjectsToLocalStorage(updatedProjects);
         if (activeProject?.id === projectToManage.id) setActiveProject(updatedProject);
-    };
+    }, [projectToManage, savedProjects, activeProject]);
 
-    const handleOpenDeleteModal = (project: Project) => { setProjectToManage(project); setIsDeleteModalOpen(true); };
-    const handleDeleteProject = () => {
+    const handleOpenDeleteModal = useCallback((project: Project) => { setProjectToManage(project); setIsDeleteModalOpen(true); }, []);
+    
+    const handleDeleteProject = useCallback(() => {
         if (!projectToManage) return;
         const updatedProjects = savedProjects.filter(p => p.id !== projectToManage.id);
         setSavedProjects(updatedProjects);
         saveProjectsToLocalStorage(updatedProjects);
         if (activeProject?.id === projectToManage.id) handleReset();
-    };
+    }, [projectToManage, savedProjects, activeProject, handleReset]);
     
     const handleChartUpdate = useCallback((updatedChart: ChartConfig) => {
         updateActiveProject(p => {
@@ -644,9 +681,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             }
             return { ...p, analysis: updatedAnalysis };
         });
-    }, [activeProject, maximizedChart]);
+    }, [maximizedChart, updateActiveProject]);
 
-    const handleSelectLayout = (layoutId: string) => {
+    const handleSelectLayout = useCallback((layoutId: string) => {
         setDashboardLayout(layoutId);
         setIsLayoutModalOpen(false);
         updateActiveProject(p => {
@@ -670,26 +707,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             }
             return { ...p, analysis: { ...p.analysis, charts: updatedCharts } };
         });
-    };
+    }, [updateActiveProject]);
     
-    const handleKpiVisibilityToggle = (kpiId: string) => {
+    const handleKpiVisibilityToggle = useCallback((kpiId: string) => {
         updateActiveProject(p => {
             if (!p.analysis) return p;
             const updatedKpis = p.analysis.kpis.map(kpi => kpi.id === kpiId ? { ...kpi, visible: !kpi.visible } : kpi);
             return { ...p, analysis: { ...p.analysis, kpis: updatedKpis } };
         });
-    };
+    }, [updateActiveProject]);
 
-    const handleAddCustomKpi = (newKpi: Omit<KpiConfig, 'id'>) => {
+    const handleAddCustomKpi = useCallback((newKpi: Omit<KpiConfig, 'id'>) => {
         updateActiveProject(p => {
             if (!p.analysis) return p;
             const fullNewKpi = { ...newKpi, id: `custom_${Date.now()}`, visible: true };
             const updatedKpis = [...p.analysis.kpis, fullNewKpi];
             return { ...p, analysis: { ...p.analysis, kpis: updatedKpis } };
         });
-    };
+    }, [updateActiveProject]);
     
-    const handleChartVisibilityToggle = (chartId: string) => {
+    const handleChartVisibilityToggle = useCallback((chartId: string) => {
         if (!activeProject?.analysis) return;
         const targetChart = activeProject.analysis.charts.find(c => c.id === chartId);
         if (!targetChart) return;
@@ -708,7 +745,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             const updatedCharts = p.analysis.charts.map(chart => chart.id === chartId ? { ...chart, visible: !chart.visible } : chart);
             return { ...p, analysis: { ...p.analysis, charts: updatedCharts } };
         });
-    };
+    }, [activeProject, dashboardLayout, updateActiveProject]);
 
     const validationTasks = useMemo(() => {
         if (!validationReport) return [];
@@ -785,6 +822,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setSelectedKpi(kpi);
         }
     }, []);
+    
+    const handleSetCurrentView = (view: 'dashboard' | 'report-studio' | 'data') => {
+      setCurrentView(view);
+    };
+
+    const handleTemplateSelected = (templateId: string) => {
+        if (!activeProject || !activeProject.analysis) return;
+        // A real implementation would have more complex logic here based on the templateId
+        // For this example, we'll use a simplified version of the old default layout generator
+        const analysis = activeProject.analysis;
+        const pages: ReportLayoutItem[][] = [[]];
+        const isSlides = templateId.includes('slides');
+
+        // Page 1: Title & Summary
+        pages[0].push({ i: 'report-title', x: 0, y: 0, w: 12, h: isSlides ? 2: 1 });
+        pages[0].push({ i: 'summary', x: 0, y: isSlides ? 2 : 1, w: 12, h: 2 });
+        analysis.kpis.slice(0, 4).forEach((kpi, index) => {
+            pages[0].push({ i: kpi.id, x: (index * 3) % 12, y: isSlides ? 4 : 3, w: 3, h: 1 });
+        });
+
+        // Add more pages with charts
+        analysis.charts.slice(0, 4).forEach((chart, index) => {
+            if (index % 2 === 0) pages.push([]); // New page for every 2 charts
+            const currentPage = pages[pages.length - 1];
+            currentPage.push({ i: chart.id, x: (index % 2) * 6, y: 0, w: 6, h: 4 });
+        });
+
+        updateActiveProject(p => ({
+            ...p,
+            reportLayout: pages,
+            reportFormat: isSlides ? 'slides' : 'pdf',
+        }));
+
+        setIsReportTemplateModalOpen(false);
+        setPreselectedReportFormat(null);
+        setCurrentView('report-studio');
+    };
 
     const renderMainContent = () => {
         if (!activeProject) {
@@ -802,9 +876,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         project={activeProject}
                         filteredData={filteredData}
                         currentView={currentView}
-                        setCurrentView={setCurrentView}
+                        onSetCurrentView={handleSetCurrentView}
                         onOpenEditModal={() => setIsSettingsModalOpen(true)}
                         setIsLayoutModalOpen={setIsLayoutModalOpen}
+                        onCreateReport={() => {
+                           setPreselectedReportFormat(null);
+                           setIsReportTemplateModalOpen(true);
+                        }}
                         dashboardLayout={dashboardLayout}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
@@ -872,6 +950,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 currentLayout={dashboardLayout}
                 onSelectLayout={handleSelectLayout}
                 layouts={layouts}
+            />
+             <ReportTemplateSelectionModal
+                isOpen={isReportTemplateModalOpen}
+                onClose={() => {
+                    setIsReportTemplateModalOpen(false);
+                    setPreselectedReportFormat(null);
+                }}
+                onSelect={handleTemplateSelected}
+                preselectedFormat={preselectedReportFormat}
             />
             {activeProject && activeProject.analysis && (
                 <DashboardSettingsModal

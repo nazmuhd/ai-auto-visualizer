@@ -58,17 +58,13 @@ const ReportComponent: React.FC<{ item: any, type: string, project: Project }> =
 }
 
 const generateDefaultLayout = (analysis: Project['analysis']): ReportLayoutItem[][] => {
-    const pages: ReportLayoutItem[][] = [[], [], []]; // Default to 3 pages
+    const pages: ReportLayoutItem[][] = [[]]; // Start with one page
 
     pages[0].push({ i: 'report-title', x: 0, y: 0, w: 12, h: 1 });
     pages[0].push({ i: 'summary', x: 0, y: 1, w: 12, h: 2 });
     
     analysis?.kpis.slice(0, 4).forEach((kpi, index) => {
         pages[0].push({ i: kpi.id, x: (index * 3) % 12, y: 3, w: 3, h: 1 });
-    });
-
-    analysis?.charts.slice(0, 4).forEach((chart, index) => {
-        pages[1].push({ i: chart.id, x: (index % 2) * 6, y: Math.floor(index / 2) * 4, w: 6, h: 4 });
     });
 
     return pages;
@@ -80,6 +76,7 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
     const [isExporting, setIsExporting] = useState(false);
     const [userTier, setUserTier] = useState<UserTier>('free');
     const printRef = useRef<HTMLDivElement>(null);
+    const reportFormat = project.reportFormat || 'pdf';
 
     const maxPages = TIER_CONFIG[userTier].maxPages;
 
@@ -97,6 +94,8 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
             const defaultLayout = generateDefaultLayout(project.analysis);
             setLayouts(defaultLayout);
             onUpdateLayout(defaultLayout);
+        } else if (project.reportLayout) {
+            setLayouts(project.reportLayout);
         }
     }, [project.analysis, project.reportLayout, onUpdateLayout]);
 
@@ -169,7 +168,8 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         }
 
         try {
-            const pdf = new jsPDF('p', 'mm', 'a4');
+            const orientation = reportFormat === 'slides' ? 'l' : 'p';
+            const pdf = new jsPDF(orientation, 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
@@ -238,6 +238,10 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
 
     if (!project.analysis) return <div>No analysis data available.</div>;
 
+    const pageWrapperClass = reportFormat === 'slides' ? 'aspect-video' : 'min-h-[1056px]';
+    const gridLayoutClass = reportFormat === 'slides' ? 'layout-slides' : 'layout';
+    const rowHeight = reportFormat === 'slides' ? 60 : 80;
+    
     return (
         <div className="flex gap-6 relative">
              {isExporting && (
@@ -283,7 +287,7 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
             </aside>
             <main className="flex-1 overflow-y-auto h-[calc(100vh-200px)] space-y-8">
                 {layouts.map((pageLayout, pageIndex) => (
-                    <div key={pageIndex} className="bg-white shadow-lg rounded-xl p-6 border border-slate-200 relative group/page">
+                    <div key={pageIndex} className={`bg-white shadow-lg rounded-xl p-6 border border-slate-200 relative group/page ${pageWrapperClass}`}>
                         <div className="absolute top-4 right-4 flex items-center gap-2">
                             <span className="text-xs font-semibold text-slate-400">Page {pageIndex + 1}</span>
                             {layouts.length > 1 && (
@@ -293,11 +297,11 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                             )}
                         </div>
                          <ResponsiveGridLayout
-                            className="layout min-h-[1056px]"
+                            className={gridLayoutClass}
                             layouts={{ lg: pageLayout }}
                             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                            rowHeight={80}
+                            rowHeight={rowHeight}
                             onLayoutChange={(layout) => handleLayoutChange(pageIndex, layout)}
                             isDroppable={true}
                             onDrop={(layout, item, e) => handleDrop(pageIndex, layout, item as ReportLayoutItem, e)}
@@ -318,14 +322,14 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
              {/* Hidden container for high-res PDF rendering */}
             <div ref={printRef} className="fixed left-[200vw] top-0 z-[-1] opacity-0 pointer-events-none">
                  {layouts.map((pageLayout, pageIndex) => (
-                    <div key={pageIndex} id={`print-page-${pageIndex}`} style={{ width: '210mm', height: '297mm', backgroundColor: 'white' }}>
+                    <div key={pageIndex} id={`print-page-${pageIndex}`} style={{ width: reportFormat === 'slides' ? '297mm' : '210mm', height: reportFormat === 'slides' ? '210mm' : '297mm', backgroundColor: 'white' }}>
                         <ResponsiveGridLayout
                             className="layout"
                             layouts={{ lg: pageLayout }}
                             breakpoints={{ lg: 1200 }}
                             cols={{ lg: 12 }}
-                            rowHeight={80}
-                            width={794} // 210mm at ~96dpi
+                            rowHeight={rowHeight}
+                            width={reportFormat === 'slides' ? 1122 : 794} 
                             isDraggable={false} isResizable={false}
                         >
                         {pageLayout.map(l => <div key={l.i} data-grid={l} className="group"><ReportComponent item={allComponents.get(l.i)?.item} type={allComponents.get(l.i)?.type || ''} project={project} /></div>)}

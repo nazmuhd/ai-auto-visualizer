@@ -89,6 +89,7 @@ export interface Project {
         status: 'idle' | 'generating' | 'complete';
     } | null;
     reportLayout?: ReportLayoutItem[][];
+    reportFormat?: 'slides' | 'pdf';
 }
 
 
@@ -101,4 +102,15 @@ export interface LayoutInfo {
   totalCharts: number;
   description: string;
   usedBy: string;
+}
+
+export type ReportFormat = 'slides' | 'pdf';
+
+export interface ReportTemplate {
+  id: string;
+  format: ReportFormat;
+  name: string;
+  company: string;
+  range: string;
+  description: string;
 }

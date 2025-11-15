@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import {
   Sparkles,
   FilePlus,
@@ -37,7 +37,7 @@ const ProjectLink: React.FC<{
   onSelectProject: (id: string) => void;
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
-}> = ({ proj, isActive, isOpen, isDesktop, contextMenuOpen, setContextMenuOpen, onSelectProject, onRename, onDelete }) => {
+}> = memo(({ proj, isActive, isOpen, isDesktop, contextMenuOpen, setContextMenuOpen, onSelectProject, onRename, onDelete }) => {
   
   const projectLinkRef = useRef<HTMLLIElement>(null);
   const isMenuOpenForThis = contextMenuOpen === proj.id;
@@ -112,7 +112,7 @@ const ProjectLink: React.FC<{
       )}
     </li>
   );
-};
+});
 
 
 export const Sidebar: React.FC<Props> = ({ 
