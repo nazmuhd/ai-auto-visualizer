@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, KpiConfig, LayoutInfo } from '../../types.ts';
-import { Settings, CheckCircle, Eye, EyeOff, GripVertical, PlusCircle, X } from 'lucide-react';
+import { Settings, CheckCircle, Eye, EyeOff, GripVertical, PlusCircle, X, Zap } from 'lucide-react';
 
-const DEFAULT_KPI: Omit<KpiConfig, 'id'> = { title: '', column: '', operation: 'sum', format: 'number', isCustom: true };
+const DEFAULT_KPI: Omit<KpiConfig, 'id' | 'multiplier'> = { title: '', column: '', operation: 'sum', format: 'number', isCustom: true };
 
 interface Props {
     isOpen: boolean;
@@ -26,9 +26,39 @@ export const DashboardSettingsModal: React.FC<Props> = ({
     layouts
 }) => {
     
-    if (!isOpen || !project.analysis) return null;
-
+    const [newKpi, setNewKpi] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
     const analysis = project.analysis;
+    const columns = useMemo(() => project.dataSource.data.length > 0 ? Object.keys(project.dataSource.data[0]) : [], [project.dataSource.data]);
+
+    if (!isOpen || !analysis) return null;
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setNewKpi(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAddKpi = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newKpi.title && newKpi.column) {
+            onAddCustomKpi(newKpi);
+            setNewKpi(DEFAULT_KPI);
+        }
+    };
+    
+    const handleQuickAddTax = () => {
+        const revenueColumn = columns.find(c => c.toLowerCase().includes('revenue')) 
+                           || columns.find(c => c.toLowerCase().includes('sales'))
+                           || columns[0];
+        onAddCustomKpi({
+            title: 'Sales Tax (8%)',
+            column: revenueColumn,
+            operation: 'sum',
+            format: 'currency',
+            isCustom: true,
+            multiplier: 0.08
+        });
+    };
+
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const layout = layouts.find(l => l.id === dashboardLayout) || layouts[0];
 
@@ -53,6 +83,35 @@ export const DashboardSettingsModal: React.FC<Props> = ({
                         </div>
                     </section>
                     
+                     <section>
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-lg font-bold text-primary-900 flex items-center"><PlusCircle size={18} className="mr-2" /> Add Custom KPI</h3>
+                            <button onClick={handleQuickAddTax} className="px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-100 hover:bg-primary-200 rounded-full flex items-center"><Zap size={12} className="mr-1.5" /> Quick Add: Sales Tax (8%)</button>
+                        </div>
+                        <form onSubmit={handleAddKpi} className="p-4 bg-white rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                            <div className="md:col-span-2">
+                                <label className="text-xs font-medium text-slate-600">Title</label>
+                                <input name="title" value={newKpi.title} onChange={handleInputChange} type="text" placeholder="e.g., Average Order Value" className="w-full mt-1 px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" required />
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-slate-600">Column</label>
+                                <select name="column" value={newKpi.column} onChange={handleInputChange} className="w-full mt-1 px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" required>
+                                    <option value="">Select...</option>
+                                    {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-slate-600">Operation</label>
+                                <select name="operation" value={newKpi.operation} onChange={handleInputChange} className="w-full mt-1 px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" required>
+                                    <option value="sum">Sum</option>
+                                    <option value="average">Average</option>
+                                    <option value="count_distinct">Count Distinct</option>
+                                </select>
+                            </div>
+                            <button type="submit" className="md:col-span-1 w-full px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center justify-center shadow-sm">Add KPI</button>
+                        </form>
+                    </section>
+
                     <section>
                         <h3 className="text-lg font-bold text-primary-900 mb-3 flex items-center"><Settings size={18} className="mr-2" /> Manage Charts</h3>
                         <p className="text-sm text-primary-800/80 mb-3">You are showing <span className="font-bold">{visibleCharts.length}</span> of <span className="font-bold">{analysis.charts.length}</span> AI-generated charts. Your current layout supports up to <span className="font-bold">{layout.totalCharts}</span> charts.</p>

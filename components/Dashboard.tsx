@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
@@ -139,14 +139,16 @@ const KpiSection: React.FC<{ kpis: KpiConfig[], data: DataRow[], dateColumn: str
                 if(kpi.primaryCategory && kpi.primaryCategoryValue) {
                     filteredData = dataset.filter(r => String(r[kpi.primaryCategory!]) === kpi.primaryCategoryValue);
                 }
-
-                if(kpi.operation === 'sum') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
-                if(kpi.operation === 'average') return filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (filteredData.length || 1);
-                if (kpi.operation === 'count_distinct') {
+                
+                let baseValue = 0;
+                if(kpi.operation === 'sum') baseValue = filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0);
+                else if(kpi.operation === 'average') baseValue = filteredData.reduce((acc, row) => acc + (Number(row[kpi.column]) || 0), 0) / (filteredData.length || 1);
+                else if (kpi.operation === 'count_distinct') {
                     const values = filteredData.map(row => row[kpi.column]);
-                    return new Set(values).size;
+                    baseValue = new Set(values).size;
                 }
-                return 0;
+                
+                return baseValue * (kpi.multiplier || 1);
             };
 
             const currentValue = calculateValue(data);
@@ -267,15 +269,16 @@ const ProjectWorkspace: React.FC<{
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
-    onUpdateReportLayout: (page1: ReportLayoutItem[], page2: ReportLayoutItem[]) => void;
+    onUpdateReportLayout: (pages: ReportLayoutItem[][]) => void;
     saveStatus: SaveStatus;
+    onManualSave: () => void;
     globalFilters: Record<string, Set<string>>;
     timeFilter: { type: TimeFilterPreset; start?: string; end?: string };
     onGlobalFilterChange: (column: string, values: Set<string>) => void;
     onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
-}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, saveStatus, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
+}> = ({ project, filteredData, currentView, setCurrentView, onOpenEditModal, setIsLayoutModalOpen, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, ...props }) => {
     
     const { analysis } = project;
     if (!analysis) return null;
@@ -305,6 +308,16 @@ const ProjectWorkspace: React.FC<{
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                 <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data View" icon={FileText} /></div>
                 <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
+                   {saveStatus === 'unsaved' && (
+                        <button onClick={onManualSave} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-white bg-primary-600 border-primary-600 hover:bg-primary-700 shadow-sm">
+                            <Save size={16} className="mr-2" /> Save
+                        </button>
+                    )}
+                     {saveStatus === 'saving' && (
+                        <button disabled className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-500 bg-slate-200 border-slate-300 cursor-not-allowed">
+                            <Loader2 size={16} className="mr-2 animate-spin" /> Saving...
+                        </button>
+                    )}
                    <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
                         <Edit size={16} className="mr-2" /> Edit
                     </button>
@@ -324,18 +337,6 @@ const ProjectWorkspace: React.FC<{
             {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><DataTable data={project.dataSource.data} /></div>}
         </div>
     );
-};
-
-const useDebouncedCallback = (callback: (...args: any[]) => void, delay: number) => {
-    const timeoutRef = useRef<number | null>(null);
-    return useCallback((...args: any[]) => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-        }
-        timeoutRef.current = window.setTimeout(() => {
-            callback(...args);
-        }, delay);
-    }, [callback, delay]);
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => {
@@ -393,9 +394,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         }
     };
     
-     const debouncedSave = useDebouncedCallback((project: Project, allProjects: Project[]) => {
+    const handleManualSave = () => {
+        if (!activeProject || saveStatus !== 'unsaved') return;
         setSaveStatus('saving');
-        const updatedProjects = allProjects.map(p => p.id === project.id ? project : p);
+        const updatedProjects = savedProjects.map(p => p.id === activeProject.id ? activeProject : p);
         saveProjectsToLocalStorage(updatedProjects);
         setSavedProjects(updatedProjects);
 
@@ -404,16 +406,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
             saveStatusTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
         }, 500);
-    }, 1500);
+    };
 
     const updateActiveProject = (updater: (prev: Project) => Project) => {
         setActiveProject(prev => {
             if (!prev) return null;
-            if (prev.id.startsWith('unsaved_')) return updater(prev);
-            
             const updatedProject = updater(prev);
-            setSaveStatus('unsaved');
-            debouncedSave(updatedProject, savedProjects);
+            if (!prev.id.startsWith('unsaved_')) {
+                setSaveStatus('unsaved');
+            }
             return updatedProject;
         });
     };
@@ -604,10 +605,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         }
     };
     
-    const handleUpdateReportLayout = useCallback((page1: ReportLayoutItem[], page2: ReportLayoutItem[]) => {
+    const handleUpdateReportLayout = useCallback((pages: ReportLayoutItem[][]) => {
          updateActiveProject(p => ({
             ...p,
-            reportLayout: { page1, page2 }
+            reportLayout: pages
         }));
     }, [activeProject]);
 
@@ -810,6 +811,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         onSetMaximizedChart={setMaximizedChart}
                         onUpdateReportLayout={handleUpdateReportLayout}
                         saveStatus={saveStatus}
+                        onManualSave={handleManualSave}
                         globalFilters={globalFilters}
                         timeFilter={timeFilter}
                         onGlobalFilterChange={handleGlobalFilterChange}
@@ -855,7 +857,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onFilterChange={handleGlobalFilterChange}
                 onTimeFilterChange={handleTimeFilterChange}
                 activeFilters={globalFilters}
-                // FIX: Corrected variable name from 'activeTimeFilter' to 'timeFilter'.
                 activeTimeFilter={timeFilter}
             />}
             {activeProject && <KpiDetailModal

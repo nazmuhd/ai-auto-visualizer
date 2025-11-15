@@ -1,10 +1,6 @@
 # AI Auto-Visualizer
 
-![AI Auto-Visualizer Screenshot](https://raw.githubusercontent.com/nazmuhd/ai-auto-visualizer/refs/heads/main/Screenshot-1.png)
-
-![AI Auto-Visualizer Screenshot](https://raw.githubusercontent.com/nazmuhd/ai-auto-visualizer/refs/heads/main/Screenshot-2.png)
-
-![AI Auto-Visualizer Screenshot](https://raw.githubusercontent.com/nazmuhd/ai-auto-visualizer/refs/heads/main/Screenshot-3.png)
+![AI Auto-Visualizer Screenshot](https://storage.googleapis.com/aistudio-hosting/workspace-samples/screenshot.png)
 
 Upload your data (CSV, Excel) and let our AI analyze it to automatically generate beautiful, interactive dashboards and multi-page reports in seconds.
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Project, ReportLayoutItem, KpiConfig } from '../types.ts';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
-import { Download, Loader2, FileText, BarChart3, TrendingUp, Sparkles, X } from 'lucide-react';
+import { Download, Loader2, FileText, BarChart3, TrendingUp, Sparkles, X, PlusCircle, Trash2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -10,8 +10,17 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface ReportStudioProps {
     project: Project;
-    onUpdateLayout: (page1: ReportLayoutItem[], page2: ReportLayoutItem[]) => void;
+    onUpdateLayout: (pages: ReportLayoutItem[][]) => void;
 }
+
+type UserTier = 'free' | 'pro' | 'enterprise';
+
+const TIER_CONFIG: Record<UserTier, { name: string; maxPages: number }> = {
+    free: { name: 'Free', maxPages: 3 },
+    pro: { name: 'Pro', maxPages: 5 },
+    enterprise: { name: 'Enterprise', maxPages: 7 },
+};
+
 
 const ReportKpiCard: React.FC<{ kpi: KpiConfig, value: number | null }> = ({ kpi, value }) => {
     const formattedValue = new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value ?? 0);
@@ -48,35 +57,46 @@ const ReportComponent: React.FC<{ item: any, type: string, project: Project }> =
     }
 }
 
-const generateDefaultLayout = (analysis: Project['analysis']): { page1: ReportLayoutItem[], page2: ReportLayoutItem[] } => {
-    const page1: ReportLayoutItem[] = [];
-    const page2: ReportLayoutItem[] = [];
+const generateDefaultLayout = (analysis: Project['analysis']): ReportLayoutItem[][] => {
+    const pages: ReportLayoutItem[][] = [[], [], []]; // Default to 3 pages
 
-    page1.push({ i: 'report-title', x: 0, y: 0, w: 12, h: 1 });
-    page1.push({ i: 'summary', x: 0, y: 1, w: 12, h: 2 });
+    pages[0].push({ i: 'report-title', x: 0, y: 0, w: 12, h: 1 });
+    pages[0].push({ i: 'summary', x: 0, y: 1, w: 12, h: 2 });
     
     analysis?.kpis.slice(0, 4).forEach((kpi, index) => {
-        page1.push({ i: kpi.id, x: (index * 3) % 12, y: 3, w: 3, h: 1 });
+        pages[0].push({ i: kpi.id, x: (index * 3) % 12, y: 3, w: 3, h: 1 });
     });
 
     analysis?.charts.slice(0, 4).forEach((chart, index) => {
-        page2.push({ i: chart.id, x: (index % 2) * 6, y: Math.floor(index / 2) * 4, w: 6, h: 4 });
+        pages[1].push({ i: chart.id, x: (index % 2) * 6, y: Math.floor(index / 2) * 4, w: 6, h: 4 });
     });
 
-    return { page1, page2 };
+    return pages;
 };
 
 
 export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLayout }) => {
-    const [layouts, setLayouts] = useState(() => project.reportLayout || generateDefaultLayout(project.analysis));
+    const [layouts, setLayouts] = useState<ReportLayoutItem[][]>(() => project.reportLayout || generateDefaultLayout(project.analysis));
     const [isExporting, setIsExporting] = useState(false);
+    const [userTier, setUserTier] = useState<UserTier>('free');
     const printRef = useRef<HTMLDivElement>(null);
+
+    const maxPages = TIER_CONFIG[userTier].maxPages;
+
+    useEffect(() => {
+        // Trim pages if current tier allows fewer pages than what's in state
+        if (layouts.length > maxPages) {
+            const newLayouts = layouts.slice(0, maxPages);
+            setLayouts(newLayouts);
+            onUpdateLayout(newLayouts);
+        }
+    }, [userTier, layouts, maxPages, onUpdateLayout]);
 
     useEffect(() => {
         if (!project.reportLayout && project.analysis) {
             const defaultLayout = generateDefaultLayout(project.analysis);
             setLayouts(defaultLayout);
-            onUpdateLayout(defaultLayout.page1, defaultLayout.page2);
+            onUpdateLayout(defaultLayout);
         }
     }, [project.analysis, project.reportLayout, onUpdateLayout]);
 
@@ -92,23 +112,18 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         return items;
     }, [project.analysis]);
 
-    const handleLayoutChange = (pageIndex: 0 | 1, newLayout: ReportLayoutItem[]) => {
-        const newLayouts = { ...layouts };
-        const key = pageIndex === 0 ? 'page1' : 'page2';
-        // Filter out any placeholder items from react-grid-layout
-        newLayouts[key] = newLayout.filter(item => allComponents.has(item.i));
+    const handleLayoutChange = (pageIndex: number, newLayout: ReportLayoutItem[]) => {
+        const newLayouts = [...layouts];
+        newLayouts[pageIndex] = newLayout.filter(item => allComponents.has(item.i));
         setLayouts(newLayouts);
-        onUpdateLayout(newLayouts.page1, newLayouts.page2);
+        onUpdateLayout(newLayouts);
     };
     
-    const usedComponentIds = useMemo(() => new Set([...layouts.page1.map(l => l.i), ...layouts.page2.map(l => l.i)]), [layouts]);
+    const usedComponentIds = useMemo(() => new Set(layouts.flat().map(l => l.i)), [layouts]);
     
-    const handleDrop = (pageIndex: 0 | 1, layout: ReportLayoutItem[], item: ReportLayoutItem, e: React.DragEvent) => {
+    const handleDrop = (pageIndex: number, layout: ReportLayoutItem[], item: ReportLayoutItem, e: React.DragEvent) => {
         const componentId = e.dataTransfer.getData('text/plain');
-        if (!componentId) return;
-
-        // Use the memoized set of used IDs for a more robust check across both pages
-        if (usedComponentIds.has(componentId)) return;
+        if (!componentId || usedComponentIds.has(componentId)) return;
         
         const componentType = allComponents.get(componentId)?.type;
         let h = 2, w = 4;
@@ -117,21 +132,35 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         if(componentType === 'summary') { w = 12; h = 2; }
         if(componentType === 'title') { w = 12; h = 1; }
 
-        // Combine positional data from `item` with the real `i` and our calculated `w` and `h`
         const newLayoutItem: ReportLayoutItem = { ...item, i: componentId, w, h };
-        const key = pageIndex === 0 ? 'page1' : 'page2';
         
         setLayouts(prev => {
-            const newLayouts = {...prev};
-            newLayouts[key] = [...prev[key], newLayoutItem];
-            onUpdateLayout(newLayouts.page1, newLayouts.page2);
+            const newLayouts = [...prev];
+            newLayouts[pageIndex] = [...newLayouts[pageIndex], newLayoutItem];
+            onUpdateLayout(newLayouts);
             return newLayouts;
         });
+    };
+
+    const addPage = () => {
+        if (layouts.length < maxPages) {
+            const newLayouts = [...layouts, []];
+            setLayouts(newLayouts);
+            onUpdateLayout(newLayouts);
+        }
+    };
+    
+    const removePage = (pageIndex: number) => {
+        if (layouts.length > 1) {
+            const newLayouts = layouts.filter((_, i) => i !== pageIndex);
+            setLayouts(newLayouts);
+            onUpdateLayout(newLayouts);
+        }
     };
     
     const handleExportPdf = async () => {
         setIsExporting(true);
-        await new Promise(res => setTimeout(res, 100)); // allow state to update and render print view
+        await new Promise(res => setTimeout(res, 100));
 
         const printElement = printRef.current;
         if (!printElement) {
@@ -139,28 +168,20 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
             return;
         }
 
-        const page1 = printElement.querySelector<HTMLElement>('#print-page-1');
-        const page2 = printElement.querySelector<HTMLElement>('#print-page-2');
-
-        if (!page1 || !page2) {
-             setIsExporting(false);
-             return;
-        }
-
         try {
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
-            const canvas1 = await html2canvas(page1, { scale: 3, useCORS: true });
-            const imgData1 = canvas1.toDataURL('image/png');
-            pdf.addImage(imgData1, 'PNG', 0, 0, pdfWidth, pdfHeight);
-
-            pdf.addPage();
-            const canvas2 = await html2canvas(page2, { scale: 3, useCORS: true });
-            const imgData2 = canvas2.toDataURL('image/png');
-            pdf.addImage(imgData2, 'PNG', 0, 0, pdfWidth, pdfHeight);
-
+            for (let i = 0; i < layouts.length; i++) {
+                const pageElement = printElement.querySelector<HTMLElement>(`#print-page-${i}`);
+                if (pageElement) {
+                    const canvas = await html2canvas(pageElement, { scale: 3, useCORS: true });
+                    const imgData = canvas.toDataURL('image/png');
+                    if (i > 0) pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                }
+            }
             pdf.save(`${project.name}_report.pdf`);
         } catch (error) {
             console.error("Error generating PDF:", error);
@@ -170,7 +191,7 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         }
     };
     
-    const renderGridItems = (pageLayout: ReportLayoutItem[]) => {
+    const renderGridItems = (pageLayout: ReportLayoutItem[], pageIndex: number) => {
         return pageLayout.map(l => {
             const component = allComponents.get(l.i);
             if (!component) return null;
@@ -179,13 +200,13 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                     <ReportComponent item={component.item} type={component.type} project={project} />
                      <button 
                         onClick={() => {
-                            const newLayouts = {...layouts};
-                            newLayouts.page1 = layouts.page1.filter(item => item.i !== l.i);
-                            newLayouts.page2 = layouts.page2.filter(item => item.i !== l.i);
+                            const newLayouts = [...layouts];
+                            newLayouts[pageIndex] = newLayouts[pageIndex].filter(item => item.i !== l.i);
                             setLayouts(newLayouts);
-                            onUpdateLayout(newLayouts.page1, newLayouts.page2);
+                            onUpdateLayout(newLayouts);
                         }}
                         className="absolute top-1 right-1 z-10 p-1 bg-white/50 backdrop-blur-sm rounded-full text-slate-500 hover:text-red-500 hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remove from page"
                     >
                         <X size={14} />
                     </button>
@@ -205,6 +226,15 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
         </div>
     );
     
+    const TierButton: React.FC<{tier: UserTier, label: string}> = ({ tier, label }) => (
+        <button
+            onClick={() => setUserTier(tier)}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${userTier === tier ? 'bg-primary-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-200'}`}
+        >
+            {label} ({TIER_CONFIG[tier].maxPages} pages)
+        </button>
+    );
+
 
     if (!project.analysis) return <div>No analysis data available.</div>;
 
@@ -218,9 +248,17 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                 </div>
             )}
             <aside className="w-64 bg-slate-100 p-4 rounded-2xl border border-slate-200 flex-shrink-0 h-[calc(100vh-200px)] overflow-y-auto">
-                 <button onClick={handleExportPdf} disabled={isExporting} className="w-full mb-6 px-4 py-2.5 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center justify-center shadow-sm disabled:bg-primary-300">
+                 <button onClick={handleExportPdf} disabled={isExporting} className="w-full mb-4 px-4 py-2.5 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center justify-center shadow-sm disabled:bg-primary-300">
                     <Download size={16} className="mr-2"/> Export as PDF
                 </button>
+                <div className="p-2 border border-slate-200 rounded-lg bg-white mb-4">
+                     <label className="text-xs font-bold text-slate-500 mb-1.5 block">User Tier</label>
+                     <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-lg">
+                         <TierButton tier="free" label="Free"/>
+                         <TierButton tier="pro" label="Pro"/>
+                         <TierButton tier="enterprise" label="Ent."/>
+                     </div>
+                </div>
                 <div className="space-y-4">
                     <div>
                         <h4 className="font-semibold text-slate-500 text-sm mb-2 px-1 flex items-center"><FileText size={14} className="mr-2"/>Text Blocks</h4>
@@ -244,56 +282,56 @@ export const ReportStudio: React.FC<ReportStudioProps> = ({ project, onUpdateLay
                 </div>
             </aside>
             <main className="flex-1 overflow-y-auto h-[calc(100vh-200px)] space-y-8">
-                {[...Array(2)].map((_, pageIndex) => (
-                    <div key={pageIndex} className="bg-white shadow-lg rounded-xl p-6 border border-slate-200 relative">
-                        <span className="absolute top-4 right-4 text-xs font-semibold text-slate-400">Page {pageIndex + 1}</span>
+                {layouts.map((pageLayout, pageIndex) => (
+                    <div key={pageIndex} className="bg-white shadow-lg rounded-xl p-6 border border-slate-200 relative group/page">
+                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-400">Page {pageIndex + 1}</span>
+                            {layouts.length > 1 && (
+                                <button onClick={() => removePage(pageIndex)} className="p-1.5 rounded-full bg-slate-100 text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors">
+                                    <Trash2 size={14}/>
+                                </button>
+                            )}
+                        </div>
                          <ResponsiveGridLayout
                             className="layout min-h-[1056px]"
-                            layouts={{ lg: pageIndex === 0 ? layouts.page1 : layouts.page2 }}
+                            layouts={{ lg: pageLayout }}
                             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
                             rowHeight={80}
-                            onLayoutChange={(layout) => handleLayoutChange(pageIndex as 0 | 1, layout)}
+                            onLayoutChange={(layout) => handleLayoutChange(pageIndex, layout)}
                             isDroppable={true}
-                            onDrop={(layout, item, e) => handleDrop(pageIndex as 0 | 1, layout, item as ReportLayoutItem, e)}
+                            onDrop={(layout, item, e) => handleDrop(pageIndex, layout, item as ReportLayoutItem, e)}
                             droppingItem={{ i: 'new-item-' + Date.now(), w: 4, h: 2}}
                             useCSSTransforms={true}
                         >
-                           {renderGridItems(pageIndex === 0 ? layouts.page1 : layouts.page2)}
+                           {renderGridItems(pageLayout, pageIndex)}
                         </ResponsiveGridLayout>
                     </div>
                 ))}
+                {layouts.length < maxPages && (
+                    <button onClick={addPage} className="w-full border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-8 text-slate-500 hover:border-primary-500 hover:text-primary-600 transition-colors">
+                        <PlusCircle size={32} />
+                        <span className="mt-2 font-semibold">Add New Page</span>
+                    </button>
+                )}
             </main>
              {/* Hidden container for high-res PDF rendering */}
             <div ref={printRef} className="fixed left-[200vw] top-0 z-[-1] opacity-0 pointer-events-none">
-                 <div id="print-page-1" style={{ width: '210mm', height: '297mm', backgroundColor: 'white' }}>
-                    <ResponsiveGridLayout
-                        className="layout"
-                        layouts={{ lg: layouts.page1 }}
-                        // FIX: Added breakpoints and cols to satisfy react-grid-layout requirements and prevent crashes.
-                        breakpoints={{ lg: 1200 }}
-                        cols={{ lg: 12 }}
-                        rowHeight={80}
-                        width={794} // 210mm at ~96dpi
-                        isDraggable={false} isResizable={false}
-                    >
-                       {layouts.page1.map(l => <div key={l.i} data-grid={l} className="group"><ReportComponent item={allComponents.get(l.i)?.item} type={allComponents.get(l.i)?.type || ''} project={project} /></div>)}
-                    </ResponsiveGridLayout>
-                </div>
-                <div id="print-page-2" style={{ width: '210mm', height: '297mm', backgroundColor: 'white' }}>
-                    <ResponsiveGridLayout
-                        className="layout"
-                        layouts={{ lg: layouts.page2 }}
-                        // FIX: Added breakpoints and cols to satisfy react-grid-layout requirements and prevent crashes.
-                        breakpoints={{ lg: 1200 }}
-                        cols={{ lg: 12 }}
-                        rowHeight={80}
-                        width={794}
-                        isDraggable={false} isResizable={false}
-                    >
-                       {layouts.page2.map(l => <div key={l.i} data-grid={l} className="group"><ReportComponent item={allComponents.get(l.i)?.item} type={allComponents.get(l.i)?.type || ''} project={project} /></div>)}
-                    </ResponsiveGridLayout>
-                </div>
+                 {layouts.map((pageLayout, pageIndex) => (
+                    <div key={pageIndex} id={`print-page-${pageIndex}`} style={{ width: '210mm', height: '297mm', backgroundColor: 'white' }}>
+                        <ResponsiveGridLayout
+                            className="layout"
+                            layouts={{ lg: pageLayout }}
+                            breakpoints={{ lg: 1200 }}
+                            cols={{ lg: 12 }}
+                            rowHeight={80}
+                            width={794} // 210mm at ~96dpi
+                            isDraggable={false} isResizable={false}
+                        >
+                        {pageLayout.map(l => <div key={l.i} data-grid={l} className="group"><ReportComponent item={allComponents.get(l.i)?.item} type={allComponents.get(l.i)?.type || ''} project={project} /></div>)}
+                        </ResponsiveGridLayout>
+                    </div>
+                 ))}
             </div>
         </div>
     );

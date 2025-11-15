@@ -39,6 +39,7 @@ export interface KpiConfig {
     primaryCategoryValue?: string; // e.g., 'North America'
     isCustom?: boolean;
     visible?: boolean;
+    multiplier?: number;
 }
 
 export interface AnalysisResult {
@@ -87,10 +88,7 @@ export interface Project {
         content: string;
         status: 'idle' | 'generating' | 'complete';
     } | null;
-    reportLayout?: {
-        page1: ReportLayoutItem[];
-        page2: ReportLayoutItem[];
-    }
+    reportLayout?: ReportLayoutItem[][];
 }
 
 
