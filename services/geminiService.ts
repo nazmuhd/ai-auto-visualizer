@@ -277,3 +277,50 @@ export const queryDataWithAI = async (sample: DataRow[], question: string): Prom
         throw new Error("Failed to query data with AI. The model may be experiencing issues.");
     }
 };
+
+export const generateFormulaFromNaturalLanguage = async (naturalLanguageQuery: string, columns: string[]): Promise<string> => {
+    const prompt = `
+    You are a formula generator. Your task is to convert a natural language description into a mathematical formula string.
+    - The formula must use column names enclosed in square brackets, like [Column Name].
+    - Use standard mathematical operators: +, -, *, /.
+    - The output must be ONLY the formula string. Do not add any explanation, code fences, or other text.
+
+    AVAILABLE COLUMNS:
+    ${columns.join(', ')}
+
+    USER'S REQUEST:
+    "${naturalLanguageQuery}"
+
+    FORMULA:
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0,
+                stopSequences: ['\n']
+            }
+        });
+        
+        let formula = response.text.trim();
+        // Basic validation and cleanup
+        if (formula.startsWith('`') && formula.endsWith('`')) {
+            formula = formula.substring(1, formula.length - 1);
+        }
+
+        // Validate that the columns in the formula exist
+        const columnsInFormula = formula.match(/\[(.*?)\]/g)?.map(c => c.slice(1, -1)) || [];
+        for (const col of columnsInFormula) {
+            if (!columns.includes(col)) {
+                throw new Error(`The AI generated a formula with a column that does not exist: "${col}". Please rephrase your request.`);
+            }
+        }
+        
+        return formula;
+    } catch (error) {
+        console.error("Gemini Formula Generation Error:", error);
+        throw new Error("The AI failed to generate a formula. Please try rephrasing your request or enter the formula manually.");
+    }
+};
