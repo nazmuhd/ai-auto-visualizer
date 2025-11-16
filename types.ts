@@ -79,6 +79,7 @@ export interface Project {
     name: string;
     description: string;
     createdAt: Date;
+    lastSaved?: Date;
     dataSource: {
         name: string;
         data: DataRow[];

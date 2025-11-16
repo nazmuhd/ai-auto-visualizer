@@ -229,13 +229,13 @@ const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => v
 const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
     switch (status) {
         case 'unsaved':
-            return <div className="flex items-center text-xs text-amber-600"><div className="w-2 h-2 rounded-full bg-amber-400 mr-2 animate-pulse"></div>Unsaved changes</div>;
+            return <div className="flex items-center text-sm font-semibold text-amber-700"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-2 animate-pulse"></div>Unsaved Changes</div>;
         case 'saving':
             return <div className="flex items-center text-xs text-slate-500"><Loader2 size={12} className="mr-2 animate-spin" /> Saving...</div>;
         case 'saved':
             return <div className="flex items-center text-xs text-green-600"><CheckCircle size={12} className="mr-2" /> All changes saved</div>;
         default:
-            return null;
+            return <div className="h-5" />; // Placeholder for alignment
     }
 };
 
@@ -319,38 +319,62 @@ const ProjectWorkspace: React.FC<{
         }
     };
     
+    const formatDate = (date: Date | undefined): string => {
+        if (!date) return '';
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+        }).format(date);
+    };
+
     const visibleKpis = useMemo(() => analysis.kpis.filter(kpi => kpi.visible), [analysis.kpis]);
     const ViewLoader = () => <div className="h-[calc(100vh-280px)] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
 
     return (
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{project.name}</h2>
-                    <div className="h-4 mt-1"><SaveStatusIndicator status={saveStatus} /></div>
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
+                    <p className="text-sm text-slate-500 mt-1 truncate">{project.description || "No description provided."}</p>
                 </div>
-            </div>
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-                <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data Studio" icon={Database} /></div>
-                <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
-                   {saveStatus === 'unsaved' && (
+                <div className="flex-shrink-0 flex items-center space-x-3">
+                    <div className="text-right">
+                         <SaveStatusIndicator status={saveStatus} />
+                         {saveStatus !== 'unsaved' && saveStatus !== 'saving' && project.lastSaved && (
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                Last saved: {formatDate(project.lastSaved)}
+                            </p>
+                        )}
+                    </div>
+                    {saveStatus === 'unsaved' && (
                         <button onClick={onManualSave} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-white bg-primary-600 border-primary-600 hover:bg-primary-700 shadow-sm">
                             <Save size={16} className="mr-2" /> Save
                         </button>
                     )}
-                     {saveStatus === 'saving' && (
+                    {saveStatus === 'saving' && (
                         <button disabled className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-500 bg-slate-200 border-slate-300 cursor-not-allowed">
                             <Loader2 size={16} className="mr-2 animate-spin" /> Saving...
                         </button>
                     )}
-                   <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
-                        <Edit size={16} className="mr-2" /> Edit
-                    </button>
-                    <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
-                        <LayoutGrid size={16} className="mr-2" /> Layout
-                    </button>
                 </div>
             </div>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data Studio" icon={Database} /></div>
+                {currentView === 'dashboard' && (
+                    <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
+                       <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
+                            <Edit size={16} className="mr-2" /> Edit
+                        </button>
+                        <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
+                            <LayoutGrid size={16} className="mr-2" /> Layout
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {currentView === 'dashboard' && (
             <>
                 <GlobalFilterBar filters={globalFilters} onRemove={onRemoveFilter} />
@@ -409,7 +433,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             const storedProjects = localStorage.getItem('ai-insights-projects');
             if (storedProjects) {
                  const projects: Project[] = JSON.parse(storedProjects, (key, value) => {
-                    if (key === 'createdAt' && typeof value === 'string') {
+                    if ((key === 'createdAt' || key === 'lastSaved') && typeof value === 'string') {
                         return new Date(value);
                     }
                     return value;
@@ -443,7 +467,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleManualSave = useCallback(() => {
         if (!activeProject || saveStatus !== 'unsaved') return;
         setSaveStatus('saving');
-        const updatedProjects = savedProjects.map(p => p.id === activeProject.id ? activeProject : p);
+
+        const projectToSave = { ...activeProject, lastSaved: new Date() };
+        setActiveProject(projectToSave);
+
+        const updatedProjects = savedProjects.map(p => p.id === projectToSave.id ? projectToSave : p);
         saveProjectsToLocalStorage(updatedProjects);
         setSavedProjects(updatedProjects);
 
@@ -603,7 +631,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     const handleCreateProject = useCallback((name: string, description: string) => {
         const newProject: Project = {
-            id: new Date().toISOString(), name, description, createdAt: new Date(),
+            id: new Date().toISOString(), name, description, createdAt: new Date(), lastSaved: new Date(),
             dataSource: { name: 'No data source', data: [] }, analysis: null, aiReport: null,
         };
         const updatedProjects = [newProject, ...savedProjects];
@@ -616,7 +644,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleSaveProject = useCallback((name: string, description: string) => {
         if (!activeProject) return;
         const finalId = new Date().toISOString();
-        const finalProject: Project = { ...activeProject, id: finalId, name, description, createdAt: new Date() };
+        const finalProject: Project = { ...activeProject, id: finalId, name, description, createdAt: new Date(), lastSaved: new Date() };
 
         const updatedProjects = [finalProject, ...savedProjects];
         setSavedProjects(updatedProjects);
@@ -624,6 +652,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         
         setActiveProject(finalProject);
         setIsSaveModalOpen(false);
+        setSaveStatus('saved');
+        if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
+        saveStatusTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
+
     }, [activeProject, savedProjects]);
 
     const handleSelectProject = useCallback((projectId: string) => {
@@ -653,7 +685,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     const handleRenameProject = useCallback((name: string, description: string) => {
         if (!projectToManage) return;
-        const updatedProject = { ...projectToManage, name, description };
+        const updatedProject = { ...projectToManage, name, description, lastSaved: new Date() };
         const updatedProjects = savedProjects.map(p => p.id === projectToManage.id ? updatedProject : p);
         setSavedProjects(updatedProjects);
         saveProjectsToLocalStorage(updatedProjects);
@@ -966,7 +998,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 <DashboardSettingsModal
                     isOpen={isSettingsModalOpen}
                     onClose={() => setIsSettingsModalOpen(false)}
-                    // FIX: Changed `project` to `activeProject` to pass the correct project data to the modal.
                     project={activeProject}
                     dashboardLayout={dashboardLayout}
                     onKpiVisibilityToggle={handleKpiVisibilityToggle}
