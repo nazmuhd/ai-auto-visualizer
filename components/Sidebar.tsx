@@ -7,12 +7,14 @@ import {
   Folder,
   Edit,
   Trash2,
-  LogOut,
   Settings,
   X,
-  MoreVertical
+  MoreVertical,
+  LogOut,
 } from 'lucide-react';
 import { Project } from '../types.ts';
+
+type MainView = 'dashboard' | 'settings' | 'account';
 
 interface Props {
   isOpen: boolean;
@@ -25,6 +27,8 @@ interface Props {
   onDelete: (project: Project) => void;
   userEmail: string;
   onLogout: () => void;
+  mainView: MainView;
+  setMainView: (view: MainView) => void;
 }
 
 const ProjectLink: React.FC<{
@@ -114,6 +118,20 @@ const ProjectLink: React.FC<{
   );
 });
 
+const MenuItem: React.FC<{ icon: React.ElementType, label: string, onClick: () => void, isDestructive?: boolean }> = ({ icon: Icon, label, onClick, isDestructive = false }) => (
+    <button
+        onClick={onClick}
+        className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center transition-colors ${
+            isDestructive
+                ? 'text-red-600 hover:bg-red-50'
+                : 'text-slate-700 hover:bg-slate-50'
+        }`}
+    >
+        <Icon size={16} className={`mr-3 ${isDestructive ? 'text-red-500' : 'text-slate-400'}`} />
+        {label}
+    </button>
+);
+
 
 export const Sidebar: React.FC<Props> = ({ 
     isOpen, 
@@ -125,29 +143,30 @@ export const Sidebar: React.FC<Props> = ({
     onRename,
     onDelete,
     userEmail,
-    onLogout
+    onLogout,
+    mainView,
+    setMainView
 }) => {
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const profileSectionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const checkSize = () => setIsDesktop(window.innerWidth >= 1024);
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isProfileMenuOpen && profileSectionRef.current && !profileSectionRef.current.contains(event.target as Node)) {
-        setIsProfileMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isProfileMenuOpen]);
 
   return (
     <>
@@ -160,12 +179,12 @@ export const Sidebar: React.FC<Props> = ({
           `}
         >
           <div className={`flex items-center h-16 px-4 border-b border-slate-200 flex-shrink-0 ${isOpen ? 'justify-between' : 'justify-center'}`}>
-            <a href="#" className="flex items-center">
-                <div className="bg-primary-600 text-white p-2 rounded-lg">
+            <button onClick={onNewProject} className="flex items-center group/logo">
+                <div className="bg-primary-600 text-white p-2 rounded-lg group-hover/logo:scale-105 transition-transform">
                     <Sparkles size={20} className="fill-primary-400 text-white" />
                 </div>
                 {isOpen && <h1 className="ml-3 text-lg font-bold text-slate-900 whitespace-nowrap">AI Insights</h1>}
-            </a>
+            </button>
              <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-500 hover:text-slate-800">
                 <X size={20} />
             </button>
@@ -201,7 +220,7 @@ export const Sidebar: React.FC<Props> = ({
                            <ProjectLink 
                             key={proj.id} 
                             proj={proj} 
-                            isActive={proj.id === activeProjectId}
+                            isActive={proj.id === activeProjectId && mainView === 'dashboard'}
                             isOpen={isOpen}
                             isDesktop={isDesktop}
                             contextMenuOpen={contextMenuOpen}
@@ -215,23 +234,22 @@ export const Sidebar: React.FC<Props> = ({
                 </div>
             </nav>
             
-            <div ref={profileSectionRef} className="p-4 border-t border-slate-100 relative flex-shrink-0">
-                {isProfileMenuOpen && (
-                    <div className={`absolute z-20 py-1.5 bg-white rounded-md shadow-lg border border-slate-100 duration-100
-                        ${isOpen ? 'bottom-full left-4 right-4 mb-2' : 'bottom-0 left-full ml-2 w-48'}
-                    `}>
-                        <button disabled className="w-full cursor-not-allowed text-left px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-100 flex items-center opacity-50"><Settings size={14} className="mr-2"/> Settings</button>
-                        <button onClick={onLogout} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><LogOut size={14} className="mr-2"/> Logout</button>
+            <div className="p-4 border-t border-slate-100 relative flex-shrink-0" ref={userMenuRef}>
+                {isUserMenuOpen && (
+                    <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                        <MenuItem icon={User} label="Account Management" onClick={() => { setMainView('account'); setIsUserMenuOpen(false); }} />
+                        <MenuItem icon={Settings} label="Settings" onClick={() => { setMainView('settings'); setIsUserMenuOpen(false); }} />
+                        <div className="my-1 border-t border-slate-100" />
+                        <MenuItem icon={LogOut} label="Logout" onClick={onLogout} isDestructive />
                     </div>
                 )}
-                <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className={`flex items-center w-full p-2 rounded-lg transition-colors group text-slate-600 hover:bg-slate-100 hover:text-slate-900 ${isOpen ? '' : 'justify-center'}`}>
+                <button onClick={() => setIsUserMenuOpen(prev => !prev)} className={`flex items-center w-full p-2 rounded-lg transition-colors group ${isUserMenuOpen ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'} ${isOpen ? '' : 'justify-center'}`}>
                     <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
                         <User size={18} className="text-slate-500"/>
                     </div>
                     {isOpen && (
-                        <div className="ml-3 text-left">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{userEmail}</p>
-                            <p className="text-xs text-slate-500">Account</p>
+                        <div className="ml-3 text-left overflow-hidden">
+                            <p className={`text-sm font-semibold truncate ${isUserMenuOpen ? 'text-slate-900' : 'text-slate-800'}`}>{userEmail}</p>
                         </div>
                     )}
                     {!isOpen && (

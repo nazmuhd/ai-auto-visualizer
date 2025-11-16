@@ -19,6 +19,8 @@ import { KpiDetailModal } from './modals/KpiDetailModal.tsx';
 import { ReportTemplateSelectionModal } from './modals/ReportTemplateSelectionModal.tsx';
 import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
+import { SettingsPage } from './pages/SettingsPage.tsx';
+import { AccountPage } from './pages/AccountPage.tsx';
 
 const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
 const DataStudio = lazy(() => import('./DataStudio.tsx').then(m => ({ default: m.DataStudio })));
@@ -37,20 +39,15 @@ const layouts: LayoutInfo[] = [
 ];
 
 const useResponsiveSidebar = () => {
-    const getInitialState = () => window.innerWidth >= 1024;
-    const [isSidebarOpen, setIsSidebarOpen] = useState(getInitialState);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Start collapsed by default
 
     useEffect(() => {
         const handleResize = () => {
+            // Automatically close if the screen becomes very small (mobile view)
             if (window.innerWidth < 768) {
                 setIsSidebarOpen(false);
-            } else if (window.innerWidth < 1024) {
-                setIsSidebarOpen(false);
-            } else {
-                setIsSidebarOpen(true);
             }
         };
-        handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -229,7 +226,7 @@ const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => v
 const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
     switch (status) {
         case 'unsaved':
-            return <div className="flex items-center text-sm font-semibold text-amber-700"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 mr-2 animate-pulse"></div>Unsaved Changes</div>;
+            return <div className="flex items-center text-sm font-semibold text-amber-700"><div className="w-3 h-3 rounded-full bg-amber-500 mr-2 animate-pulse"></div>Unsaved Changes</div>;
         case 'saving':
             return <div className="flex items-center text-xs text-slate-500"><Loader2 size={12} className="mr-2 animate-spin" /> Saving...</div>;
         case 'saved':
@@ -349,11 +346,9 @@ const ProjectWorkspace: React.FC<{
                             </p>
                         )}
                     </div>
-                    {saveStatus === 'unsaved' && (
-                        <button onClick={onManualSave} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-white bg-primary-600 border-primary-600 hover:bg-primary-700 shadow-sm">
-                            <Save size={16} className="mr-2" /> Save
-                        </button>
-                    )}
+                     <button onClick={onManualSave} className={`px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-all duration-300 shadow-sm ${saveStatus === 'unsaved' ? 'text-white bg-primary-600 border-primary-600 hover:bg-primary-700' : 'w-0 p-0 opacity-0 -mr-3 border-transparent'}`}>
+                        <Save size={16} className="mr-2" /> Save
+                    </button>
                     {saveStatus === 'saving' && (
                         <button disabled className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-500 bg-slate-200 border-slate-300 cursor-not-allowed">
                             <Loader2 size={16} className="mr-2 animate-spin" /> Saving...
@@ -422,6 +417,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
+
+    const [mainView, setMainView] = useState<'dashboard' | 'settings' | 'account'>('dashboard');
 
     const analysisPromiseRef = useRef<Promise<AnalysisResult> | null>(null);
     const mainContentRef = useRef<HTMLElement>(null);
@@ -626,6 +623,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setTimeFilter({type: 'all'});
         setProgress(null);
         setIsSettingsModalOpen(false);
+        setMainView('dashboard');
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
     }, [setIsSidebarOpen]);
     
@@ -639,6 +637,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         saveProjectsToLocalStorage(updatedProjects);
         setActiveProject(newProject);
         setIsCreateModalOpen(false);
+        setMainView('dashboard');
     }, [savedProjects]);
 
     const handleSaveProject = useCallback((name: string, description: string) => {
@@ -668,6 +667,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             setTimeFilter({ type: 'all' });
             setIsSettingsModalOpen(false);
             setSaveStatus('idle');
+            setMainView('dashboard');
             if (window.innerWidth < 1024) setIsSidebarOpen(false);
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -894,6 +894,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     };
 
     const renderMainContent = () => {
+        if (mainView === 'settings') {
+            return <SettingsPage />;
+        }
+        if (mainView === 'account') {
+            return <AccountPage userEmail={userEmail} onLogout={onLogout} />;
+        }
+
         if (!activeProject) {
             return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
         }
@@ -949,7 +956,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     return (
         <div className="flex h-screen bg-slate-50">
-            <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} onNewProject={handleReset} savedProjects={savedProjects} activeProjectId={activeProject?.id || null} onSelectProject={handleSelectProject} onRename={handleOpenRenameModal} onDelete={handleOpenDeleteModal} userEmail={userEmail} onLogout={onLogout} />
+            <Sidebar 
+                isOpen={isSidebarOpen} 
+                setIsOpen={setIsSidebarOpen} 
+                onNewProject={handleReset} 
+                savedProjects={savedProjects} 
+                activeProjectId={activeProject?.id || null} 
+                onSelectProject={handleSelectProject} 
+                onRename={handleOpenRenameModal} 
+                onDelete={handleOpenDeleteModal} 
+                userEmail={userEmail} 
+                onLogout={onLogout}
+                mainView={mainView}
+                setMainView={setMainView}
+            />
             <div className={`flex-1 transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
                 <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
                 <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>{renderMainContent()}</main>
