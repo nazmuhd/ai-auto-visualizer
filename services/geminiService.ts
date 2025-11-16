@@ -231,3 +231,49 @@ export const generateAiReport = async (sample: DataRow[], analysis: AnalysisResu
         throw new Error("Failed to generate the AI report. The consultant might be on a coffee break. Please try again.");
     }
 };
+
+
+export const queryDataWithAI = async (sample: DataRow[], question: string): Promise<string> => {
+    const dataStr = JSON.stringify(sample);
+    let columnsInfo = "Unknown";
+    if (sample.length > 0) {
+        const firstRow = sample[0];
+        columnsInfo = Object.keys(firstRow).join(', ');
+    }
+
+    const prompt = `
+    You are an expert data analyst. A user has provided a data sample and a question. Your task is to answer the question based ONLY on the data provided.
+    - Analyze the data to find the answer.
+    - Provide a concise, clear, and direct answer.
+    - The answer can be a single value, a short sentence, or a small bulleted list if necessary.
+    - Do not provide code or explain how you got the answer. Just give the answer.
+    - If the question cannot be answered from the data, state that clearly.
+
+    DETECTED COLUMNS: ${columnsInfo}
+    DATA SAMPLE (JSON):
+    ${dataStr}
+
+    USER QUESTION:
+    "${question}"
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.1,
+            }
+        });
+        
+        if (!response.text) {
+            return "Sorry, I couldn't process that request.";
+        }
+        
+        return response.text;
+
+    } catch (error) {
+        console.error("Gemini Data Query Error:", error);
+        throw new Error("Failed to query data with AI. The model may be experiencing issues.");
+    }
+};

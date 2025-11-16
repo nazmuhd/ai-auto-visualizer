@@ -114,3 +114,8 @@ export interface ReportTemplate {
   range: string;
   description: string;
 }
+
+export interface ChatMessage {
+    role: 'user' | 'ai' | 'system';
+    content: string;
+}
