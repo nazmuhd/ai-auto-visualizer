@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, KpiConfig, TextBlock } from '../types.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 // Initialize the Gemini API client
@@ -322,5 +322,80 @@ export const generateFormulaFromNaturalLanguage = async (naturalLanguageQuery: s
     } catch (error) {
         console.error("Gemini Formula Generation Error:", error);
         throw new Error("The AI failed to generate a formula. Please try rephrasing your request or enter the formula manually.");
+    }
+};
+
+export const generateChartInsight = async (chart: ChartConfig, data: DataRow[], promptType: 'summary' | 'insights'): Promise<string> => {
+    const dataSample = JSON.stringify(data.slice(0, 30));
+    const chartContext = JSON.stringify({
+        title: chart.title,
+        type: chart.type,
+        description: chart.description,
+        xAxis: chart.mapping.x,
+        yAxis: chart.mapping.y,
+        colorSeries: chart.mapping.color,
+    });
+
+    const goal = promptType === 'summary' 
+        ? "Write a concise, one-paragraph summary of the key takeaway from this chart."
+        : "List 2-3 bullet points of the most important insights revealed by this chart. Be specific and reference data points if possible.";
+
+    const prompt = `
+    ROLE: Expert Data Analyst.
+    TASK: Analyze the provided chart configuration and data sample to generate an insight.
+
+    CHART CONTEXT:
+    ${chartContext}
+
+    DATA SAMPLE (first 30 rows):
+    ${dataSample}
+    
+    YOUR GOAL:
+    ${goal}
+
+    OUTPUT:
+    Provide only the text for the summary or bullet points. Do not include any headers or introductory phrases like "Here is a summary...". For bullet points, use markdown like "* Insight one".
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { temperature: 0.4 }
+        });
+        if (!response.text) throw new Error("AI returned an empty response.");
+        return response.text;
+    } catch (error) {
+        console.error("Gemini Chart Insight Error:", error);
+        throw new Error("Failed to generate insights for the chart.");
+    }
+};
+
+export const improveText = async (text: string, promptType: 'improve' | 'summarize'): Promise<string> => {
+    const goal = promptType === 'improve'
+        ? "Rewrite the following text to be more professional, clear, and impactful for a business report. Correct any grammar or spelling mistakes."
+        : "Summarize the following text into a concise paragraph, capturing the main point.";
+
+    const prompt = `
+    ROLE: Expert Editor & Business Writer.
+    TASK: ${goal}
+
+    ORIGINAL TEXT:
+    "${text}"
+
+    REVISED TEXT:
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { temperature: 0.6 }
+        });
+        if (!response.text) throw new Error("AI returned an empty response.");
+        return response.text.trim();
+    } catch (error) {
+        console.error("Gemini Text Improvement Error:", error);
+        throw new Error("Failed to improve the text.");
     }
 };

@@ -42,6 +42,13 @@ export interface KpiConfig {
     multiplier?: number;
 }
 
+export interface TextBlock {
+    id: string;
+    type: 'text';
+    title: string;
+    content: string;
+}
+
 export interface AnalysisResult {
     summary: string[];
     kpis: KpiConfig[];
@@ -92,6 +99,7 @@ export interface Project {
     reportLayout?: ReportLayoutItem[][];
     reportFormat?: 'slides' | 'pdf';
     transformations?: Transformation[];
+    reportTextBlocks?: TextBlock[]; // Store text blocks separately from analysis
 }
 
 

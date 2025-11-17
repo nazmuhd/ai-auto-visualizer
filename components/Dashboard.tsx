@@ -24,6 +24,8 @@ import { AccountPage } from './pages/AccountPage.tsx';
 
 const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
 const DataStudio = lazy(() => import('./DataStudio.tsx').then(m => ({ default: m.DataStudio })));
+const PresentationView = lazy(() => import('./PresentationView.tsx').then(m => ({ default: m.PresentationView })));
+
 
 interface DashboardProps {
     userEmail: string;
@@ -285,6 +287,7 @@ const ProjectWorkspace: React.FC<{
     onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     onCreateReport: () => void;
+    onSetIsPresentationMode: (isPresenting: boolean) => void;
     dashboardLayout: string;
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
@@ -299,7 +302,7 @@ const ProjectWorkspace: React.FC<{
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
     onProjectUpdate: (updater: (prev: Project) => Project) => void;
-}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, ...props }) => {
+}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSetIsPresentationMode, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, ...props }) => {
     
     const { analysis } = project;
     if (!analysis) return null;
@@ -358,16 +361,23 @@ const ProjectWorkspace: React.FC<{
             </div>
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                 <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data Studio" icon={Database} /></div>
-                {currentView === 'dashboard' && (
-                    <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
-                       <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
-                            <Edit size={16} className="mr-2" /> Edit
+                <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
+                    {currentView === 'dashboard' && (
+                        <>
+                           <button onClick={onOpenEditModal} className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center transition-colors text-slate-700 bg-white border-slate-300 hover:bg-slate-50">
+                                <Edit size={16} className="mr-2" /> Edit
+                            </button>
+                            <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
+                                <LayoutGrid size={16} className="mr-2" /> Layout
+                            </button>
+                        </>
+                    )}
+                    {currentView === 'report-studio' && project.reportLayout && (
+                         <button onClick={() => onSetIsPresentationMode(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
+                            <MonitorPlay size={16} className="mr-2" /> Present
                         </button>
-                        <button onClick={() => setIsLayoutModalOpen(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
-                            <LayoutGrid size={16} className="mr-2" /> Layout
-                        </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {currentView === 'dashboard' && (
@@ -380,7 +390,7 @@ const ProjectWorkspace: React.FC<{
             {currentView === 'report-studio' && (
                 project.reportLayout ? (
                      <Suspense fallback={<ViewLoader />}>
-                        <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} />
+                        <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} onUpdateProject={onProjectUpdate} />
                     </Suspense>
                 ) : (
                     <ReportStartScreen onCreateReport={onCreateReport} />
@@ -414,6 +424,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [isReportTemplateModalOpen, setIsReportTemplateModalOpen] = useState(false);
     const [preselectedReportFormat, setPreselectedReportFormat] = useState<ReportFormat | null>(null);
+    const [isPresentationMode, setIsPresentationMode] = useState(false);
     
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
@@ -923,6 +934,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                            setPreselectedReportFormat(null);
                            setIsReportTemplateModalOpen(true);
                         }}
+                        onSetIsPresentationMode={setIsPresentationMode}
                         dashboardLayout={dashboardLayout}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
@@ -975,6 +987,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>{renderMainContent()}</main>
             </div>
             
+            {isPresentationMode && activeProject && (
+                <Suspense fallback={<div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
+                    <PresentationView project={activeProject} onClose={() => setIsPresentationMode(false)} />
+                </Suspense>
+            )}
+
             <CreateProjectModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSave={handleCreateProject} />
             <SaveProjectModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveProject} defaultName={activeProject?.name || 'Untitled Project'} />
             <RenameProjectModal isOpen={isRenameModalOpen} onClose={() => setIsRenameModalOpen(false)} onSave={handleRenameProject} currentName={projectToManage?.name || ''} currentDescription={projectToManage?.description || ''} />
