@@ -115,7 +115,7 @@ export interface Project {
 }
 
 
-export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing';
+export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing' | 'contact';
 
 export interface LayoutInfo {
   id: string;

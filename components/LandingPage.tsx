@@ -11,13 +11,12 @@ import { Page } from '../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
-export const LandingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => {
+export const LandingPage: React.FC<Props> = ({ onNavigate }) => {
   return (
     <div className="bg-white">
-      <HeroSection onNavigate={onNavigate} onContactClick={onContactClick} />
+      <HeroSection onNavigate={onNavigate} />
       <main>
         <HowItWorksSection />
         <AboutSection onNavigate={onNavigate} />
@@ -26,7 +25,7 @@ export const LandingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => 
         <TestimonialsSection />
         <FAQSection />
       </main>
-      <Footer onNavigate={onNavigate} onContactClick={onContactClick} />
+      <Footer onNavigate={onNavigate} />
     </div>
   );
 };

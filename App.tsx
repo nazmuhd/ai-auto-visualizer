@@ -4,7 +4,7 @@ import { LoginPage } from './components/pages/LoginPage.tsx';
 import { SignupPage } from './components/pages/SignupPage.tsx';
 import { AboutPage } from './components/pages/AboutPage.tsx';
 import { PricingPage } from './components/pages/PricingPage.tsx';
-import { ContactModal } from './components/modals/ContactModal.tsx';
+import { ContactPage } from './components/pages/ContactPage.tsx';
 import { Page } from './types.ts';
 import { Loader2 } from 'lucide-react';
 
@@ -23,7 +23,6 @@ const FullscreenLoader = () => (
 function App() {
   const [page, setPage] = useState<Page>('landing');
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   const handleLogin = (email: string) => {
     setUserEmail(email);
@@ -46,7 +45,7 @@ function App() {
   };
 
   const renderPage = () => {
-    const commonProps = { onNavigate: handleNavigate, onContactClick: () => setIsContactModalOpen(true) };
+    const commonProps = { onNavigate: handleNavigate };
     switch (page) {
       case 'login':
         return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
@@ -56,6 +55,8 @@ function App() {
         return <AboutPage {...commonProps} />;
       case 'pricing':
         return <PricingPage {...commonProps} />;
+      case 'contact':
+        return <ContactPage {...commonProps} />;
       case 'dashboard':
         if (userEmail) {
           return (
@@ -75,7 +76,6 @@ function App() {
   return (
     <>
       {renderPage()}
-      <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
     </>
   );
 }

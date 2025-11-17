@@ -6,7 +6,6 @@ import { Check, Zap, ShieldCheck, Share2, BarChart3, Users } from 'lucide-react'
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
 const PricingCard = ({ plan, price, description, features, isPopular }: { plan: string, price: string, description: string, features: string[], isPopular?: boolean }) => (
@@ -31,10 +30,10 @@ const PricingCard = ({ plan, price, description, features, isPopular }: { plan: 
     </div>
 );
 
-export const PricingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => {
+export const PricingPage: React.FC<Props> = ({ onNavigate }) => {
   return (
     <div className="bg-slate-50">
-      <Header onNavigate={onNavigate} onContactClick={onContactClick} />
+      <Header onNavigate={onNavigate} />
 
       <main>
         {/* Pricing Tiers Section */}
@@ -92,7 +91,7 @@ export const PricingPage: React.FC<Props> = ({ onNavigate, onContactClick }) => 
         </section>
       </main>
 
-      <Footer onNavigate={onNavigate} onContactClick={onContactClick} />
+      <Footer onNavigate={onNavigate} />
     </div>
   );
 };

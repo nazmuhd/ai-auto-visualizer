@@ -4,10 +4,9 @@ import { Page } from '../../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
-export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
+export const Header: React.FC<Props> = ({ onNavigate }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -26,11 +25,6 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
     setIsMobileMenuOpen(false);
   }
   
-  const handleContact = () => {
-      onContactClick();
-      setIsMobileMenuOpen(false);
-  }
-
   return (
     <>
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-sm border-b border-slate-200">
@@ -47,7 +41,7 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
             <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('about')}} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">About Us</a>
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('pricing')}} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Pricing</a>
-              <a href="#" onClick={(e) => {e.preventDefault(); handleContact()}} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Contact Us</a>
+              <a href="#" onClick={(e) => {e.preventDefault(); handleNav('contact')}} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Contact Us</a>
             </nav>
             <div className="flex items-center">
               <div className="hidden md:block">
@@ -85,7 +79,7 @@ export const Header: React.FC<Props> = ({ onNavigate, onContactClick }) => {
             <nav className="flex-1 flex flex-col items-center justify-center space-y-8">
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('about')}} className="text-xl font-medium text-slate-700 hover:text-primary-600">About Us</a>
               <a href="#" onClick={(e) => {e.preventDefault(); handleNav('pricing')}} className="text-xl font-medium text-slate-700 hover:text-primary-600">Pricing</a>
-              <a href="#" onClick={(e) => {e.preventDefault(); handleContact()}} className="text-xl font-medium text-slate-700 hover:text-primary-600">Contact Us</a>
+              <a href="#" onClick={(e) => {e.preventDefault(); handleNav('contact')}} className="text-xl font-medium text-slate-700 hover:text-primary-600">Contact Us</a>
                <button onClick={() => handleNav('login')} className="px-8 py-3 text-lg font-medium text-white bg-slate-900 hover:bg-black rounded-lg shadow-sm">
                   Login
                 </button>

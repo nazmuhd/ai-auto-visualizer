@@ -4,10 +4,9 @@ import { Page } from '../types.ts';
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
-export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
+export const Footer: React.FC<Props> = ({ onNavigate }) => {
   return (
     <footer className="bg-black text-slate-300">
       <div className="bg-slate-800">
@@ -58,7 +57,7 @@ export const Footer: React.FC<Props> = ({ onNavigate, onContactClick }) => {
             <h3 className="text-sm font-semibold text-slate-200 tracking-wider uppercase">Company</h3>
             <ul className="mt-4 space-y-3">
               <li><a href="#" onClick={(e) => {e.preventDefault(); onNavigate('about')}} className="text-base text-slate-400 hover:text-white">About Us</a></li>
-              <li><a href="#" onClick={(e) => {e.preventDefault(); onContactClick()}} className="text-base text-slate-400 hover:text-white">Contact</a></li>
+              <li><a href="#" onClick={(e) => {e.preventDefault(); onNavigate('contact')}} className="text-base text-slate-400 hover:text-white">Contact</a></li>
             </ul>
           </div>
           <div>

@@ -4,7 +4,6 @@ import { Sparkles, ArrowRight, Video, Menu, X } from 'lucide-react';
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
 const companies = [
@@ -14,7 +13,7 @@ const companies = [
   "Innovate LLC", "DataDriven Inc.", "Summit Logistics", "Helios Systems",
 ];
 
-export default function HeroSection({ onNavigate, onContactClick }: Props) {
+export default function HeroSection({ onNavigate }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -48,11 +47,6 @@ export default function HeroSection({ onNavigate, onContactClick }: Props) {
     setMenuOpen(false);
   }
 
-  const handleContact = () => {
-      onContactClick();
-      setMenuOpen(false);
-  }
-
   return (
     <>
       <section className="bg-[url('https://raw.githubusercontent.com/prebuiltui/prebuiltui/main/assets/hero/gridBackground.png')] w-full bg-no-repeat bg-cover bg-center text-sm pb-24">
@@ -77,7 +71,7 @@ export default function HeroSection({ onNavigate, onContactClick }: Props) {
           >
             <a href="#" onClick={(e) => { e.preventDefault(); handleNav('about'); }} className="hover:text-gray-600">About Us</a>
             <a href="#" onClick={(e) => { e.preventDefault(); handleNav('pricing'); }} className="hover:text-gray-600">Pricing</a>
-            <a href="#" onClick={(e) => { e.preventDefault(); handleContact(); }} className="hover:text-gray-600">Contact Us</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); handleNav('contact'); }} className="hover:text-gray-600">Contact Us</a>
 
             <button
               onClick={() => setMenuOpen(false)}

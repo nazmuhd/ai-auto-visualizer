@@ -6,7 +6,6 @@ import { Lightbulb, ShieldCheck, Zap, Linkedin } from 'lucide-react';
 
 interface Props {
   onNavigate: (page: Page) => void;
-  onContactClick: () => void;
 }
 
 const teamMembers = [
@@ -16,10 +15,10 @@ const teamMembers = [
   { name: 'Diana Miller', title: 'Senior Frontend Engineer', img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=250&h=250&auto=format&fit=crop' },
 ];
 
-export const AboutPage: React.FC<Props> = ({ onNavigate, onContactClick }) => {
+export const AboutPage: React.FC<Props> = ({ onNavigate }) => {
   return (
     <div className="bg-white">
-      <Header onNavigate={onNavigate} onContactClick={onContactClick} />
+      <Header onNavigate={onNavigate} />
 
       <main>
         {/* Hero Section */}
@@ -91,7 +90,7 @@ export const AboutPage: React.FC<Props> = ({ onNavigate, onContactClick }) => {
 
       </main>
 
-      <Footer onNavigate={onNavigate} onContactClick={onContactClick} />
+      <Footer onNavigate={onNavigate} />
     </div>
   );
 };
