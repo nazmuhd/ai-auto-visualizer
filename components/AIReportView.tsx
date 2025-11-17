@@ -311,30 +311,54 @@ interface PresentationStudioProps {
 
 export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, presentation, onPresentationUpdate, onBackToHub, onPresent }) => {
     const [currentPage, setCurrentPage] = useState(0);
-    const [dynamicRowHeight, setDynamicRowHeight] = useState(0);
+    const [visibleSlides, setVisibleSlides] = useState<Set<number>>(new Set([0]));
     const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
     const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('filmstrip');
-    const canvasRef = useRef<HTMLDivElement>(null);
+    const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
-        const calculateRowHeight = () => {
-            if (canvasRef.current) {
-                const isSlides = presentation.format === 'slides';
-                const canvasHeight = canvasRef.current.offsetHeight;
-                const rows = isSlides ? 12 : 18; // More rows for taller documents
-                setDynamicRowHeight(canvasHeight / rows);
-            }
+        slideRefs.current = presentation.slides.map(() => null);
+    }, [presentation.slides]);
+
+    const handleSelectPage = useCallback((index: number) => {
+        slideRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, []);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                let mostVisibleIndex = currentPage;
+                let maxVisibleRatio = 0;
+                
+                entries.forEach(entry => {
+                    const index = parseInt(entry.target.getAttribute('data-slide-index') || '0', 10);
+                    if (entry.isIntersecting) {
+                        setVisibleSlides(prev => new Set(prev).add(index));
+                        if(entry.intersectionRatio > maxVisibleRatio) {
+                            maxVisibleRatio = entry.intersectionRatio;
+                            mostVisibleIndex = index;
+                        }
+                    }
+                });
+                
+                if (maxVisibleRatio > 0.5) { // Threshold to prevent jumpy updates
+                    setCurrentPage(mostVisibleIndex);
+                }
+            },
+            { rootMargin: '0px', threshold: [0.1, 0.5, 0.9] }
+        );
+
+        const currentRefs = slideRefs.current;
+        currentRefs.forEach(ref => {
+            if (ref) observer.observe(ref);
+        });
+
+        return () => {
+            currentRefs.forEach(ref => {
+                if (ref) observer.unobserve(ref);
+            });
         };
-
-        const resizeObserver = new ResizeObserver(() => calculateRowHeight());
-        if (canvasRef.current) {
-            resizeObserver.observe(canvasRef.current);
-        }
-
-        calculateRowHeight(); // Initial calculation
-
-        return () => resizeObserver.disconnect();
-    }, [presentation.format, currentPage]);
+    }, [presentation.slides, currentPage]);
 
 
     const kpiValues = useMemo(() => {
@@ -366,18 +390,18 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 slides: [...p.slides, newSlide],
                 textBlocks: [...(p.textBlocks || []), ...newTextBlocks],
             }));
-            setCurrentPage(presentation.slides.length);
+            setTimeout(() => handleSelectPage(presentation.slides.length), 100);
         } catch (err) {
             console.error("Failed to add AI slide", err);
             alert("Sorry, I couldn't generate a slide for that. Please try another prompt.");
         }
-    }, [project, presentation, onPresentationUpdate]);
+    }, [project, presentation, onPresentationUpdate, handleSelectPage]);
 
 
     const handleAddPage = () => {
         const newSlide: Slide = { id: `slide_${uuidv4()}`, layout: [] };
         handlePresentationUpdate(p => ({ ...p, slides: [...p.slides, newSlide] }));
-        setCurrentPage(presentation.slides.length);
+        setTimeout(() => handleSelectPage(presentation.slides.length), 100);
     };
     
     const handleDeletePage = (index: number) => {
@@ -386,27 +410,26 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             return;
         }
         handlePresentationUpdate(p => ({ ...p, slides: p.slides.filter((_, i) => i !== index) }));
-        if (currentPage >= index) setCurrentPage(Math.max(0, currentPage - 1));
     };
     
     const handleReorderPages = (newSlides: Slide[]) => {
         handlePresentationUpdate(p => ({ ...p, slides: newSlides }));
     };
 
-    const handleLayoutChange = (newLayout: ReportLayoutItem[]) => {
+    const handleLayoutChange = (index: number, newLayout: ReportLayoutItem[]) => {
         handlePresentationUpdate(p => ({
             ...p,
-            slides: p.slides.map((s, i) => i === currentPage ? { ...s, layout: newLayout } : s)
+            slides: p.slides.map((s, i) => i === index ? { ...s, layout: newLayout } : s)
         }));
     };
     
-    const onDrop = (_: ReportLayoutItem[], item: ReportLayoutItem, e: DragEvent) => {
+    const onDrop = (index: number, _: ReportLayoutItem[], item: ReportLayoutItem, e: DragEvent) => {
         const data = JSON.parse(e.dataTransfer?.getData('application/json') || '{}');
         if (!data.type) return;
 
         let newItem: ReportLayoutItem | null = null;
         if (['chart', 'kpi'].includes(data.type)) {
-            if (presentation.slides[currentPage].layout.some(l => l.i === data.id)) return;
+            if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
             newItem = { ...item, i: data.id, w: data.type === 'chart' ? 6 : 3, h: data.type === 'chart' ? 5 : 2 };
         } else if (data.type === 'text') {
             const newBlock: TextBlock = { id: `text_${uuidv4()}`, type: 'text', title: `New ${data.style} Block`, content: '', style: data.style };
@@ -415,14 +438,14 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         }
         
         if (newItem) {
-            const newLayout = [...presentation.slides[currentPage].layout, newItem];
-            handleLayoutChange(newLayout);
+            const newLayout = [...presentation.slides[index].layout, newItem];
+            handleLayoutChange(index, newLayout);
         }
     };
     
-    const handleRemoveItem = (itemId: string) => {
-         const newLayout = presentation.slides[currentPage].layout.filter(item => item.i !== itemId);
-         handleLayoutChange(newLayout);
+    const handleRemoveItem = (slideIndex: number, itemId: string) => {
+         const newLayout = presentation.slides[slideIndex].layout.filter(item => item.i !== itemId);
+         handleLayoutChange(slideIndex, newLayout);
          if (itemId.startsWith('text_')) {
             handlePresentationUpdate(p => ({...p, textBlocks: (p.textBlocks || []).filter(b => b.id !== itemId)}));
          }
@@ -477,33 +500,43 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                         paddingRight: '20rem' // w-72 (18rem) + ~1rem padding on each side
                     }}
                 >
-                    <div className="mx-auto my-8" style={{maxWidth: '1200px'}}>
-                        <div 
-                            ref={canvasRef} 
-                            className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
-                        >
-                            {dynamicRowHeight > 0 && (
-                                <ResponsiveGridLayout
-                                    className="layout"
-                                    layouts={{ lg: presentation.slides[currentPage]?.layout || [] }}
-                                    breakpoints={{ lg: 1200 }} cols={{ lg: 12 }}
-                                    rowHeight={dynamicRowHeight}
-                                    onDrop={onDrop}
-                                    onLayoutChange={handleLayoutChange}
-                                    isDroppable={true}
-                                    droppingItem={{ i: `new-item_${uuidv4()}`, w: 4, h: 4 }}
+                    <div className="mx-auto my-8 space-y-8" style={{maxWidth: '1200px'}}>
+                        {presentation.slides.map((slide, index) => {
+                            const rowHeight = (isSlides ? 50 : 35);
+                             return (
+                                <div
+                                    key={slide.id}
+                                    ref={el => slideRefs.current[index] = el}
+                                    data-slide-index={index}
+                                    className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
                                 >
-                                     {(presentation.slides[currentPage]?.layout || []).map(item => (
-                                        <div key={item.i} className="group relative bg-transparent overflow-hidden rounded-lg">
-                                            <div className="w-full h-full">
-                                                {renderGridItemContent(item)}
-                                            </div>
-                                            <button onClick={() => handleRemoveItem(item.i)} className="absolute top-1 right-1 p-1 rounded-full bg-white/80 text-slate-500 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all z-20 shadow" title="Remove item"><Trash2 size={12} /></button>
-                                        </div>
-                                    ))}
-                                </ResponsiveGridLayout>
-                            )}
-                        </div>
+                                    {visibleSlides.has(index) ? (
+                                        <ResponsiveGridLayout
+                                            className="layout"
+                                            layouts={{ lg: slide.layout || [] }}
+                                            breakpoints={{ lg: 1200 }}
+                                            cols={{ lg: 12 }}
+                                            rowHeight={rowHeight}
+                                            onDrop={(layout, item, e) => onDrop(index, layout, item, e)}
+                                            onLayoutChange={(newLayout) => handleLayoutChange(index, newLayout)}
+                                            isDroppable={true}
+                                            droppingItem={{ i: `new-item_${uuidv4()}`, w: 4, h: 4 }}
+                                        >
+                                            {(slide.layout || []).map(item => (
+                                                <div key={item.i} className="group relative bg-transparent overflow-hidden rounded-lg">
+                                                    <div className="w-full h-full">
+                                                        {renderGridItemContent(item)}
+                                                    </div>
+                                                    <button onClick={() => handleRemoveItem(index, item.i)} className="absolute top-1 right-1 p-1 rounded-full bg-white/80 text-slate-500 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all z-20 shadow" title="Remove item"><Trash2 size={12} /></button>
+                                                </div>
+                                            ))}
+                                        </ResponsiveGridLayout>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-slate-300" /></div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
                 
@@ -523,7 +556,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                         navigatorViewMode={navigatorViewMode}
                         setNavigatorViewMode={setNavigatorViewMode}
                         onClose={() => setIsNavigatorOpen(false)}
-                        onSelectPage={setCurrentPage} 
+                        onSelectPage={handleSelectPage} 
                         onAddPage={handleAddPage}
                         onAddPageWithAI={handleAddPageWithAI}
                         onDeletePage={handleDeletePage} 

@@ -1,11 +1,26 @@
 // Import the XLSX library. In a worker, we use importScripts.
 // NOTE: The 'XLSX' variable will be available in the global scope after this runs.
 importScripts('https://aistudiocdn.com/xlsx@0.18.5/dist/xlsx.full.min.js');
-import { DataRow, DataQualityReport } from '../types';
 
 // FIX: Declare the XLSX global variable that is loaded via `importScripts`.
 // This informs TypeScript that the variable exists at runtime, resolving compile-time errors.
 declare const XLSX: any;
+
+// Type definitions are manually duplicated here because workers can't use ES module imports.
+type DataRow = Record<string, any>;
+interface DataIssue {
+    type: 'missing_values' | 'duplicates' | 'data_type_mismatch' | 'empty_file';
+    severity: 'low' | 'medium' | 'high';
+    title: string;
+    description: string;
+}
+interface DataQualityReport {
+    score: number;
+    issues: DataIssue[];
+    rowCount: number;
+    columnCount: number;
+    isClean: boolean;
+}
 
 
 const parseFileContents = (data: ArrayBuffer): Promise<DataRow[]> => {

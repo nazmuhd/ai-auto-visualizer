@@ -380,10 +380,11 @@ const ProjectWorkspace: React.FC<{
     const ViewLoader = () => <div className="h-[calc(100vh-280px)] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
     
     const presentationToEdit = project.presentations?.find(p => p.id === editingPresentationId);
+    const isReportStudioMode = currentView === 'report-studio' && !!editingPresentationId;
 
     return (
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-8 duration-300">
-             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className={`w-full duration-300 ${isReportStudioMode ? 'h-full flex flex-col' : 'px-4 sm:px-6 lg:px-8 py-8'}`}>
+             <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 ${isReportStudioMode ? 'p-4 pb-0' : ''}`}>
                 <div className="flex-1 min-w-0">
                     <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
                     <p className="text-sm text-slate-500 mt-1 truncate">{project.description || "No description provided."}</p>
@@ -407,7 +408,7 @@ const ProjectWorkspace: React.FC<{
                     )}
                 </div>
             </div>
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+            <div className={`flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 ${isReportStudioMode ? 'p-4 pt-0' : ''}`}>
                 <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data Studio" icon={Database} /></div>
                 <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
                     {currentView === 'dashboard' && (
@@ -423,26 +424,28 @@ const ProjectWorkspace: React.FC<{
                 </div>
             </div>
 
-            {currentView === 'dashboard' && (
-            <>
-                <GlobalFilterBar filters={globalFilters} onRemove={onRemoveFilter} />
-                <KpiSection kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
-                <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
-            </>
-            )}
-            {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
-            {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
-                <Suspense fallback={<ViewLoader />}>
-                    <ReportStudio 
-                        project={project}
-                        presentation={presentationToEdit}
-                        onPresentationUpdate={onPresentationUpdate}
-                        onBackToHub={onBackToHub}
-                        onPresent={onPresent}
-                    />
-                </Suspense>
-            )}
-            {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><Suspense fallback={<ViewLoader />}><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></Suspense></div>}
+            <div className={isReportStudioMode ? 'flex-1 min-h-0' : ''}>
+                {currentView === 'dashboard' && (
+                <>
+                    <GlobalFilterBar filters={globalFilters} onRemove={onRemoveFilter} />
+                    <KpiSection kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
+                    <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
+                </>
+                )}
+                {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
+                {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
+                    <Suspense fallback={<ViewLoader />}>
+                        <ReportStudio 
+                            project={project}
+                            presentation={presentationToEdit}
+                            onPresentationUpdate={onPresentationUpdate}
+                            onBackToHub={onBackToHub}
+                            onPresent={onPresent}
+                        />
+                    </Suspense>
+                )}
+                {currentView === 'data' && <div className="h-full"><Suspense fallback={<ViewLoader />}><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></Suspense></div>}
+            </div>
         </div>
     );
 };
@@ -1001,6 +1004,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     };
 
     const presentationToPresent = activeProject?.presentations?.find(p => p.id === presentingPresentationId);
+    const isEditingOrPresenting = !!editingPresentationId || !!presentingPresentationId;
 
     return (
         <div className="flex h-screen bg-slate-50">
@@ -1020,7 +1024,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             />
             <div className={`flex-1 transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
                 <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
-                <main ref={mainContentRef} className="h-full overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
+                <main ref={mainContentRef} className={`h-full ${isEditingOrPresenting ? 'overflow-hidden' : 'overflow-y-auto'}`} style={{ scrollBehavior: 'smooth' }}>
                      {/* The main content area is now full-width by default */}
                     {renderMainContent()}
                 </main>
