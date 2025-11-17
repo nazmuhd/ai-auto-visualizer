@@ -247,18 +247,77 @@ const AskAI: React.FC<{ data: DataRow[] }> = ({ data }) => {
     );
 };
 
+interface ContextMenuState {
+    x: number;
+    y: number;
+    column: string;
+    columnType: 'text' | 'number' | 'date';
+}
+
+const ColumnContextMenu: React.FC<{
+    menuState: ContextMenuState | null;
+    onClose: () => void;
+    onSort: (key: string, dir?: 'asc' | 'desc') => void;
+    onHide: (key: string) => void;
+    onRename: (key: string) => void;
+    onTextTransform: (key: string, type: 'uppercase' | 'lowercase' | 'capitalize') => void;
+    onQuickCalc: (key: string, op: 'sum' | 'average' | 'count') => void;
+    onFilter: () => void;
+}> = ({ menuState, onClose, onSort, onHide, onRename, onTextTransform, onQuickCalc, onFilter }) => {
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onClose]);
+
+    if (!menuState) return null;
+
+    const { x, y, column, columnType } = menuState;
+    const menuStyle = { top: `${y}px`, left: `${x}px` };
+
+    return (
+        <div ref={menuRef} style={menuStyle} className="fixed bg-white rounded-lg shadow-lg border border-slate-200 z-[9999] w-56 py-1">
+            {columnType === 'text' && <>
+                <button onMouseDown={() => onSort(column, 'asc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowUp size={14} className="mr-2"/> Sort A → Z</button>
+                <button onMouseDown={() => onSort(column, 'desc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowDown size={14} className="mr-2"/> Sort Z → A</button>
+                <div className="my-1 border-t border-slate-100"></div>
+                <div className="relative group/sub"><button className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"><div className="flex items-center"><CaseSensitive size={14} className="mr-2"/> Transform</div><ChevronRight size={14} /></button><div className="absolute left-full -top-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 hidden group-hover/sub:block"><button onMouseDown={() => onTextTransform(column, 'uppercase')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">UPPERCASE</button><button onMouseDown={() => onTextTransform(column, 'lowercase')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">lowercase</button><button onMouseDown={() => onTextTransform(column, 'capitalize')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Capitalize</button></div></div>
+            </>}
+            {columnType === 'number' && <>
+                <button onMouseDown={() => onSort(column, 'asc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowDown01 size={14} className="mr-2"/> Sort Smallest to Largest</button>
+                <button onMouseDown={() => onSort(column, 'desc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowUp10 size={14} className="mr-2"/> Sort Largest to Smallest</button>
+                <div className="my-1 border-t border-slate-100"></div>
+                <div className="relative group/sub"><button className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"><div className="flex items-center"><Sigma size={14} className="mr-2"/> Quick Calculation</div><ChevronRight size={14} /></button><div className="absolute left-full -top-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 hidden group-hover/sub:block"><button onMouseDown={() => onQuickCalc(column, 'sum')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Sum</button><button onMouseDown={() => onQuickCalc(column, 'average')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Average</button><button onMouseDown={() => onQuickCalc(column, 'count')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Count</button></div></div>
+            </>}
+            {columnType === 'date' && <>
+                <button onMouseDown={() => onSort(column, 'asc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><CalendarDays size={14} className="mr-2"/> Sort Oldest to Newest</button>
+                <button onMouseDown={() => onSort(column, 'desc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><CalendarDays size={14} className="mr-2"/> Sort Newest to Oldest</button>
+            </>}
+            <div className="my-1 border-t border-slate-100"></div>
+            <button onMouseDown={onFilter} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><FilterIcon size={14} className="mr-2"/> Filter...</button>
+            <button onMouseDown={() => onHide(column)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><EyeOff size={14} className="mr-2"/> Hide Column</button>
+            <button onMouseDown={() => onRename(column)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Pencil size={14} className="mr-2"/> Rename...</button>
+        </div>
+    );
+};
+
 export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
     const [page, setPage] = useState(0);
-    const [openMenu, setOpenMenu] = useState<string | null>(null);
+    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isChooseColumnsModalOpen, setIsChooseColumnsModalOpen] = useState(false);
     const [isFilterModalOpen, setFilterModalOpen] = useState(false);
     const [isAddColumnModalOpen, setAddColumnModalOpen] = useState(false);
     const [isGroupByModalOpen, setGroupByModalOpen] = useState(false);
     
-    const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const transformations = project.transformations || [];
 
     const originalData = project.dataSource.data;
@@ -313,43 +372,33 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         onProjectUpdate(p => ({ ...p, transformations: (p.transformations || []).filter((_, i) => i !== index) }));
     }, [onProjectUpdate]);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (openMenu && menuRefs.current[openMenu] && !menuRefs.current[openMenu]?.contains(event.target as Node)) {
-                setOpenMenu(null);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [openMenu]);
-
-    const handleSort = (key: string) => {
-        const newDirection = (sortConfig?.key === key && sortConfig.direction === 'asc') ? 'desc' : 'asc';
+    const handleSort = (key: string, direction?: 'asc' | 'desc') => {
+        const newDirection = direction ?? ((sortConfig?.key === key && sortConfig.direction === 'asc') ? 'desc' : 'asc');
         addTransformation({ type: 'sort', payload: { key, direction: newDirection } });
         setPage(0);
-        setOpenMenu(null);
+        setContextMenu(null);
     };
 
     const handleHideColumn = (key: string) => {
         addTransformation({ type: 'hide_columns', payload: { columns: [key] } });
-        setOpenMenu(null);
+        setContextMenu(null);
     };
     
     const handleRenameColumn = (oldName: string) => {
+        setContextMenu(null);
         const newName = prompt(`Rename column "${oldName}" to:`, oldName);
         if (newName && newName.trim() && newName !== oldName) {
             addTransformation({ type: 'rename_column', payload: { oldName, newName } });
         }
-        setOpenMenu(null);
     };
 
     const handleTextTransform = (column: string, transformType: 'uppercase' | 'lowercase' | 'capitalize') => {
         addTransformation({ type: 'transform_text', payload: { column, transformType } });
-        setOpenMenu(null);
+        setContextMenu(null);
     };
     
     const handleQuickCalc = (column: string, op: 'sum' | 'average' | 'count') => {
-        setOpenMenu(null);
+        setContextMenu(null);
         if (columnTypes[column] !== 'number') {
             alert(`Calculation can only be performed on number columns.`);
             return;
@@ -368,6 +417,17 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         }
         alert(`Quick Calculation Result:\n${op.charAt(0).toUpperCase() + op.slice(1)} of ${column}: ${result.toLocaleString()}`);
     };
+
+    const handleMenuOpen = (e: React.MouseEvent, h: string) => {
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setContextMenu({
+            x: rect.left,
+            y: rect.bottom + 4,
+            column: h,
+            columnType: columnTypes[h]
+        });
+    };
     
     const visibleHeaders = useMemo(() => columnsAfterTransform.filter(h => !hiddenColumnsSet.has(h)), [columnsAfterTransform, hiddenColumnsSet]);
     const totalPages = Math.ceil(transformedData.length / ROWS_PER_PAGE);
@@ -375,6 +435,16 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
 
     return (
         <>
+            <ColumnContextMenu 
+                menuState={contextMenu}
+                onClose={() => setContextMenu(null)}
+                onSort={handleSort}
+                onHide={handleHideColumn}
+                onRename={handleRenameColumn}
+                onTextTransform={handleTextTransform}
+                onQuickCalc={handleQuickCalc}
+                onFilter={() => { setFilterModalOpen(true); setContextMenu(null); }}
+            />
             <div className="flex h-full w-full bg-slate-100/50">
                 <aside className={`flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-300 ease-in-out ${isLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
                     <header className="px-4 py-3 border-b border-slate-100 flex-shrink-0"><h3 className="font-semibold text-slate-900">Applied Steps</h3></header>
@@ -401,7 +471,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                 <main className="flex-1 flex flex-col min-w-0 relative px-2">
                     <button onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)} title={isLeftPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -left-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsLeft size={16} className={`transition-transform duration-300 ${!isLeftPanelOpen && 'rotate-180'}`} /></button>
                     
-                    <div className={`w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-[1000] rounded-none' : 'relative'}`}>
+                    <div className={`w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden duration-300 ${isFullscreen ? 'fixed inset-0 z-[99999] rounded-none' : 'relative'}`}>
                         <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
                             <h3 className="font-semibold text-slate-900">Data Canvas</h3>
                             <div className="flex items-center space-x-4">
@@ -417,28 +487,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                             <div className="absolute inset-0 overflow-auto custom-scrollbar">
                                 <table className="min-w-full text-sm text-left">
                                     <thead className="bg-slate-50 sticky top-0 z-10">
-                                        <tr>{visibleHeaders.map(h => (<th key={h} className="px-4 py-2.5 font-medium text-slate-600 uppercase tracking-wider text-xs whitespace-nowrap group"><div className="flex items-center justify-between"><button onClick={() => handleSort(h)} className="flex items-center w-full text-left">{h}{sortConfig?.key === h && (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="ml-2" /> : <ArrowDown size={14} className="ml-2" />)}{filteredColumnsSet.has(h) && <FilterIcon size={12} className="ml-2 text-primary-600" />}</button><div className="relative" ref={el => menuRefs.current[h] = el}><button onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === h ? null : h) }} className="ml-2 p-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-200"><MoreVertical size={14} /></button>{openMenu === h && (<div className="absolute top-full right-0 mt-1.5 bg-white rounded-lg shadow-lg border border-slate-200 z-20 w-56 py-1">
-                                            {columnTypes[h] === 'text' && <>
-                                                <button onMouseDown={() => handleSort(h)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowUp size={14} className="mr-2"/> Sort A → Z</button>
-                                                <button onMouseDown={() => { addTransformation({ type: 'sort', payload: { key: h, direction: 'desc' } }); setOpenMenu(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowDown size={14} className="mr-2"/> Sort Z → A</button>
-                                                <div className="my-1 border-t border-slate-100"></div>
-                                                <div className="relative group/sub"><button className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"><div className="flex items-center"><CaseSensitive size={14} className="mr-2"/> Transform</div><ChevronRight size={14} /></button><div className="absolute left-full -top-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 hidden group-hover/sub:block"><button onMouseDown={() => handleTextTransform(h, 'uppercase')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">UPPERCASE</button><button onMouseDown={() => handleTextTransform(h, 'lowercase')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">lowercase</button><button onMouseDown={() => handleTextTransform(h, 'capitalize')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Capitalize</button></div></div>
-                                            </>}
-                                            {columnTypes[h] === 'number' && <>
-                                                <button onMouseDown={() => handleSort(h)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowDown01 size={14} className="mr-2"/> Sort Smallest to Largest</button>
-                                                <button onMouseDown={() => { addTransformation({ type: 'sort', payload: { key: h, direction: 'desc' } }); setOpenMenu(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowUp10 size={14} className="mr-2"/> Sort Largest to Smallest</button>
-                                                <div className="my-1 border-t border-slate-100"></div>
-                                                <div className="relative group/sub"><button className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center justify-between"><div className="flex items-center"><Sigma size={14} className="mr-2"/> Quick Calculation</div><ChevronRight size={14} /></button><div className="absolute left-full -top-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 hidden group-hover/sub:block"><button onMouseDown={() => handleQuickCalc(h, 'sum')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Sum</button><button onMouseDown={() => handleQuickCalc(h, 'average')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Average</button><button onMouseDown={() => handleQuickCalc(h, 'count')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Count</button></div></div>
-                                            </>}
-                                            {columnTypes[h] === 'date' && <>
-                                                <button onMouseDown={() => handleSort(h)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><CalendarDays size={14} className="mr-2"/> Sort Oldest to Newest</button>
-                                                <button onMouseDown={() => { addTransformation({ type: 'sort', payload: { key: h, direction: 'desc' } }); setOpenMenu(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><CalendarDays size={14} className="mr-2"/> Sort Newest to Oldest</button>
-                                            </>}
-                                            <div className="my-1 border-t border-slate-100"></div>
-                                            <button onMouseDown={() => { setFilterModalOpen(true); setOpenMenu(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><FilterIcon size={14} className="mr-2"/> Filter...</button>
-                                            <button onMouseDown={() => handleHideColumn(h)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><EyeOff size={14} className="mr-2"/> Hide Column</button>
-                                            <button onMouseDown={() => handleRenameColumn(h)} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Pencil size={14} className="mr-2"/> Rename...</button>
-                                        </div>)}</div></div></th>))}</tr>
+                                        <tr>{visibleHeaders.map(h => (<th key={h} className="px-4 py-2.5 font-medium text-slate-600 uppercase tracking-wider text-xs whitespace-nowrap group"><div className="flex items-center justify-between"><button onClick={() => handleSort(h)} className="flex items-center w-full text-left">{h}{sortConfig?.key === h && (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="ml-2" /> : <ArrowDown size={14} className="ml-2" />)}{filteredColumnsSet.has(h) && <FilterIcon size={12} className="ml-2 text-primary-600" />}</button><button onClick={(e) => handleMenuOpen(e, h)} className="ml-2 p-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-200"><MoreVertical size={14} /></button></div></th>))}</tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">{paginatedData.map((row, i) => (<tr key={i} className="hover:bg-slate-50">{visibleHeaders.map(h => (<td key={`${i}-${h}`} className="px-4 py-3 text-slate-600 whitespace-nowrap max-w-xs truncate" title={String(row[h])}>{String(row[h] ?? '').trim() ? String(row[h]) : <em className="text-slate-400">null</em>}</td>))}</tr>))}</tbody>
                                 </table>

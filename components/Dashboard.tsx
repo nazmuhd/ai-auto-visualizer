@@ -1021,7 +1021,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             />
             <div className={`flex-1 transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
                 <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
-                <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>
+                <main ref={mainContentRef} className="h-full overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
                      {/* The main content area is now full-width by default */}
                     {renderMainContent()}
                 </main>
