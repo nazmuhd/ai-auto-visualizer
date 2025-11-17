@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, PresentationFormat, TextBlock, ReportTemplate, Presentation } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft, ArrowRight } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
@@ -207,7 +207,7 @@ const DashboardView: React.FC<{
 ));
 
 const ProjectSetup: React.FC<{ project: Project; onFileSelect: (file: File) => void; onRename: () => void }> = ({ project, onFileSelect, onRename }) => (
-    <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center gap-4 mb-6">
             <div className="flex-1 min-w-0">
                 <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
@@ -259,36 +259,65 @@ const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove
     );
 });
 
-
-const ReportStartScreen: React.FC<{ onCreateReport: () => void }> = memo(({ onCreateReport }) => {
-    return (
-        <div className="text-center py-16">
-            <div className="p-4 bg-primary-100 text-primary-600 rounded-full mb-6 inline-block">
-                <Bot size={40} />
+const ReportHub: React.FC<{ 
+    project: Project,
+    onCreateReport: () => void,
+    onSelectPresentation: (id: string) => void 
+}> = ({ project, onCreateReport, onSelectPresentation }) => {
+    const presentations = project.presentations || [];
+    
+    if (presentations.length === 0) {
+        return (
+            <div className="text-center py-16">
+                <div className="p-4 bg-primary-100 text-primary-600 rounded-full mb-6 inline-block"><Bot size={40} /></div>
+                <h2 className="text-3xl font-bold text-slate-900">Create your report instantly</h2>
+                <p className="text-lg text-slate-500 mt-2 mb-10">Let AI help you build a professional presentation from your dashboard.</p>
+                <button 
+                    onClick={onCreateReport} 
+                    className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center mx-auto"
+                >
+                    <PlusCircle size={20} className="mr-2" />
+                    Create a Presentation
+                </button>
             </div>
-            <h2 className="text-3xl font-bold text-slate-900">Create your report instantly</h2>
-            <p className="text-lg text-slate-500 mt-2 mb-10">Let AI help you build a professional report from your dashboard.</p>
-            <button 
-                onClick={onCreateReport} 
-                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center mx-auto"
-            >
-                <PlusCircle size={20} className="mr-2" />
-                Create a Report
-            </button>
+        );
+    }
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-slate-800">Report Studio Hub</h2>
+                 <button 
+                    onClick={onCreateReport} 
+                    className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm transition-transform transform hover:scale-105 flex items-center"
+                >
+                    <PlusCircle size={16} className="mr-2" />
+                    Create New Presentation
+                </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {presentations.map(p => (
+                    <button key={p.id} onClick={() => onSelectPresentation(p.id)} className="group text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-primary-500 hover:shadow-xl transition-all transform hover:-translate-y-1 bg-white">
+                        <div className="aspect-video w-full rounded-lg bg-slate-100 border border-slate-200 group-hover:bg-primary-50/50 flex items-center justify-center">
+                            <FileText size={40} className="text-slate-400 group-hover:text-primary-500" />
+                        </div>
+                        <h3 className="font-bold text-slate-800 mt-3 truncate">{p.name}</h3>
+                        <p className="text-sm text-slate-500">{p.slides.length} {p.format === 'slides' ? 'Slides' : 'Pages'}</p>
+                    </button>
+                ))}
+            </div>
         </div>
     );
-});
+};
 
 
 const ProjectWorkspace: React.FC<{
     project: Project;
     filteredData: DataRow[];
-    currentView: 'dashboard' | 'report-studio' | 'data';
-    onSetCurrentView: (view: 'dashboard' | 'report-studio' | 'data') => void;
     onOpenEditModal: () => void;
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     onCreateReport: () => void;
-    onSetIsPresentationMode: (isPresenting: boolean) => void;
+    onSelectPresentation: (id: string) => void;
     dashboardLayout: string;
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
@@ -302,12 +331,12 @@ const ProjectWorkspace: React.FC<{
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
     onProjectUpdate: (updater: (prev: Project) => Project) => void;
-    onPresentationUpdate: (updatedPresentation: Presentation) => void;
-    onBackToHub: () => void;
-}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSetIsPresentationMode, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, onPresentationUpdate, onBackToHub, ...props }) => {
+}> = ({ project, filteredData, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSelectPresentation, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, ...props }) => {
     
+    const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
     const { analysis } = project;
     if (!analysis) return null;
+
     const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'report-studio' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const chartRows = structureChartsByLayout(visibleCharts, props.dashboardLayout);
@@ -336,7 +365,7 @@ const ProjectWorkspace: React.FC<{
     const ViewLoader = () => <div className="h-[calc(100vh-280px)] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
 
     return (
-        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 duration-300">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8 duration-300">
              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                 <div className="flex-1 min-w-0">
                     <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
@@ -384,21 +413,7 @@ const ProjectWorkspace: React.FC<{
                 <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
             </>
             )}
-            {currentView === 'report-studio' && (
-                project.presentations && project.presentations.length > 0 ? (
-                     <Suspense fallback={<ViewLoader />}>
-                        <ReportStudio 
-                           project={project}
-                           presentation={project.presentations[0]}
-                           onPresentationUpdate={onPresentationUpdate}
-                           onBackToHub={onBackToHub}
-                           onPresent={() => onSetIsPresentationMode(true)}
-                        />
-                    </Suspense>
-                ) : (
-                    <ReportStartScreen onCreateReport={onCreateReport} />
-                )
-            )}
+            {currentView === 'report-studio' && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
             {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><Suspense fallback={<ViewLoader />}><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></Suspense></div>}
         </div>
     );
@@ -418,7 +433,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [projectToManage, setProjectToManage] = useState<Project | null>(null);
-    const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
+    
+    const [editingPresentationId, setEditingPresentationId] = useState<string | null>(null);
+    const [presentingPresentationId, setPresentingPresentationId] = useState<string | null>(null);
+
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
     const [selectedKpi, setSelectedKpi] = useState<KpiConfig | null>(null);
     const [dashboardLayout, setDashboardLayout] = useState<string>('2-2-2');
@@ -426,8 +444,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [isReportTemplateModalOpen, setIsReportTemplateModalOpen] = useState(false);
-    const [preselectedReportFormat, setPreselectedReportFormat] = useState<PresentationFormat | null>(null);
-    const [isPresentationMode, setIsPresentationMode] = useState(false);
     
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
@@ -560,7 +576,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
         setStatus('parsing');
         setError(null);
-        setCurrentView('dashboard');
+        setEditingPresentationId(null);
+        setPresentingPresentationId(null);
         setGlobalFilters({});
         setTimeFilter({ type: 'all' });
         setProgress({ status: 'Initiating upload...', percentage: 0 });
@@ -626,7 +643,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setActiveProject(null);
         setStatus('idle');
         setError(null);
-        setCurrentView('dashboard');
+        setEditingPresentationId(null);
+        setPresentingPresentationId(null);
         setGlobalFilters({});
         setTimeFilter({type:'all'});
         setProgress(null);
@@ -670,7 +688,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         if (project) {
             setActiveProject(project);
             setStatus(project.dataSource.data.length > 0 ? 'complete' : 'idle');
-            setCurrentView('dashboard');
+            setEditingPresentationId(null);
+            setPresentingPresentationId(null);
             setGlobalFilters({});
             setTimeFilter({ type: 'all' });
             setIsSettingsModalOpen(false);
@@ -856,10 +875,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         }
     }, []);
     
-    const handleSetCurrentView = (view: 'dashboard' | 'report-studio' | 'data') => {
-      setCurrentView(view);
-    };
-
     const handleTemplateSelected = async (template: ReportTemplate) => {
         if (!activeProject || !activeProject.analysis) return;
         
@@ -874,8 +889,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 ...p,
                 presentations: [...(p.presentations || []), newPresentation],
             }));
-
-            setCurrentView('report-studio');
+            
+            setEditingPresentationId(newPresentation.id);
             setStatus('complete');
             setProgress(null);
 
@@ -909,6 +924,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
         }
         
+        if (editingPresentationId) {
+            const presentationToEdit = activeProject.presentations?.find(p => p.id === editingPresentationId);
+            if (presentationToEdit) {
+                 return (
+                    <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
+                        <ReportStudio 
+                           project={activeProject}
+                           presentation={presentationToEdit}
+                           onPresentationUpdate={handlePresentationUpdate}
+                           onBackToHub={() => setEditingPresentationId(null)}
+                           onPresent={(id) => setPresentingPresentationId(id)}
+                        />
+                    </Suspense>
+                 );
+            }
+        }
+
         switch (status) {
             case 'idle':
                 if (activeProject.dataSource.data.length === 0) {
@@ -919,15 +951,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                     return <ProjectWorkspace
                         project={activeProject}
                         filteredData={filteredData}
-                        currentView={currentView}
-                        onSetCurrentView={handleSetCurrentView}
                         onOpenEditModal={() => setIsSettingsModalOpen(true)}
                         setIsLayoutModalOpen={setIsLayoutModalOpen}
-                        onCreateReport={() => {
-                           setPreselectedReportFormat(null);
-                           setIsReportTemplateModalOpen(true);
-                        }}
-                        onSetIsPresentationMode={setIsPresentationMode}
+                        onCreateReport={() => setIsReportTemplateModalOpen(true)}
+                        onSelectPresentation={setEditingPresentationId}
                         dashboardLayout={dashboardLayout}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
@@ -941,8 +968,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         onRemoveFilter={handleRemoveFilter}
                         onKpiClick={handleKpiClick}
                         onProjectUpdate={updateActiveProject}
-                        onPresentationUpdate={handlePresentationUpdate}
-                        onBackToHub={handleReset}
                     />;
                 }
                 break;
@@ -959,6 +984,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         
         return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={error || 'An unexpected error occurred.'} />;
     };
+
+    const presentationToPresent = activeProject?.presentations?.find(p => p.id === presentingPresentationId);
 
     return (
         <div className="flex h-screen bg-slate-50">
@@ -981,12 +1008,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>{renderMainContent()}</main>
             </div>
             
-            {isPresentationMode && activeProject && activeProject.presentations && activeProject.presentations.length > 0 && (
+            {presentingPresentationId && activeProject && presentationToPresent && (
                 <Suspense fallback={<div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
                     <PresentationView 
                         project={activeProject} 
-                        presentation={activeProject.presentations[0]} 
-                        onClose={() => setIsPresentationMode(false)} 
+                        presentation={presentationToPresent} 
+                        onClose={() => setPresentingPresentationId(null)} 
                     />
                 </Suspense>
             )}
@@ -1023,12 +1050,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             />
              <ReportTemplateSelectionModal
                 isOpen={isReportTemplateModalOpen}
-                onClose={() => {
-                    setIsReportTemplateModalOpen(false);
-                    setPreselectedReportFormat(null);
-                }}
+                onClose={() => setIsReportTemplateModalOpen(false)}
                 onSelect={handleTemplateSelected}
-                preselectedFormat={preselectedReportFormat}
             />
             {activeProject && activeProject.analysis && (
                 <DashboardSettingsModal

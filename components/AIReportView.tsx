@@ -26,7 +26,7 @@ const calculateKpiValue = (dataset: DataRow[], kpi: KpiConfig): number | null =>
 const ReportKpiCard: React.FC<{ kpi: KpiConfig, value: number | null }> = ({ kpi, value }) => {
     const formattedValue = value !== null ? new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value) : '-';
     return (
-        <div className="p-4 bg-white rounded-lg border border-slate-200 h-full flex flex-col justify-center text-center">
+        <div className="p-4 bg-white rounded-lg h-full flex flex-col justify-center text-center">
             <p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p>
             <p className="text-3xl font-bold text-slate-900">{formattedValue}</p>
         </div>
@@ -43,7 +43,6 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
     useEffect(() => {
         if (isEditing && textAreaRef.current) {
             textAreaRef.current.focus();
-            // Autosize logic on entering edit mode
             const el = textAreaRef.current;
             el.style.height = 'auto';
             el.style.height = `${el.scrollHeight}px`;
@@ -59,7 +58,6 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
 
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setContent(e.target.value);
-        // Autosize on change
         e.target.style.height = 'auto';
         e.target.style.height = `${e.target.scrollHeight}px`;
     }
@@ -81,7 +79,7 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
     return (
         <div
             onDoubleClick={() => setIsEditing(true)}
-            className="p-4 h-full prose prose-sm max-w-none prose-p:my-1 cursor-text"
+            className="p-4 h-full w-full prose prose-sm max-w-none prose-p:my-1 cursor-text"
             dangerouslySetInnerHTML={{ __html: renderedContent }}
         />
     );
@@ -199,14 +197,14 @@ const SlideNavigator: React.FC<{
     };
 
     return (
-        <aside className="w-48 bg-slate-50 border-r border-slate-200 flex flex-col p-3">
+        <aside className="w-56 bg-white border-r border-slate-200 flex flex-col p-3">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">Slides</h3>
             <ul className="space-y-3 flex-1 overflow-y-auto pr-1">
                 {slides.map((slide, index) => (
                     <li key={slide.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className="group cursor-pointer">
                         <div className="flex items-start space-x-2">
                             <span className="text-xs font-medium text-slate-400 pt-1">{index + 1}</span>
-                            <div onClick={() => onSelectPage(index)} className={`aspect-video w-full rounded-md border-2 p-1 transition-colors ${currentPage === index ? 'border-primary-500' : 'border-transparent hover:border-slate-300'}`}><div className="w-full h-full bg-slate-200 border border-slate-300 rounded-sm flex items-center justify-center"><File size={24} className="text-slate-400" /></div></div>
+                            <div onClick={() => onSelectPage(index)} className={`aspect-video w-full rounded-md border-2 p-1 transition-colors ${currentPage === index ? 'border-primary-500 bg-primary-50' : 'border-transparent hover:border-slate-300'}`}><div className="w-full h-full bg-white border border-slate-300 rounded-sm flex items-center justify-center"><File size={24} className="text-slate-400" /></div></div>
                             <div className="flex flex-col pt-1">
                                 <button onClick={(e) => { e.stopPropagation(); onDeletePage(index); }} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-100 rounded-md opacity-0 group-hover:opacity-100 transition-opacity" title="Delete slide"><Trash2 size={14} /></button>
                                 <button className="p-1 text-slate-400 cursor-move"><GripVertical size={14} /></button>
@@ -217,12 +215,12 @@ const SlideNavigator: React.FC<{
             </ul>
             <div className="flex-shrink-0 pt-3 mt-3 border-t border-slate-200 relative" ref={addMenuRef}>
                  <button onClick={() => setIsAddMenuOpen(prev => !prev)} className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md">
-                    <div className="flex items-center"><PlusCircle size={16} className="mr-2" /> New Slide</div>
+                    <div className="flex items-center"><PlusCircle size={16} className="mr-2" /> New</div>
                     <ChevronDown size={14} />
                  </button>
                  {isAddMenuOpen && (
                      <div className="absolute bottom-full left-0 right-0 mb-2 w-full bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
-                         <button onClick={() => { onAddPage(); setIsAddMenuOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><File size={14} className="mr-2 text-slate-400" /> Add Blank Slide</button>
+                         <button onClick={() => { onAddPage(); setIsAddMenuOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><File size={14} className="mr-2 text-slate-400" /> Add Blank Card</button>
                          <button onClick={() => { onAddPageWithAI(); setIsAddMenuOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><Sparkles size={14} className="mr-2 text-primary-500" /> Add with AI</button>
                      </div>
                  )}
@@ -240,7 +238,7 @@ const DraggableTextBlock: React.FC<{ style: 'title' | 'body'; name: string; icon
 
 const ContentToolbar: React.FC<{ project: Project }> = ({ project }) => {
     return (
-        <aside className="w-64 bg-slate-50 border-l border-slate-200 p-4 overflow-y-auto">
+        <aside className="w-64 bg-white border-l border-slate-200 p-4 overflow-y-auto">
             <div className="space-y-6">
                 <div>
                     <h3 className="font-bold text-slate-800 text-base mb-2">Text Blocks</h3>
@@ -272,7 +270,7 @@ interface PresentationStudioProps {
     presentation: Presentation;
     onPresentationUpdate: (updatedPresentation: Presentation) => void;
     onBackToHub: () => void;
-    onPresent: () => void;
+    onPresent: (presentationId: string) => void;
 }
 
 export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, presentation, onPresentationUpdate, onBackToHub, onPresent }) => {
@@ -391,29 +389,23 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
          }
     };
 
-    const renderGridItem = useCallback((item: ReportLayoutItem): React.ReactElement => {
+    const renderGridItemContent = (item: ReportLayoutItem) => {
         const chart = project.analysis?.charts.find(c => c.id === item.i);
+        if (chart) return <ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} />;
+
         const kpi = project.analysis?.kpis.find(k => k.id === item.i);
+        if (kpi) return <ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} />;
+
         const textBlock = presentation.textBlocks?.find(b => b.id === item.i);
+        if(textBlock) return <EditableTextBlock block={textBlock} onUpdate={b => handlePresentationUpdate(p => ({ ...p, textBlocks: (p.textBlocks || []).map(tb => tb.id === b.id ? b : tb)}))} />;
 
-        return (
-            <div key={item.i} className="group relative bg-white rounded-lg overflow-hidden border border-slate-200 transition-all duration-200 hover:shadow-md hover:ring-2 hover:ring-primary-300">
-                {chart && <ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} />}
-                {kpi && <ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} />}
-                {textBlock && <EditableTextBlock block={textBlock} onUpdate={b => handlePresentationUpdate(p => ({ ...p, textBlocks: (p.textBlocks || []).map(tb => tb.id === b.id ? b : tb)}))} />}
-                
-                 <button onClick={() => handleRemoveItem(item.i)} className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 text-slate-500 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all z-20 shadow" title="Remove item"><Trash2 size={14} /></button>
-            </div>
-        );
-    }, [project, presentation.textBlocks, kpiValues, handlePresentationUpdate]);
-
+        return <div className="p-2 text-xs text-red-500">Unknown Item: {item.i}</div>;
+    }
 
     const isSlides = presentation.format === 'slides';
-    const canvasClass = isSlides ? 'aspect-video w-full max-w-6xl bg-slate-200/50 shadow-inner my-auto p-4' : 'w-full bg-slate-200/50 p-4';
-    const pageClass = isSlides ? 'bg-white shadow-lg' : 'aspect-[1/1.414] w-full max-w-4xl mx-auto my-4 bg-white shadow-lg border border-slate-200';
 
     return (
-        <div className="flex flex-col h-[calc(100vh-280px)] bg-slate-100/50 rounded-2xl border border-slate-200 relative overflow-hidden">
+        <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
             <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 h-16 flex justify-between items-center z-10">
                 <div className="flex items-center gap-4">
                     <button onClick={onBackToHub} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100">
@@ -429,7 +421,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={onPresent} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center shadow-sm">
+                    <button onClick={() => onPresent(presentation.id)} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center shadow-sm">
                         <MonitorPlay size={16} className="mr-2" />
                         Present
                     </button>
@@ -447,28 +439,38 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     onReorderPages={handleReorderPages} 
                 />
                 
-                <main className="flex-1 flex flex-col min-w-0 relative">
-                    <div className={`flex-1 overflow-auto flex ${isSlides ? 'items-center justify-center' : 'flex-col'} ${canvasClass}`}>
-                        <div className={pageClass}>
-                            <ResponsiveGridLayout
-                                className="layout"
-                                layouts={{ lg: presentation.slides[currentPage]?.layout || [] }}
-                                breakpoints={{ lg: 1200 }} cols={{ lg: 12 }}
-                                rowHeight={isSlides ? 40 : 30}
-                                onDrop={onDrop}
-                                onLayoutChange={handleLayoutChange}
-                                onDragStop={handleLayoutChange}
-                                onResizeStop={handleLayoutChange}
-                                isDroppable={true}
-                                droppingItem={{ i: `new-item_${uuidv4()}`, w: 4, h: 4 }}
-                            >
-                                {(presentation.slides[currentPage]?.layout || []).map(item => renderGridItem(item))}
-                            </ResponsiveGridLayout>
-                        </div>
+                <main className="flex-1 flex flex-col items-center min-w-0 p-8 overflow-auto bg-slate-100">
+                    <div className={`relative ${isSlides ? 'aspect-video w-full max-w-6xl' : 'aspect-[1/1.414] w-full max-w-4xl'}`}>
+                        <ResponsiveGridLayout
+                            className="layout bg-white shadow-lg border border-slate-200"
+                            layouts={{ lg: presentation.slides[currentPage]?.layout || [] }}
+                            breakpoints={{ lg: 1200 }} cols={{ lg: 12 }}
+                            rowHeight={isSlides ? 40 : 30}
+                            onDrop={onDrop}
+                            onLayoutChange={handleLayoutChange}
+                            onDragStop={handleLayoutChange}
+                            onResizeStop={handleLayoutChange}
+                            isDroppable={true}
+                            droppingItem={{ i: `new-item_${uuidv4()}`, w: 4, h: 4 }}
+                            style={{minHeight: '200px'}}
+                        >
+                             {(presentation.slides[currentPage]?.layout || []).map(item => (
+                                <div key={item.i} className="group relative bg-white rounded-lg overflow-hidden border border-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-2 hover:ring-primary-300">
+                                    {renderGridItemContent(item)}
+                                    <button onClick={() => handleRemoveItem(item.i)} className="absolute top-1 right-1 p-1 rounded-full bg-white/80 text-slate-500 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all z-20 shadow" title="Remove item"><Trash2 size={12} /></button>
+                                </div>
+                            ))}
+                        </ResponsiveGridLayout>
                     </div>
-                    <button
+                    {!isSlides && (
+                        <button onClick={handleAddPage} className="mt-8 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-medium shadow-sm border border-slate-300 flex items-center">
+                            <PlusCircle size={16} className="mr-2" />
+                            Add blank card
+                        </button>
+                    )}
+                     <button
                         onClick={() => setAIEditPopoverOpen(true)}
-                        className="absolute bottom-6 right-6 z-20 p-3 bg-primary-600 text-white rounded-full shadow-lg hover:bg-primary-700 transition-transform transform hover:scale-110"
+                        className="fixed bottom-6 right-[18rem] z-20 p-3 bg-primary-600 text-white rounded-full shadow-lg hover:bg-primary-700 transition-transform transform hover:scale-110"
                         title="Edit with AI"
                     >
                         <Sparkles size={20} />
