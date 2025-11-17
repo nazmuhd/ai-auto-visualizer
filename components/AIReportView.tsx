@@ -358,7 +358,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 if (ref) observer.unobserve(ref);
             });
         };
-    }, [presentation.slides, currentPage]);
+    }, [presentation.slides]);
 
 
     const kpiValues = useMemo(() => {

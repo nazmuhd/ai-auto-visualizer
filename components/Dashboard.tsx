@@ -379,11 +379,11 @@ const ProjectWorkspace: React.FC<{
     const ViewLoader = () => <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
     
     const presentationToEdit = project.presentations?.find(p => p.id === editingPresentationId);
-    const isReportStudioMode = currentView === 'report-studio' && !!editingPresentationId;
+    const isReportStudioMode = currentView === 'report-studio' || !!editingPresentationId;
 
     return (
         <div className={`w-full duration-300 ${isReportStudioMode ? 'h-full flex flex-col' : 'px-4 sm:px-6 lg:px-8 py-8'}`}>
-            {!isReportStudioMode && (
+            {!editingPresentationId && (
                 <>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                         <div className="flex-1 min-w-0">
@@ -1011,21 +1011,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     return (
         <div className="flex h-screen bg-slate-50">
-            <Sidebar 
-                isOpen={isSidebarOpen} 
-                setIsOpen={setIsSidebarOpen} 
-                onNewProject={handleReset} 
-                savedProjects={savedProjects} 
-                activeProjectId={activeProject?.id || null} 
-                onSelectProject={handleSelectProject} 
-                onRename={handleOpenRenameModal} 
-                onDelete={handleOpenDeleteModal} 
-                userEmail={userEmail} 
-                onLogout={onLogout}
-                mainView={mainView}
-                setMainView={setMainView}
-            />
-            <div className={`flex-1 flex flex-col transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
+            {!isEditingOrPresenting && (
+                <Sidebar 
+                    isOpen={isSidebarOpen} 
+                    setIsOpen={setIsSidebarOpen} 
+                    onNewProject={handleReset} 
+                    savedProjects={savedProjects} 
+                    activeProjectId={activeProject?.id || null} 
+                    onSelectProject={handleSelectProject} 
+                    onRename={handleOpenRenameModal} 
+                    onDelete={handleOpenDeleteModal} 
+                    userEmail={userEmail} 
+                    onLogout={onLogout}
+                    mainView={mainView}
+                    setMainView={setMainView}
+                />
+            )}
+            <div className={`flex-1 flex flex-col transition-all duration-300 ${!isEditingOrPresenting ? (isSidebarOpen ? 'md:ml-64' : 'md:ml-20') : 'md:ml-0'}`}>
                 <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
                 <main ref={mainContentRef} className={`flex-1 ${isEditingOrPresenting ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
                     {renderMainContent()}
