@@ -315,37 +315,37 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
     const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('filmstrip');
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         slideRefs.current = presentation.slides.map(() => null);
-    }, [presentation.slides]);
+        setVisibleSlides(new Set([currentPage]));
+    }, [presentation.slides, currentPage]);
 
     const handleSelectPage = useCallback((index: number) => {
         slideRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, []);
 
     useEffect(() => {
+        const options = {
+            root: scrollContainerRef.current,
+            rootMargin: '-50% 0px -50% 0px', // Detects when slide is in the vertical center
+            threshold: 0.1
+        };
+
         const observer = new IntersectionObserver(
             (entries) => {
-                let mostVisibleIndex = currentPage;
-                let maxVisibleRatio = 0;
-                
                 entries.forEach(entry => {
                     const index = parseInt(entry.target.getAttribute('data-slide-index') || '0', 10);
                     if (entry.isIntersecting) {
+                         setCurrentPage(index);
+                    }
+                    if(entry.isIntersecting || Math.abs(index - currentPage) <= 1) {
                         setVisibleSlides(prev => new Set(prev).add(index));
-                        if(entry.intersectionRatio > maxVisibleRatio) {
-                            maxVisibleRatio = entry.intersectionRatio;
-                            mostVisibleIndex = index;
-                        }
                     }
                 });
-                
-                if (maxVisibleRatio > 0.5) { // Threshold to prevent jumpy updates
-                    setCurrentPage(mostVisibleIndex);
-                }
             },
-            { rootMargin: '0px', threshold: [0.1, 0.5, 0.9] }
+            options
         );
 
         const currentRefs = slideRefs.current;
@@ -491,9 +491,10 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 </div>
             </header>
             
-            <main className="flex-1 relative overflow-hidden">
+            <main className="flex-1 relative overflow-hidden min-h-0">
                 {/* Central scrollable canvas */}
                 <div 
+                    ref={scrollContainerRef}
                     className="absolute inset-0 overflow-y-auto custom-scrollbar transition-all duration-300"
                     style={{
                         paddingLeft: isNavigatorOpen ? '18rem' : '5rem', // w-64 (16rem) + ~1rem padding on each side
@@ -502,7 +503,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 >
                     <div className="mx-auto my-8 space-y-8" style={{maxWidth: '1200px'}}>
                         {presentation.slides.map((slide, index) => {
-                            const rowHeight = (isSlides ? 50 : 35);
+                             const rowHeight = (isSlides ? 50 : 35);
                              return (
                                 <div
                                     key={slide.id}
