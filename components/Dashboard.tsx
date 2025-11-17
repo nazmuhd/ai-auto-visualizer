@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat, TextBlock } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat, TextBlock, ReportTemplate, Presentation, PresentationFormat } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
@@ -18,7 +18,7 @@ import { DashboardSettingsModal } from './modals/DashboardSettingsModal.tsx';
 import { KpiDetailModal } from './modals/KpiDetailModal.tsx';
 import { ReportTemplateSelectionModal } from './modals/ReportTemplateSelectionModal.tsx';
 import { processFile } from '../services/dataParser.ts';
-import { analyzeData, generateAiReport } from '../services/geminiService.ts';
+import { analyzeData, generateInitialPresentation } from '../services/geminiService.ts';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
 import { v4 as uuidv4 } from 'uuid';
@@ -302,7 +302,9 @@ const ProjectWorkspace: React.FC<{
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
     onProjectUpdate: (updater: (prev: Project) => Project) => void;
-}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSetIsPresentationMode, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, ...props }) => {
+    onPresentationUpdate: (updatedPresentation: Presentation) => void;
+    onBackToHub: () => void;
+}> = ({ project, filteredData, currentView, onSetCurrentView: setCurrentView, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSetIsPresentationMode, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, onPresentationUpdate, onBackToHub, ...props }) => {
     
     const { analysis } = project;
     if (!analysis) return null;
@@ -372,11 +374,6 @@ const ProjectWorkspace: React.FC<{
                             </button>
                         </>
                     )}
-                    {currentView === 'report-studio' && project.reportLayout && (
-                         <button onClick={() => onSetIsPresentationMode(true)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center">
-                            <MonitorPlay size={16} className="mr-2" /> Present
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -388,9 +385,15 @@ const ProjectWorkspace: React.FC<{
             </>
             )}
             {currentView === 'report-studio' && (
-                project.reportLayout ? (
+                project.presentations && project.presentations.length > 0 ? (
                      <Suspense fallback={<ViewLoader />}>
-                        <ReportStudio project={project} onUpdateProject={onProjectUpdate} />
+                        <ReportStudio 
+                           project={project}
+                           presentation={project.presentations[0]}
+                           onPresentationUpdate={onPresentationUpdate}
+                           onBackToHub={onBackToHub}
+                           onPresent={() => onSetIsPresentationMode(true)}
+                        />
                     </Suspense>
                 ) : (
                     <ReportStartScreen onCreateReport={onCreateReport} />
@@ -423,7 +426,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [isReportTemplateModalOpen, setIsReportTemplateModalOpen] = useState(false);
-    const [preselectedReportFormat, setPreselectedReportFormat] = useState<ReportFormat | null>(null);
+    const [preselectedReportFormat, setPreselectedReportFormat] = useState<PresentationFormat | null>(null);
     const [isPresentationMode, setIsPresentationMode] = useState(false);
     
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
@@ -625,7 +628,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setError(null);
         setCurrentView('dashboard');
         setGlobalFilters({});
-        setTimeFilter({type: 'all'});
+        setTimeFilter({type:'all'});
         setProgress(null);
         setIsSettingsModalOpen(false);
         setMainView('dashboard');
@@ -857,60 +860,61 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
       setCurrentView(view);
     };
 
-    const handleTemplateSelected = (templateId: string) => {
+    const handleTemplateSelected = async (template: ReportTemplate) => {
         if (!activeProject || !activeProject.analysis) return;
-        const analysis = activeProject.analysis;
-        const pages: ReportLayoutItem[][] = [[]];
-        const isSlides = templateId.includes('slides');
-
-        // Create TextBlocks for title and summary
-        const titleBlock: TextBlock = {
-            id: `text_${uuidv4()}`, type: 'text', title: 'Report Title',
-            content: activeProject.name, style: 'title'
-        };
-        const summaryBlock: TextBlock = {
-            id: `text_${uuidv4()}`, type: 'text', title: 'Executive Summary',
-            content: analysis.summary.join('\n\n'), style: 'body'
-        };
-        const headerBlock: TextBlock = {
-            id: `header_${uuidv4()}`, type: 'text', title: 'Report Header',
-            content: `${activeProject.name} - ${new Date().toLocaleDateString()}`
-        };
-        const footerBlock: TextBlock = {
-            id: `footer_${uuidv4()}`, type: 'text', title: 'Report Footer',
-            content: 'Page %page% of %total%'
-        };
         
-        const newTextBlocks = [titleBlock, summaryBlock, headerBlock, footerBlock];
-
-        // Page 1: Title & Summary
-        pages[0].push({ i: titleBlock.id, x: 0, y: 0, w: 12, h: isSlides ? 2 : 1 });
-        pages[0].push({ i: summaryBlock.id, x: 0, y: isSlides ? 2 : 1, w: 12, h: 2 });
-        analysis.kpis.slice(0, 4).forEach((kpi, index) => {
-            pages[0].push({ i: kpi.id, x: (index * 3) % 12, y: isSlides ? 4 : 3, w: 3, h: 1 });
-        });
-
-        // Add more pages with charts
-        analysis.charts.slice(0, 4).forEach((chart, index) => {
-            if (index % 2 === 0) pages.push([]); // New page for every 2 charts
-            const currentPage = pages[pages.length - 1];
-            currentPage.push({ i: chart.id, x: (index % 2) * 6, y: 0, w: 6, h: 4 });
-        });
-
-        updateActiveProject(p => ({
-            ...p,
-            reportLayout: pages,
-            reportFormat: isSlides ? 'slides' : 'pdf',
-            reportTextBlocks: newTextBlocks,
-            reportHeader: headerBlock,
-            reportFooter: footerBlock,
-            aiReport: null,
-        }));
-
         setIsReportTemplateModalOpen(false);
-        setPreselectedReportFormat(null);
-        setCurrentView('report-studio');
+        setStatus('analyzing');
+        setProgress({ status: 'AI is designing your presentation...', percentage: 50 });
+        
+        try {
+            const newPresentation = await generateInitialPresentation(activeProject.analysis, template, activeProject.name);
+
+            // SHIM: Convert new presentation format to old project structure for backward compatibility with PresentationView
+            const oldReportLayout = newPresentation.slides.map(s => s.layout);
+            const oldReportTextBlocks = newPresentation.textBlocks || [];
+            
+            updateActiveProject(p => ({
+                ...p,
+                presentations: [...(p.presentations || []), newPresentation],
+                reportLayout: oldReportLayout,
+                reportFormat: newPresentation.format === 'document' ? 'pdf' : 'slides',
+                reportTextBlocks: oldReportTextBlocks,
+                reportHeader: newPresentation.header,
+                reportFooter: newPresentation.footer,
+                aiReport: null,
+            }));
+
+            setCurrentView('report-studio');
+            setStatus('complete');
+            setProgress(null);
+
+        } catch (err: any) {
+            setError(err.message || "Failed to generate presentation.");
+            setStatus('error');
+            setProgress(null);
+        }
     };
+    
+    const handlePresentationUpdate = useCallback((updatedPresentation: Presentation) => {
+        updateActiveProject(p => {
+            if (!p) return p;
+            const newPresentations = p.presentations ? p.presentations.map(pres => pres.id === updatedPresentation.id ? updatedPresentation : pres) : [updatedPresentation];
+            
+            // SHIM for backward compatibility with PresentationView
+            const oldReportLayout = updatedPresentation.slides.map(s => s.layout);
+            const oldReportTextBlocks = updatedPresentation.textBlocks || [];
+
+            return {
+                ...p,
+                presentations: newPresentations,
+                reportLayout: oldReportLayout,
+                reportTextBlocks: oldReportTextBlocks,
+                reportHeader: updatedPresentation.header,
+                reportFooter: updatedPresentation.footer,
+            };
+        });
+    }, [updateActiveProject]);
 
     const renderMainContent = () => {
         if (mainView === 'settings') {
@@ -956,6 +960,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         onRemoveFilter={handleRemoveFilter}
                         onKpiClick={handleKpiClick}
                         onProjectUpdate={updateActiveProject}
+                        onPresentationUpdate={handlePresentationUpdate}
+                        onBackToHub={handleReset}
                     />;
                 }
                 break;
@@ -994,9 +1000,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>{renderMainContent()}</main>
             </div>
             
-            {isPresentationMode && activeProject && (
+            {isPresentationMode && activeProject && activeProject.presentations && activeProject.presentations.length > 0 && (
                 <Suspense fallback={<div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
-                    <PresentationView project={activeProject} onClose={() => setIsPresentationMode(false)} />
+                    <PresentationView 
+                        project={activeProject} 
+                        presentation={activeProject.presentations[0]} 
+                        onClose={() => setIsPresentationMode(false)} 
+                    />
                 </Suspense>
             )}
 

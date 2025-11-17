@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow } from '../types.ts';
+import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, Presentation } from '../types.ts';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -8,6 +8,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface PresentationViewProps {
     project: Project;
+    presentation: Presentation;
     onClose: () => void;
 }
 
@@ -47,11 +48,11 @@ const ReportTextBlock: React.FC<{ block: TextBlock }> = ({ block }) => (
 );
 
 
-export const PresentationView: React.FC<PresentationViewProps> = ({ project, onClose }) => {
+export const PresentationView: React.FC<PresentationViewProps> = ({ project, presentation, onClose }) => {
     const [currentPage, setCurrentPage] = useState(0);
-    const pages = project.reportLayout || [[]];
-    const totalPages = pages.length;
-
+    const slides = presentation.slides || [];
+    const totalPages = slides.length;
+    
     const kpiValues = useMemo(() => {
         const values: Record<string, number | null> = {};
         project.analysis?.kpis.forEach(kpi => {
@@ -93,35 +94,41 @@ export const PresentationView: React.FC<PresentationViewProps> = ({ project, onC
         const kpi = project.analysis?.kpis.find(k => k.id === item.i);
         if (kpi) return <ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} />;
         
-        const textBlock = project.reportTextBlocks?.find(b => b.id === item.i);
+        const textBlock = presentation.textBlocks?.find(b => b.id === item.i);
         if(textBlock) return <ReportTextBlock block={textBlock} />;
 
         return <div className="bg-slate-100 rounded-lg p-4">Unknown item: {item.i}</div>;
     };
+    
+    const currentLayout = slides[currentPage]?.layout || [];
+    const isSlides = presentation.format === 'slides';
+    const pageContainerClass = isSlides
+        ? 'aspect-video w-full max-w-7xl bg-white shadow-lg relative'
+        : 'aspect-[1/1.414] w-full max-w-4xl mx-auto my-4 bg-white shadow-lg border border-slate-200';
 
     return (
         <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-100">
             <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 py-2 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-slate-800">{project.name} - Presentation</h3>
+                <h3 className="text-lg font-bold text-slate-800">{presentation.name}</h3>
                 <button onClick={onClose} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800">
                     <X size={20} />
                 </button>
             </header>
             
             <main className="flex-1 p-4 overflow-hidden flex items-center justify-center">
-                <div className="aspect-video w-full max-w-7xl bg-white shadow-lg relative">
+                <div className={pageContainerClass}>
                      <ResponsiveGridLayout
                         className="layout"
-                        layouts={{ lg: pages[currentPage] || [] }}
+                        layouts={{ lg: currentLayout }}
                         breakpoints={{ lg: 1200 }}
                         cols={{ lg: 12 }}
-                        rowHeight={50}
+                        rowHeight={isSlides ? 50 : 35}
                         isDraggable={false}
                         isResizable={false}
                         containerPadding={[0, 0]}
                         margin={[10, 10]}
                     >
-                        {(pages[currentPage] || []).map(item => (
+                        {currentLayout.map(item => (
                             <div key={item.i} className="bg-white">
                                 {renderGridItem(item)}
                             </div>
@@ -136,7 +143,7 @@ export const PresentationView: React.FC<PresentationViewProps> = ({ project, onC
                         <ChevronLeft size={20} />
                     </button>
                     <span className="text-sm font-medium text-slate-600">
-                        Page {currentPage + 1} of {totalPages}
+                        {isSlides ? 'Slide' : 'Page'} {currentPage + 1} of {totalPages}
                     </span>
                     <button onClick={handleNextPage} disabled={currentPage === totalPages - 1} className="p-2 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50">
                         <ChevronRight size={20} />

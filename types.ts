@@ -82,6 +82,23 @@ export interface ReportLayoutItem {
     isResizable?: boolean;
 }
 
+// --- Presentation Studio 2.0 Types ---
+export interface Slide {
+    id: string;
+    layout: ReportLayoutItem[];
+}
+
+export interface Presentation {
+    id: string;
+    name: string;
+    format: 'slides' | 'document';
+    slides: Slide[];
+    themeSettings?: object;
+    textBlocks?: TextBlock[];
+    header?: TextBlock;
+    footer?: TextBlock;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -93,14 +110,17 @@ export interface Project {
         data: DataRow[];
     };
     analysis: AnalysisResult | null;
+    transformations?: Transformation[];
+    presentations?: Presentation[]; // New field for Presentation Studio 2.0
+
+    // --- Deprecated fields for backward compatibility with old Report Studio ---
     aiReport: {
         content: string;
         status: 'idle' | 'generating' | 'complete';
     } | null;
     reportLayout?: ReportLayoutItem[][];
     reportFormat?: 'slides' | 'pdf';
-    transformations?: Transformation[];
-    reportTextBlocks?: TextBlock[]; // Store text blocks separately from analysis
+    reportTextBlocks?: TextBlock[];
     reportHeader?: TextBlock;
     reportFooter?: TextBlock;
 }
@@ -118,10 +138,11 @@ export interface LayoutInfo {
 }
 
 export type ReportFormat = 'slides' | 'pdf';
+export type PresentationFormat = 'slides' | 'document';
 
 export interface ReportTemplate {
   id: string;
-  format: ReportFormat;
+  format: PresentationFormat;
   name: string;
   company: string;
   range: string;
