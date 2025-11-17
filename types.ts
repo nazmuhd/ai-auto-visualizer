@@ -47,6 +47,7 @@ export interface TextBlock {
     type: 'text';
     title: string;
     content: string;
+    style?: 'title' | 'subtitle' | 'body';
 }
 
 export interface AnalysisResult {
@@ -100,6 +101,8 @@ export interface Project {
     reportFormat?: 'slides' | 'pdf';
     transformations?: Transformation[];
     reportTextBlocks?: TextBlock[]; // Store text blocks separately from analysis
+    reportHeader?: TextBlock;
+    reportFooter?: TextBlock;
 }
 
 

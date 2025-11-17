@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat, TextBlock } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -21,6 +21,7 @@ import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateAiReport } from '../services/geminiService.ts';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
+import { v4 as uuidv4 } from 'uuid';
 
 const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
 const DataStudio = lazy(() => import('./DataStudio.tsx').then(m => ({ default: m.DataStudio })));
@@ -292,7 +293,6 @@ const ProjectWorkspace: React.FC<{
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
     onSetMaximizedChart: (chart: ChartConfig | null) => void;
-    onUpdateReportLayout: (pages: ReportLayoutItem[][]) => void;
     saveStatus: SaveStatus;
     onManualSave: () => void;
     globalFilters: Record<string, Set<string>>;
@@ -390,7 +390,7 @@ const ProjectWorkspace: React.FC<{
             {currentView === 'report-studio' && (
                 project.reportLayout ? (
                      <Suspense fallback={<ViewLoader />}>
-                        <ReportStudio project={project} onUpdateLayout={props.onUpdateReportLayout} onUpdateProject={onProjectUpdate} />
+                        <ReportStudio project={project} onUpdateProject={onProjectUpdate} />
                     </Suspense>
                 ) : (
                     <ReportStartScreen onCreateReport={onCreateReport} />
@@ -603,12 +603,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             
             const projectWithAnalysis = { ...activeProject, analysis: { ...result, charts: chartsWithVisibility, kpis: initialKpis } };
 
-            // Also pre-generate the AI report content
-            if (projectWithAnalysis.dataSource.data && projectWithAnalysis.analysis) {
-                 const reportContent = await generateAiReport(projectWithAnalysis.dataSource.data, projectWithAnalysis.analysis);
-                 projectWithAnalysis.aiReport = { content: reportContent, status: 'complete' };
-            }
-
             setActiveProject(projectWithAnalysis);
             
             if (projectWithAnalysis.id.startsWith('unsaved_')) {
@@ -683,14 +677,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }, [savedProjects, setIsSidebarOpen]);
-    
-    const handleUpdateReportLayout = useCallback((pages: ReportLayoutItem[][]) => {
-         updateActiveProject(p => ({
-            ...p,
-            reportLayout: pages
-        }));
-    }, [updateActiveProject]);
-
 
     const handleOpenRenameModal = useCallback((project: Project) => { setProjectToManage(project); setIsRenameModalOpen(true); }, []);
     
@@ -873,15 +859,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     const handleTemplateSelected = (templateId: string) => {
         if (!activeProject || !activeProject.analysis) return;
-        // A real implementation would have more complex logic here based on the templateId
-        // For this example, we'll use a simplified version of the old default layout generator
         const analysis = activeProject.analysis;
         const pages: ReportLayoutItem[][] = [[]];
         const isSlides = templateId.includes('slides');
 
+        // Create TextBlocks for title and summary
+        const titleBlock: TextBlock = {
+            id: `text_${uuidv4()}`, type: 'text', title: 'Report Title',
+            content: activeProject.name, style: 'title'
+        };
+        const summaryBlock: TextBlock = {
+            id: `text_${uuidv4()}`, type: 'text', title: 'Executive Summary',
+            content: analysis.summary.join('\n\n'), style: 'body'
+        };
+        const headerBlock: TextBlock = {
+            id: `header_${uuidv4()}`, type: 'text', title: 'Report Header',
+            content: `${activeProject.name} - ${new Date().toLocaleDateString()}`
+        };
+        const footerBlock: TextBlock = {
+            id: `footer_${uuidv4()}`, type: 'text', title: 'Report Footer',
+            content: 'Page %page% of %total%'
+        };
+        
+        const newTextBlocks = [titleBlock, summaryBlock, headerBlock, footerBlock];
+
         // Page 1: Title & Summary
-        pages[0].push({ i: 'report-title', x: 0, y: 0, w: 12, h: isSlides ? 2: 1 });
-        pages[0].push({ i: 'summary', x: 0, y: isSlides ? 2 : 1, w: 12, h: 2 });
+        pages[0].push({ i: titleBlock.id, x: 0, y: 0, w: 12, h: isSlides ? 2 : 1 });
+        pages[0].push({ i: summaryBlock.id, x: 0, y: isSlides ? 2 : 1, w: 12, h: 2 });
         analysis.kpis.slice(0, 4).forEach((kpi, index) => {
             pages[0].push({ i: kpi.id, x: (index * 3) % 12, y: isSlides ? 4 : 3, w: 3, h: 1 });
         });
@@ -897,6 +901,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             ...p,
             reportLayout: pages,
             reportFormat: isSlides ? 'slides' : 'pdf',
+            reportTextBlocks: newTextBlocks,
+            reportHeader: headerBlock,
+            reportFooter: footerBlock,
+            aiReport: null,
         }));
 
         setIsReportTemplateModalOpen(false);
@@ -939,7 +947,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
                         onSetMaximizedChart={setMaximizedChart}
-                        onUpdateReportLayout={handleUpdateReportLayout}
                         saveStatus={saveStatus}
                         onManualSave={handleManualSave}
                         globalFilters={globalFilters}

@@ -112,10 +112,10 @@ export const PresentationView: React.FC<PresentationViewProps> = ({ project, onC
                 <div className="aspect-video w-full max-w-7xl bg-white shadow-lg relative">
                      <ResponsiveGridLayout
                         className="layout"
-                        layout={pages[currentPage] || []}
-                        cols={12}
+                        layouts={{ lg: pages[currentPage] || [] }}
+                        breakpoints={{ lg: 1200 }}
+                        cols={{ lg: 12 }}
                         rowHeight={50}
-                        width={1280} // Standard presentation width
                         isDraggable={false}
                         isResizable={false}
                         containerPadding={[0, 0]}

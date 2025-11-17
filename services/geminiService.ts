@@ -371,10 +371,12 @@ export const generateChartInsight = async (chart: ChartConfig, data: DataRow[], 
     }
 };
 
-export const improveText = async (text: string, promptType: 'improve' | 'summarize'): Promise<string> => {
+export const improveText = async (text: string, promptType: 'improve' | 'summarize' | 'check_grammar'): Promise<string> => {
     const goal = promptType === 'improve'
         ? "Rewrite the following text to be more professional, clear, and impactful for a business report. Correct any grammar or spelling mistakes."
-        : "Summarize the following text into a concise paragraph, capturing the main point.";
+        : promptType === 'summarize'
+        ? "Summarize the following text into a concise paragraph, capturing the main point."
+        : "Proofread the following text. Correct any grammar or spelling mistakes and return only the corrected text. Do not change the meaning or tone unless it's grammatically necessary.";
 
     const prompt = `
     ROLE: Expert Editor & Business Writer.
