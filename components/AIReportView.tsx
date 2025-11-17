@@ -391,13 +391,13 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
 
     const renderGridItemContent = (item: ReportLayoutItem) => {
         const chart = project.analysis?.charts.find(c => c.id === item.i);
-        if (chart) return <ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} />;
+        if (chart) return <div className="w-full h-full"><ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} /></div>;
 
         const kpi = project.analysis?.kpis.find(k => k.id === item.i);
-        if (kpi) return <ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} />;
+        if (kpi) return <div className="w-full h-full"><ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} /></div>;
 
         const textBlock = presentation.textBlocks?.find(b => b.id === item.i);
-        if(textBlock) return <EditableTextBlock block={textBlock} onUpdate={b => handlePresentationUpdate(p => ({ ...p, textBlocks: (p.textBlocks || []).map(tb => tb.id === b.id ? b : tb)}))} />;
+        if(textBlock) return <div className="w-full h-full"><EditableTextBlock block={textBlock} onUpdate={b => handlePresentationUpdate(p => ({ ...p, textBlocks: (p.textBlocks || []).map(tb => tb.id === b.id ? b : tb)}))} /></div>;
 
         return <div className="p-2 text-xs text-red-500">Unknown Item: {item.i}</div>;
     }
@@ -456,7 +456,9 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                         >
                              {(presentation.slides[currentPage]?.layout || []).map(item => (
                                 <div key={item.i} className="group relative bg-white rounded-lg overflow-hidden border border-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-2 hover:ring-primary-300">
-                                    {renderGridItemContent(item)}
+                                    <div className="w-full h-full">
+                                        {renderGridItemContent(item)}
+                                    </div>
                                     <button onClick={() => handleRemoveItem(item.i)} className="absolute top-1 right-1 p-1 rounded-full bg-white/80 text-slate-500 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all z-20 shadow" title="Remove item"><Trash2 size={12} /></button>
                                 </div>
                             ))}

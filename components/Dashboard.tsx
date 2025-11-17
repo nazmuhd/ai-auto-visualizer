@@ -331,13 +331,29 @@ const ProjectWorkspace: React.FC<{
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
     onProjectUpdate: (updater: (prev: Project) => Project) => void;
-}> = ({ project, filteredData, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSelectPresentation, saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, onKpiClick, onProjectUpdate, ...props }) => {
+    editingPresentationId: string | null;
+    onBackToHub: () => void;
+    onPresentationUpdate: (updatedPresentation: Presentation) => void;
+    onPresent: (id: string) => void;
+}> = ({ 
+    project, filteredData, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSelectPresentation, 
+    saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, 
+    onKpiClick, onProjectUpdate, editingPresentationId, onBackToHub, onPresentationUpdate, onPresent, ...props 
+}) => {
     
     const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
     const { analysis } = project;
+    
+    // When a presentation is being edited, force the view to report-studio
+    useEffect(() => {
+        if (editingPresentationId) {
+            setCurrentView('report-studio');
+        }
+    }, [editingPresentationId]);
+
     if (!analysis) return null;
 
-    const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'report-studio' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => setCurrentView(view)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
+    const TabButton = ({ view, label, icon: Icon }: { view: 'dashboard' | 'report-studio' | 'data', label: string, icon: React.ElementType }) => (<button onClick={() => { setCurrentView(view); onBackToHub(); }} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center transition-colors ${currentView === view ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}><Icon size={16} className="mr-2"/>{label}</button>);
     const visibleCharts = analysis.charts.filter(c => c.visible);
     const chartRows = structureChartsByLayout(visibleCharts, props.dashboardLayout);
     const getGridColsClass = (count: number) => {
@@ -363,6 +379,8 @@ const ProjectWorkspace: React.FC<{
 
     const visibleKpis = useMemo(() => analysis.kpis.filter(kpi => kpi.visible), [analysis.kpis]);
     const ViewLoader = () => <div className="h-[calc(100vh-280px)] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
+    
+    const presentationToEdit = project.presentations?.find(p => p.id === editingPresentationId);
 
     return (
         <div className="w-full px-4 sm:px-6 lg:px-8 py-8 duration-300">
@@ -413,7 +431,18 @@ const ProjectWorkspace: React.FC<{
                 <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
             </>
             )}
-            {currentView === 'report-studio' && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
+            {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
+            {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
+                <Suspense fallback={<ViewLoader />}>
+                    <ReportStudio 
+                        project={project}
+                        presentation={presentationToEdit}
+                        onPresentationUpdate={onPresentationUpdate}
+                        onBackToHub={onBackToHub}
+                        onPresent={onPresent}
+                    />
+                </Suspense>
+            )}
             {currentView === 'data' && <div className="h-[calc(100vh-280px)]"><Suspense fallback={<ViewLoader />}><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></Suspense></div>}
         </div>
     );
@@ -923,23 +952,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         if (!activeProject) {
             return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={status === 'parsing'} progress={progress} error={error} />;
         }
-        
-        if (editingPresentationId) {
-            const presentationToEdit = activeProject.presentations?.find(p => p.id === editingPresentationId);
-            if (presentationToEdit) {
-                 return (
-                    <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
-                        <ReportStudio 
-                           project={activeProject}
-                           presentation={presentationToEdit}
-                           onPresentationUpdate={handlePresentationUpdate}
-                           onBackToHub={() => setEditingPresentationId(null)}
-                           onPresent={(id) => setPresentingPresentationId(id)}
-                        />
-                    </Suspense>
-                 );
-            }
-        }
 
         switch (status) {
             case 'idle':
@@ -968,6 +980,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         onRemoveFilter={handleRemoveFilter}
                         onKpiClick={handleKpiClick}
                         onProjectUpdate={updateActiveProject}
+                        editingPresentationId={editingPresentationId}
+                        onBackToHub={() => setEditingPresentationId(null)}
+                        onPresentationUpdate={handlePresentationUpdate}
+                        onPresent={setPresentingPresentationId}
                     />;
                 }
                 break;
@@ -1005,7 +1021,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             />
             <div className={`flex-1 transition-all duration-300 md:ml-20 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
                 <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
-                <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>{renderMainContent()}</main>
+                <main ref={mainContentRef} className="h-full overflow-y-auto relative z-10" style={{ scrollBehavior: 'smooth' }}>
+                     {/* The main content area is now full-width by default */}
+                    {renderMainContent()}
+                </main>
             </div>
             
             {presentingPresentationId && activeProject && presentationToPresent && (
