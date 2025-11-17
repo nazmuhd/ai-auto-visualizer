@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Project, DataRow, ChatMessage, Transformation, SortTransformation, HideColumnsTransformation, FilterTransformation, AddColumnTransformation, GroupByTransformation, RenameColumnTransformation, TransformTextTransformation } from '../types.ts';
 import { 
     ChevronLeft, ChevronRight, Sparkles, Send, Loader2, User, Bot, ChevronsLeft, ChevronsRight, Maximize,
     Minimize, ArrowUp, ArrowDown, MoreVertical, EyeOff, X, Columns, Filter as FilterIcon, Settings, PlusCircle,
-    BarChart3, CaseSensitive, Pencil, Sigma, CalendarDays, ArrowDown01, ArrowUp10
+    BarChart3, CaseSensitive, Pencil, Sigma, CalendarDays, ArrowDown01, ArrowUp10, PanelLeft, PanelRight
 } from 'lucide-react';
 import { queryDataWithAI } from '../services/geminiService.ts';
 import { ChooseColumnsModal } from './modals/ChooseColumnsModal.tsx';
@@ -188,6 +189,41 @@ const detectColumnType = (data: DataRow[], columnName: string): 'text' | 'number
     return 'text';
 };
 
+const AppliedStepsPanel: React.FC<{
+    transformations: Transformation[];
+    isGrouped: boolean;
+    onAddColumn: () => void;
+    onChooseColumns: () => void;
+    onFilterRows: () => void;
+    onGroupBy: () => void;
+    onRemoveTransformation: (index: number) => void;
+}> = ({ transformations, isGrouped, onAddColumn, onChooseColumns, onFilterRows, onGroupBy, onRemoveTransformation }) => (
+    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <header className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+            <h3 className="font-semibold text-slate-900">Applied Steps</h3>
+        </header>
+        <div className="flex-shrink-0 p-3 space-y-2 border-b border-slate-100">
+            <button onClick={onAddColumn} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><PlusCircle size={14} className="mr-2"/> Add Column</button>
+            <button onClick={onChooseColumns} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><Columns size={14} className="mr-2"/> Choose Columns</button>
+            <button onClick={onFilterRows} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><FilterIcon size={14} className="mr-2"/> Filter Rows</button>
+            <button onClick={onGroupBy} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><BarChart3 size={14} className="mr-2"/> Group By</button>
+        </div>
+        <div className="flex-1 p-3 space-y-2 overflow-y-auto custom-scrollbar">
+            {transformations.map((t, i) => (
+                <div key={i} className="group flex items-center justify-between p-2 rounded-md bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <div className="flex items-center text-sm text-slate-600">
+                        <span className="font-mono text-xs mr-2 text-slate-400">{i + 1}.</span>
+                        <Settings size={14} className="mr-2 text-slate-400" />
+                        <span className="truncate">{getTransformationDescription(t)}</span>
+                    </div>
+                    <button onClick={() => onRemoveTransformation(i)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500"><X size={14} /></button>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+
 const AskAI: React.FC<{ data: DataRow[] }> = ({ data }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([
         { role: 'ai', content: "Hello! Ask me anything about your current data view." }
@@ -282,7 +318,7 @@ const ColumnContextMenu: React.FC<{
     const menuStyle = { top: `${y}px`, left: `${x}px` };
 
     return (
-        <div ref={menuRef} style={menuStyle} className="fixed bg-white rounded-lg shadow-lg border border-slate-200 z-[9999] w-56 py-1">
+        <div ref={menuRef} style={menuStyle} className="fixed bg-white rounded-lg shadow-lg border border-slate-200 w-56 py-1 z-[100001]">
             {columnType === 'text' && <>
                 <button onMouseDown={() => onSort(column, 'asc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowUp size={14} className="mr-2"/> Sort A → Z</button>
                 <button onMouseDown={() => onSort(column, 'desc')} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center"><ArrowDown size={14} className="mr-2"/> Sort Z → A</button>
@@ -307,9 +343,28 @@ const ColumnContextMenu: React.FC<{
     );
 };
 
+const DataTable: React.FC<{
+    headers: string[];
+    data: DataRow[];
+    sortConfig: { key: string, direction: 'asc' | 'desc' } | null;
+    filteredColumns: Set<string>;
+    onSort: (key: string) => void;
+    onMenuOpen: (e: React.MouseEvent, h: string) => void;
+}> = ({ headers, data, sortConfig, filteredColumns, onSort, onMenuOpen }) => (
+    <div className="flex-1 relative">
+        <div className="absolute inset-0 overflow-auto custom-scrollbar">
+            <table className="min-w-full text-sm text-left">
+                <thead className="bg-slate-50 sticky top-0 z-10">
+                    <tr>{headers.map(h => (<th key={h} className="px-4 py-2.5 font-medium text-slate-600 uppercase tracking-wider text-xs whitespace-nowrap group"><div className="flex items-center justify-between"><button onClick={() => onSort(h)} className="flex items-center w-full text-left">{h}{sortConfig?.key === h && (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="ml-2" /> : <ArrowDown size={14} className="ml-2" />)}{filteredColumns.has(h) && <FilterIcon size={12} className="ml-2 text-primary-600" />}</button><button onClick={(e) => onMenuOpen(e, h)} className="ml-2 p-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-200"><MoreVertical size={14} /></button></div></th>))}</tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">{data.map((row, i) => (<tr key={i} className="hover:bg-slate-50">{headers.map(h => (<td key={`${i}-${h}`} className="px-4 py-3 text-slate-600 whitespace-nowrap max-w-xs truncate" title={String(row[h])}>{String(row[h] ?? '').trim() ? String(row[h]) : <em className="text-slate-400">null</em>}</td>))}</tr>))}</tbody>
+            </table>
+        </div>
+    </div>
+);
+
+
 export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
-    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
-    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
     const [page, setPage] = useState(0);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -317,11 +372,17 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     const [isFilterModalOpen, setFilterModalOpen] = useState(false);
     const [isAddColumnModalOpen, setAddColumnModalOpen] = useState(false);
     const [isGroupByModalOpen, setGroupByModalOpen] = useState(false);
+
+    // Normal view state
+    const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+
+    // Fullscreen view state
+    const [isFsLeftPanelOpen, setIsFsLeftPanelOpen] = useState(false);
+    const [isFsRightPanelOpen, setIsFsRightPanelOpen] = useState(false);
     
     const transformations = project.transformations || [];
-
     const originalData = project.dataSource.data;
-    
     const isGrouped = useMemo(() => transformations.some(t => t.type === 'group_by'), [transformations]);
 
     const { transformedData, columnsAfterTransform } = useMemo(() => {
@@ -329,7 +390,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         let columns: string[] = data.length > 0 ? Object.keys(data[0]) : [];
         
         for (const transform of transformations) {
-            data = applyTransformations(data, [transform]); // Apply one by one to get intermediate columns
+            data = applyTransformations(data, [transform]);
             if (data.length > 0) columns = Object.keys(data[0]);
         }
         return { transformedData: data, columnsAfterTransform: columns };
@@ -337,9 +398,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     
     const columnTypes = useMemo(() => {
         const types: Record<string, 'text' | 'number' | 'date'> = {};
-        columnsAfterTransform.forEach(col => {
-            types[col] = detectColumnType(transformedData, col);
-        });
+        columnsAfterTransform.forEach(col => { types[col] = detectColumnType(transformedData, col); });
         return types;
     }, [columnsAfterTransform, transformedData]);
 
@@ -350,17 +409,12 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     }, [transformations]);
 
     const sortConfig = useMemo(() => {
-        const lastSort = [...transformations].reverse().find(t => t.type === 'sort') as SortTransformation | undefined;
-        return lastSort ? lastSort.payload : null;
-    }, [transformations]);
+        return [...transformations].reverse().find(t => t.type === 'sort') as SortTransformation | undefined;
+    }, [transformations])?.payload || null;
     
     const filteredColumnsSet = useMemo(() => {
         const filtered = new Set<string>();
-        transformations.forEach(t => {
-            if (t.type === 'filter') {
-                t.payload.clauses.forEach(clause => filtered.add(clause.column));
-            }
-        });
+        transformations.forEach(t => { if (t.type === 'filter') t.payload.clauses.forEach(clause => filtered.add(clause.column)); });
         return filtered;
     }, [transformations]);
 
@@ -404,10 +458,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
             return;
         }
         const values = transformedData.map(row => Number(row[column])).filter(n => !isNaN(n));
-        if (values.length === 0) {
-            alert('No valid numbers to calculate.');
-            return;
-        }
+        if (values.length === 0) { alert('No valid numbers to calculate.'); return; }
 
         let result: number;
         switch (op) {
@@ -421,58 +472,88 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     const handleMenuOpen = (e: React.MouseEvent, h: string) => {
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
-        setContextMenu({
-            x: rect.left,
-            y: rect.bottom + 4,
-            column: h,
-            columnType: columnTypes[h]
-        });
+        setContextMenu({ x: rect.left, y: rect.bottom + 4, column: h, columnType: columnTypes[h] });
     };
     
     const visibleHeaders = useMemo(() => columnsAfterTransform.filter(h => !hiddenColumnsSet.has(h)), [columnsAfterTransform, hiddenColumnsSet]);
     const totalPages = Math.ceil(transformedData.length / ROWS_PER_PAGE);
     const paginatedData = transformedData.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
 
+    const commonModals = (
+        <>
+            {isChooseColumnsModalOpen && <ChooseColumnsModal allColumns={columnsAfterTransform} hiddenColumns={hiddenColumnsSet} onClose={() => setIsChooseColumnsModalOpen(false)} onApply={(colsToHide) => addTransformation({ type: 'hide_columns', payload: { columns: colsToHide } })} />}
+            {isFilterModalOpen && <FilterRowsModal columns={columnsAfterTransform} onClose={() => setFilterModalOpen(false)} onApply={(filter) => addTransformation(filter)} />}
+            {isAddColumnModalOpen && <AddColumnModal columns={columnsAfterTransform} onClose={() => setAddColumnModalOpen(false)} onApply={(newColumn) => addTransformation(newColumn)} />}
+            {isGroupByModalOpen && <GroupByModal columns={columnsAfterTransform} onClose={() => setGroupByModalOpen(false)} onApply={(grouping) => addTransformation(grouping)} />}
+        </>
+    );
+
+    const FullscreenHeader = () => (
+        <header className="px-4 py-2 bg-white border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+            <div className="flex items-center gap-2">
+                <button onClick={() => setIsFsLeftPanelOpen(p => !p)} title="Toggle Applied Steps" className={`p-2 rounded-md hover:bg-slate-100 ${isFsLeftPanelOpen ? 'bg-primary-50 text-primary-600' : 'text-slate-500'}`}><PanelLeft size={16}/></button>
+                <h3 className="font-semibold text-slate-900">Data Canvas (Fullscreen)</h3>
+            </div>
+            <div className="flex items-center space-x-4">
+                <div className="text-sm text-slate-500">{page * ROWS_PER_PAGE + 1}-{Math.min((page + 1) * ROWS_PER_PAGE, transformedData.length)} of {transformedData.length}</div>
+                <div className="flex items-center space-x-1">
+                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronLeft size={16} /></button>
+                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronRight size={16} /></button>
+                </div>
+            </div>
+             <div className="flex items-center gap-2">
+                 <button onClick={() => setIsFsRightPanelOpen(p => !p)} title="Toggle Ask AI" className={`p-2 rounded-md hover:bg-slate-100 ${isFsRightPanelOpen ? 'bg-primary-50 text-primary-600' : 'text-slate-500'}`}><PanelRight size={16}/></button>
+                 <button onClick={() => setIsFullscreen(false)} title="Exit Fullscreen" className="p-2 rounded-md hover:bg-slate-100 text-slate-500"><Minimize size={16} /></button>
+             </div>
+        </header>
+    );
+
+    if (isFullscreen) {
+        return (
+            // This top-level wrapper creates the stacking context for the entire fullscreen experience.
+            <div className="fixed inset-0 z-[100000]">
+                {commonModals}
+                <ColumnContextMenu menuState={contextMenu} onClose={() => setContextMenu(null)} onSort={handleSort} onHide={handleHideColumn} onRename={handleRenameColumn} onTextTransform={handleTextTransform} onQuickCalc={handleQuickCalc} onFilter={() => setFilterModalOpen(true)} />
+
+                {/* This div is the actual fullscreen UI, with a lower z-index to sit behind modals */}
+                <div className="absolute inset-0 z-[-1] bg-slate-100 flex flex-col">
+                    <FullscreenHeader />
+                    <div className="flex-1 flex p-2 gap-2 min-h-0">
+                        <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isFsLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
+                           {isFsLeftPanelOpen && <AppliedStepsPanel transformations={transformations} isGrouped={isGrouped} onAddColumn={() => setAddColumnModalOpen(true)} onChooseColumns={() => setIsChooseColumnsModalOpen(true)} onFilterRows={() => setFilterModalOpen(true)} onGroupBy={() => setGroupByModalOpen(true)} onRemoveTransformation={removeTransformation} />}
+                        </aside>
+                        <main className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <DataTable headers={visibleHeaders} data={paginatedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
+                        </main>
+                        <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isFsRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}>
+                            {isFsRightPanelOpen && <AskAI data={transformedData} />}
+                        </aside>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
-            <ColumnContextMenu 
-                menuState={contextMenu}
-                onClose={() => setContextMenu(null)}
-                onSort={handleSort}
-                onHide={handleHideColumn}
-                onRename={handleRenameColumn}
-                onTextTransform={handleTextTransform}
-                onQuickCalc={handleQuickCalc}
-                onFilter={() => { setFilterModalOpen(true); setContextMenu(null); }}
-            />
+            {createPortal(
+                <>
+                    {commonModals}
+                    <ColumnContextMenu menuState={contextMenu} onClose={() => setContextMenu(null)} onSort={handleSort} onHide={handleHideColumn} onRename={handleRenameColumn} onTextTransform={handleTextTransform} onQuickCalc={handleQuickCalc} onFilter={() => setFilterModalOpen(true)} />
+                </>,
+                document.body
+            )}
+            
             <div className="flex h-full w-full bg-slate-100/50">
-                <aside className={`flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-300 ease-in-out ${isLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
-                    <header className="px-4 py-3 border-b border-slate-100 flex-shrink-0"><h3 className="font-semibold text-slate-900">Applied Steps</h3></header>
-                    <div className="flex-shrink-0 p-3 space-y-2 border-b border-slate-100">
-                        <button onClick={() => setAddColumnModalOpen(true)} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><PlusCircle size={14} className="mr-2"/> Add Column</button>
-                        <button onClick={() => setIsChooseColumnsModalOpen(true)} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><Columns size={14} className="mr-2"/> Choose Columns</button>
-                        <button onClick={() => setFilterModalOpen(true)} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><FilterIcon size={14} className="mr-2"/> Filter Rows</button>
-                        <button onClick={() => setGroupByModalOpen(true)} disabled={isGrouped} className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"><BarChart3 size={14} className="mr-2"/> Group By</button>
-                    </div>
-                    <div className="flex-1 p-3 space-y-2 overflow-y-auto">
-                        {transformations.map((t, i) => (
-                            <div key={i} className="group flex items-center justify-between p-2 rounded-md bg-slate-50 border border-slate-200 hover:bg-slate-100">
-                                <div className="flex items-center text-sm text-slate-600">
-                                    <span className="font-mono text-xs mr-2 text-slate-400">{i + 1}.</span>
-                                    <Settings size={14} className="mr-2 text-slate-400" />
-                                    <span>{getTransformationDescription(t)}</span>
-                                </div>
-                                <button onClick={() => removeTransformation(i)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500"><X size={14} /></button>
-                            </div>
-                        ))}
-                    </div>
+                <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
+                    <AppliedStepsPanel transformations={transformations} isGrouped={isGrouped} onAddColumn={() => setAddColumnModalOpen(true)} onChooseColumns={() => setIsChooseColumnsModalOpen(true)} onFilterRows={() => setFilterModalOpen(true)} onGroupBy={() => setGroupByModalOpen(true)} onRemoveTransformation={removeTransformation} />
                 </aside>
 
                 <main className="flex-1 flex flex-col min-w-0 relative px-2">
                     <button onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)} title={isLeftPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -left-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsLeft size={16} className={`transition-transform duration-300 ${!isLeftPanelOpen && 'rotate-180'}`} /></button>
                     
-                    <div className={`w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden duration-300 ${isFullscreen ? 'fixed inset-0 z-[99999] rounded-none' : 'relative'}`}>
-                        <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+                    <div className="w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
+                        <header className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
                             <h3 className="font-semibold text-slate-900">Data Canvas</h3>
                             <div className="flex items-center space-x-4">
                                 <div className="text-sm text-slate-500">{page * ROWS_PER_PAGE + 1}-{Math.min((page + 1) * ROWS_PER_PAGE, transformedData.length)} of {transformedData.length}</div>
@@ -480,29 +561,18 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                                     <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronLeft size={16} /></button>
                                     <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronRight size={16} /></button>
                                 </div>
-                                <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500">{isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}</button>
+                                <button onClick={() => setIsFullscreen(true)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500"><Maximize size={16} /></button>
                             </div>
-                        </div>
-                        <div className="flex-1 relative">
-                            <div className="absolute inset-0 overflow-auto custom-scrollbar">
-                                <table className="min-w-full text-sm text-left">
-                                    <thead className="bg-slate-50 sticky top-0 z-10">
-                                        <tr>{visibleHeaders.map(h => (<th key={h} className="px-4 py-2.5 font-medium text-slate-600 uppercase tracking-wider text-xs whitespace-nowrap group"><div className="flex items-center justify-between"><button onClick={() => handleSort(h)} className="flex items-center w-full text-left">{h}{sortConfig?.key === h && (sortConfig.direction === 'asc' ? <ArrowUp size={14} className="ml-2" /> : <ArrowDown size={14} className="ml-2" />)}{filteredColumnsSet.has(h) && <FilterIcon size={12} className="ml-2 text-primary-600" />}</button><button onClick={(e) => handleMenuOpen(e, h)} className="ml-2 p-1 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-200"><MoreVertical size={14} /></button></div></th>))}</tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">{paginatedData.map((row, i) => (<tr key={i} className="hover:bg-slate-50">{visibleHeaders.map(h => (<td key={`${i}-${h}`} className="px-4 py-3 text-slate-600 whitespace-nowrap max-w-xs truncate" title={String(row[h])}>{String(row[h] ?? '').trim() ? String(row[h]) : <em className="text-slate-400">null</em>}</td>))}</tr>))}</tbody>
-                                </table>
-                            </div>
-                        </div>
+                        </header>
+                        <DataTable headers={visibleHeaders} data={paginatedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
                     </div>
                     <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} title={isRightPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -right-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsRight size={16} className={`transition-transform duration-300 ${isRightPanelOpen && 'rotate-180'}`} /></button>
                 </main>
                 
-                <aside className={`flex flex-col transition-all duration-300 ease-in-out ${isRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}><AskAI data={transformedData} /></aside>
+                <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}>
+                    <AskAI data={transformedData} />
+                </aside>
             </div>
-            {isChooseColumnsModalOpen && <ChooseColumnsModal allColumns={columnsAfterTransform} hiddenColumns={hiddenColumnsSet} onClose={() => setIsChooseColumnsModalOpen(false)} onApply={(colsToHide) => addTransformation({ type: 'hide_columns', payload: { columns: colsToHide } })} />}
-            {isFilterModalOpen && <FilterRowsModal columns={columnsAfterTransform} onClose={() => setFilterModalOpen(false)} onApply={(filter) => addTransformation(filter)} />}
-            {isAddColumnModalOpen && <AddColumnModal columns={columnsAfterTransform} onClose={() => setAddColumnModalOpen(false)} onApply={(newColumn) => addTransformation(newColumn)} />}
-            {isGroupByModalOpen && <GroupByModal columns={columnsAfterTransform} onClose={() => setGroupByModalOpen(false)} onApply={(grouping) => addTransformation(grouping)} />}
         </>
     );
 };
