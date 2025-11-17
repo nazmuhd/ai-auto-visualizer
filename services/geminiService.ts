@@ -270,54 +270,6 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
 };
 
 
-export const generateAiReport = async (sample: DataRow[], analysis: AnalysisResult): Promise<string> => {
-    const dataStr = JSON.stringify(sample.slice(0, 20)); // Use a small sample
-    const analysisContext = JSON.stringify({
-        summary: analysis.summary,
-        kpis: analysis.kpis.map(k => k.title),
-        charts: analysis.charts.map(c => c.title),
-    });
-
-    const prompt = `
-    ROLE: You are a senior business consultant writing a report for a client.
-    TASK: Analyze the provided data summary and raw data sample to generate a professional, insightful report in Markdown format. The tone should be formal, confident, and actionable.
-
-    AVAILABLE DATA & ANALYSIS CONTEXT:
-    ${analysisContext}
-
-    RAW DATA SAMPLE (for context on values and columns):
-    ${dataStr}
-
-    REPORT REQUIREMENTS:
-    Your entire response MUST be valid Markdown.
-    1.  **Executive Summary:** Start with a heading "### Executive Summary". Write a concise, high-level paragraph summarizing the most critical insights and takeaways.
-    2.  **Key Findings:** Create a heading "### Key Findings". Below it, list 2-4 of the most important findings as bullet points. Each bullet point MUST be bolded and followed by a short explanation of why it matters. For example:
-        *   **West Region Outperforms All Others:** The West region shows significantly higher sales, suggesting a strong market fit or a successful regional strategy.
-    3.  **Actionable Recommendations:** Create a heading "### Actionable Recommendations". Below it, list 2-3 concrete, strategic next steps the business should consider based on the findings. Frame them as clear recommendations. For example:
-        *   **Recommendation: Double-down on marketing spend in the West region to capitalize on strong performance.**
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                temperature: 0.5,
-            }
-        });
-
-        if (!response.text) {
-            throw new Error("The AI consultant returned an empty report.");
-        }
-
-        return response.text;
-    } catch (error) {
-        console.error("AI Report Generation Error:", error);
-        throw new Error("Failed to generate the AI report. The consultant might be on a coffee break. Please try again.");
-    }
-};
-
-
 export const queryDataWithAI = async (sample: DataRow[], question: string): Promise<string> => {
     const dataStr = JSON.stringify(sample);
     let columnsInfo = "Unknown";

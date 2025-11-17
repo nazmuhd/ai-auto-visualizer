@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, ReportFormat, TextBlock, ReportTemplate, Presentation, PresentationFormat } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, PresentationFormat, TextBlock, ReportTemplate, Presentation } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -553,7 +553,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         } else {
             projectToUpdate = {
                 id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
-                dataSource: { name: file.name, data: [] }, analysis: null, aiReport: null,
+                dataSource: { name: file.name, data: [] }, analysis: null,
             };
             setActiveProject(projectToUpdate);
         }
@@ -638,7 +638,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleCreateProject = useCallback((name: string, description: string) => {
         const newProject: Project = {
             id: new Date().toISOString(), name, description, createdAt: new Date(), lastSaved: new Date(),
-            dataSource: { name: 'No data source', data: [] }, analysis: null, aiReport: null,
+            dataSource: { name: 'No data source', data: [] }, analysis: null,
         };
         const updatedProjects = [newProject, ...savedProjects];
         setSavedProjects(updatedProjects);
@@ -869,20 +869,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         
         try {
             const newPresentation = await generateInitialPresentation(activeProject.analysis, template, activeProject.name);
-
-            // SHIM: Convert new presentation format to old project structure for backward compatibility with PresentationView
-            const oldReportLayout = newPresentation.slides.map(s => s.layout);
-            const oldReportTextBlocks = newPresentation.textBlocks || [];
             
             updateActiveProject(p => ({
                 ...p,
                 presentations: [...(p.presentations || []), newPresentation],
-                reportLayout: oldReportLayout,
-                reportFormat: newPresentation.format === 'document' ? 'pdf' : 'slides',
-                reportTextBlocks: oldReportTextBlocks,
-                reportHeader: newPresentation.header,
-                reportFooter: newPresentation.footer,
-                aiReport: null,
             }));
 
             setCurrentView('report-studio');
@@ -900,18 +890,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         updateActiveProject(p => {
             if (!p) return p;
             const newPresentations = p.presentations ? p.presentations.map(pres => pres.id === updatedPresentation.id ? updatedPresentation : pres) : [updatedPresentation];
-            
-            // SHIM for backward compatibility with PresentationView
-            const oldReportLayout = updatedPresentation.slides.map(s => s.layout);
-            const oldReportTextBlocks = updatedPresentation.textBlocks || [];
-
             return {
                 ...p,
                 presentations: newPresentations,
-                reportLayout: oldReportLayout,
-                reportTextBlocks: oldReportTextBlocks,
-                reportHeader: updatedPresentation.header,
-                reportFooter: updatedPresentation.footer,
             };
         });
     }, [updateActiveProject]);

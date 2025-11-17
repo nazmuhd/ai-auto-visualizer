@@ -111,18 +111,7 @@ export interface Project {
     };
     analysis: AnalysisResult | null;
     transformations?: Transformation[];
-    presentations?: Presentation[]; // New field for Presentation Studio 2.0
-
-    // --- Deprecated fields for backward compatibility with old Report Studio ---
-    aiReport: {
-        content: string;
-        status: 'idle' | 'generating' | 'complete';
-    } | null;
-    reportLayout?: ReportLayoutItem[][];
-    reportFormat?: 'slides' | 'pdf';
-    reportTextBlocks?: TextBlock[];
-    reportHeader?: TextBlock;
-    reportFooter?: TextBlock;
+    presentations?: Presentation[];
 }
 
 
@@ -137,7 +126,6 @@ export interface LayoutInfo {
   usedBy: string;
 }
 
-export type ReportFormat = 'slides' | 'pdf';
 export type PresentationFormat = 'slides' | 'document';
 
 export interface ReportTemplate {
