@@ -153,5 +153,3 @@ export const PresentationView: React.FC<PresentationViewProps> = ({ project, pre
         </div>
     );
 };
-
-export default PresentationView;

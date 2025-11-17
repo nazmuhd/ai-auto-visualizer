@@ -3,7 +3,9 @@ import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, 
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
-import { BarChart3, TrendingUp, Type, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay } from 'lucide-react';
+import { addSlideWithAI } from '../services/geminiService.ts';
+// FIX: Renamed `Type` to `TypeIcon` to avoid a name collision with the `Type` enum from `@google/genai` which is used in `geminiService`.
+import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2 } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -86,23 +88,86 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
 
 
 // --- SUB-COMPONENTS for PresentationStudio ---
+const SlidePreview: React.FC<{
+    slide: Slide;
+    project: Project;
+    presentation: Presentation;
+    isSlides: boolean;
+}> = ({ slide, project, presentation, isSlides }) => {
+    
+    const getItemType = (itemId: string) => {
+        if (itemId.startsWith('chart_')) return 'chart';
+        if (project.analysis?.kpis.some(k => k.id === itemId)) return 'kpi';
+        if (itemId.startsWith('text_')) {
+             const textBlock = presentation.textBlocks?.find(t => t.id === itemId);
+             return textBlock?.style === 'title' ? 'title' : 'text';
+        }
+        return 'unknown';
+    };
+
+    const maxRows = isSlides ? 8 : 12;
+
+    return (
+        <div className={`relative w-full rounded-md bg-white overflow-hidden shadow-sm border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}>
+            <div className={`grid grid-cols-12 gap-px`} style={{gridTemplateRows: `repeat(${maxRows}, 1fr)`, height: '100%'}}>
+                {slide.layout.map(item => {
+                    const type = getItemType(item.i);
+                    const rowEnd = Math.min(item.y + item.h, maxRows);
+                    const style = {
+                        gridColumn: `${item.x + 1} / span ${item.w}`,
+                        gridRow: `${item.y + 1} / span ${rowEnd - item.y}`,
+                    };
+                    let bgColor = 'bg-slate-200';
+                    if (type === 'chart') bgColor = 'bg-sky-200';
+                    if (type === 'kpi') bgColor = 'bg-emerald-200';
+                    if (type === 'text') bgColor = 'bg-slate-300';
+                    if (type === 'title') bgColor = 'bg-slate-400';
+
+                    return <div key={item.i} style={style} className={`${bgColor} rounded-sm`}></div>;
+                })}
+            </div>
+        </div>
+    );
+};
 
 const SlideNavigator: React.FC<{
     slides: Slide[];
     currentPage: number;
+    project: Project;
+    presentation: Presentation;
+    navigatorViewMode: 'filmstrip' | 'list';
+    setNavigatorViewMode: (mode: 'filmstrip' | 'list') => void;
+    onClose: () => void;
     onSelectPage: (index: number) => void;
     onAddPage: () => void;
+    onAddPageWithAI: (prompt: string) => Promise<void>;
     onReorderPages: (newSlides: Slide[]) => void;
     onDeletePage: (index: number) => void;
-}> = ({ slides, currentPage, onSelectPage, onAddPage, onReorderPages, onDeletePage }) => {
+}> = ({ slides, currentPage, project, presentation, navigatorViewMode, setNavigatorViewMode, onClose, onSelectPage, onAddPage, onAddPageWithAI, onReorderPages, onDeletePage }) => {
+    const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+    const [showAiPrompt, setShowAiPrompt] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isGeneratingSlide, setIsGeneratingSlide] = useState(false);
+    const newMenuRef = useRef<HTMLDivElement>(null);
+    
     const dragItem = useRef<number | null>(null);
     const dragOverItem = useRef<number | null>(null);
 
-    const handleDragStart = (e: React.DragEvent<HTMLLIElement>, index: number) => {
-        dragItem.current = index;
-        e.dataTransfer.effectAllowed = 'move';
-    };
-    const handleDragEnter = (e: React.DragEvent<HTMLLIElement>, index: number) => { dragOverItem.current = index; };
+    const isSlides = presentation.format === 'slides';
+    const pageName = isSlides ? 'Slide' : 'Page';
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
+                setIsNewMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleDragStart = (e: React.DragEvent<HTMLLIElement>, index: number) => { dragItem.current = index; e.dataTransfer.effectAllowed = 'move'; };
+    const handleDragEnter = (_: React.DragEvent<HTMLLIElement>, index: number) => { dragOverItem.current = index; };
     const handleDragEnd = () => {
         if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
             const newSlides = [...slides];
@@ -113,28 +178,90 @@ const SlideNavigator: React.FC<{
         dragItem.current = null;
         dragOverItem.current = null;
     };
+    
+    const handleAiGenerate = async () => {
+        if (!aiPrompt.trim()) return;
+        setIsGeneratingSlide(true);
+        await onAddPageWithAI(aiPrompt);
+        setIsGeneratingSlide(false);
+        setAiPrompt('');
+        setShowAiPrompt(false);
+    };
+
+    const getSlideTitle = (slide: Slide) => {
+        const allTextBlocks = presentation.textBlocks || [];
+        const titleBlock = slide.layout
+            .map(item => allTextBlocks.find(tb => tb.id === item.i))
+            .find(block => block && block.style === 'title');
+
+        return titleBlock?.content?.trim() || `Untitled ${pageName}`;
+    };
 
     return (
-        <aside className="w-56 bg-white border-r border-slate-200 flex flex-col p-3">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">Slides</h3>
-            <ul className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                {slides.map((slide, index) => (
-                    <li key={slide.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className="group cursor-pointer">
-                        <div className="flex items-start space-x-2">
-                            <span className="text-xs font-medium text-slate-400 pt-1">{index + 1}</span>
-                            <div onClick={() => onSelectPage(index)} className={`aspect-video w-full rounded-md border-2 p-1 transition-colors ${currentPage === index ? 'border-primary-500 bg-primary-50' : 'border-slate-300 bg-slate-100 hover:border-slate-400'}`}><div className="w-full h-full bg-white border border-slate-300 rounded-sm flex items-center justify-center"><File size={24} className="text-slate-400" /></div></div>
-                            <div className="flex flex-col pt-1">
-                                 <button className="p-1 text-slate-400 cursor-move"><GripVertical size={14} /></button>
-                                 <button onClick={() => onDeletePage(index)} className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
-                            </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-lg h-full flex flex-col p-3">
+            <div className="flex-shrink-0 space-y-3">
+                 <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-md">
+                        <button onClick={() => setNavigatorViewMode('filmstrip')} className={`p-1.5 rounded-md ${navigatorViewMode === 'filmstrip' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={16} /></button>
+                        <button onClick={() => setNavigatorViewMode('list')} className={`p-1.5 rounded-md ${navigatorViewMode === 'list' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><List size={16} /></button>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-md"><X size={16} /></button>
+                </div>
+                <div className="relative" ref={newMenuRef}>
+                    <div className="flex">
+                        <button onClick={onAddPage} className="flex-1 px-4 py-2 bg-primary-100/80 text-primary-700 hover:bg-primary-100 rounded-l-lg font-semibold flex items-center justify-center text-sm"><Plus size={16} className="mr-1.5"/> New</button>
+                        <button onClick={() => setIsNewMenuOpen(p => !p)} className="px-2 bg-primary-100/80 text-primary-700 hover:bg-primary-100 rounded-r-lg"><ChevronDown size={16} /></button>
+                    </div>
+                    {isNewMenuOpen && (
+                        <div className="absolute top-full mt-2 w-60 bg-white rounded-lg shadow-xl border border-slate-100 py-1.5 z-20">
+                            <button onClick={() => { setShowAiPrompt(true); setIsNewMenuOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><Sparkles size={16} className="mr-3 text-primary-500"/> Add new with AI</button>
+                            <button onClick={() => { onAddPage(); setIsNewMenuOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><File size={16} className="mr-3 text-slate-400"/> Add blank {pageName.toLowerCase()}</button>
                         </div>
-                    </li>
-                ))}
-            </ul>
-             <button onClick={onAddPage} className="mt-3 w-full px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center justify-center">
-                <PlusCircle size={14} className="mr-2"/> Add Slide
-            </button>
-        </aside>
+                    )}
+                </div>
+
+                {showAiPrompt && (
+                    <div className="p-2 bg-primary-50 border border-primary-200 rounded-lg">
+                        <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder={`Describe the ${pageName.toLowerCase()} you want...`} className="w-full text-sm p-2 border border-slate-300 rounded-md h-20 resize-none focus:ring-primary-500" />
+                        <div className="flex justify-end gap-2 mt-2">
+                             <button onClick={() => setShowAiPrompt(false)} className="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md">Cancel</button>
+                             <button onClick={handleAiGenerate} disabled={isGeneratingSlide} className="px-3 py-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md flex items-center disabled:bg-primary-300">{isGeneratingSlide ? <Loader2 size={12} className="animate-spin mr-1.5"/> : <Send size={12} className="mr-1.5" />} Generate</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+            
+            {navigatorViewMode === 'filmstrip' ? (
+                <ul className="flex-1 overflow-y-auto mt-3 -mx-1 px-1 space-y-4 custom-scrollbar">
+                    {slides.map((slide, index) => (
+                        <li key={slide.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className="group cursor-pointer relative" onClick={() => onSelectPage(index)}>
+                             <div className="flex items-start space-x-2">
+                                 <div className={`flex-1 transition-all duration-200 ${currentPage === index ? 'ring-2 ring-primary-500 ring-offset-2 rounded-lg' : ''}`}>
+                                    <SlidePreview slide={slide} project={project} presentation={presentation} isSlides={isSlides} />
+                                 </div>
+                                 <div className="flex flex-col pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="p-1 text-slate-400 cursor-move"><GripVertical size={14} /></div>
+                                    <button onClick={(e) => { e.stopPropagation(); onDeletePage(index); }} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
+                                 </div>
+                             </div>
+                             <span className="absolute bottom-2 left-2 text-xs font-medium text-slate-500 bg-white/70 px-1.5 py-0.5 rounded">{index + 1}</span>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <ul className="flex-1 overflow-y-auto mt-3 -mx-1 px-1 space-y-1 custom-scrollbar">
+                    {slides.map((slide, index) => (
+                         <li key={slide.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className="group cursor-pointer relative" onClick={() => onSelectPage(index)}>
+                            <div className={`flex items-center p-2 rounded-md ${currentPage === index ? 'bg-primary-100 text-primary-800' : 'text-slate-700 hover:bg-slate-100'}`}>
+                                <span className={`text-xs w-6 text-center flex-shrink-0 ${currentPage === index ? 'font-semibold' : 'text-slate-500'}`}>{index + 1}</span>
+                                <span className={`flex-1 truncate text-sm font-medium ${currentPage === index ? 'font-semibold' : ''}`}>{getSlideTitle(slide)}</span>
+                                 <button onClick={(e) => { e.stopPropagation(); onDeletePage(index); }} className="ml-2 p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                            </div>
+                         </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 };
 
@@ -147,13 +274,13 @@ const DraggableTextBlock: React.FC<{ style: 'title' | 'body'; name: string; icon
 
 const ContentToolbar: React.FC<{ project: Project }> = ({ project }) => {
     return (
-        <aside className="w-64 bg-white border-l border-slate-200 p-4 overflow-y-auto custom-scrollbar">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-lg h-full p-4 overflow-y-auto custom-scrollbar">
             <div className="space-y-6">
                 <div>
                     <h3 className="font-bold text-slate-800 text-base mb-2">Text Blocks</h3>
                     <p className="text-xs text-slate-500 mb-3">Drag elements onto your slide.</p>
                     <div className="space-y-2">
-                        <DraggableTextBlock style="title" name="Title" icon={Type} />
+                        <DraggableTextBlock style="title" name="Title" icon={TypeIcon} />
                         <DraggableTextBlock style="body" name="Body Text" icon={AlignJustify} />
                     </div>
                 </div>
@@ -167,7 +294,7 @@ const ContentToolbar: React.FC<{ project: Project }> = ({ project }) => {
                     </div>
                 </div>
             </div>
-        </aside>
+        </div>
     );
 };
 
@@ -185,13 +312,17 @@ interface PresentationStudioProps {
 export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, presentation, onPresentationUpdate, onBackToHub, onPresent }) => {
     const [currentPage, setCurrentPage] = useState(0);
     const [dynamicRowHeight, setDynamicRowHeight] = useState(0);
+    const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
+    const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('filmstrip');
     const canvasRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const calculateRowHeight = () => {
             if (canvasRef.current) {
-                const canvasWidth = canvasRef.current.offsetWidth;
-                setDynamicRowHeight(canvasWidth / 12); 
+                const isSlides = presentation.format === 'slides';
+                const canvasHeight = canvasRef.current.offsetHeight;
+                const rows = isSlides ? 12 : 18; // More rows for taller documents
+                setDynamicRowHeight(canvasHeight / rows);
             }
         };
 
@@ -203,7 +334,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         calculateRowHeight(); // Initial calculation
 
         return () => resizeObserver.disconnect();
-    }, [presentation.format]);
+    }, [presentation.format, currentPage]);
 
 
     const kpiValues = useMemo(() => {
@@ -220,6 +351,28 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const handleNameChange = (newName: string) => {
         handlePresentationUpdate(p => ({ ...p, name: newName }));
     };
+    
+    const handleAddPageWithAI = useCallback(async (prompt: string) => {
+        if (!project.analysis) return;
+        try {
+            const { newSlide, newTextBlocks } = await addSlideWithAI(
+                prompt,
+                project.analysis,
+                project.name,
+                presentation.format === 'slides'
+            );
+            handlePresentationUpdate(p => ({
+                ...p,
+                slides: [...p.slides, newSlide],
+                textBlocks: [...(p.textBlocks || []), ...newTextBlocks],
+            }));
+            setCurrentPage(presentation.slides.length);
+        } catch (err) {
+            console.error("Failed to add AI slide", err);
+            alert("Sorry, I couldn't generate a slide for that. Please try another prompt.");
+        }
+    }, [project, presentation, onPresentationUpdate]);
+
 
     const handleAddPage = () => {
         const newSlide: Slide = { id: `slide_${uuidv4()}`, layout: [] };
@@ -291,45 +444,45 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const isSlides = presentation.format === 'slides';
 
     return (
-        <div className="flex h-full w-full bg-slate-100/70">
-            <SlideNavigator 
-                slides={presentation.slides} 
-                currentPage={currentPage} 
-                onSelectPage={setCurrentPage} 
-                onAddPage={handleAddPage}
-                onDeletePage={handleDeletePage} 
-                onReorderPages={handleReorderPages} 
-            />
+        <div className="flex flex-col h-full w-full bg-slate-100">
+            <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 h-16 flex justify-between items-center z-20">
+                <div className="flex items-center gap-4">
+                    <button onClick={onBackToHub} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900">
+                        <ChevronLeft size={16} className="mr-1" />
+                        Back to Hub
+                    </button>
+                </div>
+                <div className="flex-1 text-center min-w-0 px-4">
+                    <input 
+                        type="text"
+                        value={presentation.name}
+                        onChange={e => handleNameChange(e.target.value)}
+                        className="text-lg font-bold text-slate-800 bg-transparent focus:bg-slate-100 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-primary-300 w-full text-center truncate"
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onPresent(presentation.id)} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center shadow-sm">
+                        <MonitorPlay size={16} className="mr-2" />
+                        Present
+                    </button>
+                </div>
+            </header>
             
-            <div className="flex-1 flex flex-col min-h-0">
-                <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 h-16 flex justify-between items-center z-10">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBackToHub} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100">
-                            <ChevronLeft size={16} className="mr-1" />
-                            Back to Hub
-                        </button>
-                        <div className="w-px h-6 bg-slate-200" />
-                        <input 
-                            type="text"
-                            value={presentation.name}
-                            onChange={e => handleNameChange(e.target.value)}
-                            className="text-lg font-bold text-slate-800 bg-transparent focus:bg-slate-100 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-primary-300 w-96"
-                        />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => onPresent(presentation.id)} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center shadow-sm">
-                            <MonitorPlay size={16} className="mr-2" />
-                            Present
-                        </button>
-                    </div>
-                </header>
-                <main className="flex-1 overflow-auto p-4 md:p-8">
-                    <div className="mx-auto" style={{maxWidth: '1200px'}}>
+            <main className="flex-1 relative overflow-hidden">
+                {/* Central scrollable canvas */}
+                <div 
+                    className="absolute inset-0 overflow-y-auto custom-scrollbar transition-all duration-300"
+                    style={{
+                        paddingLeft: isNavigatorOpen ? '18rem' : '5rem', // w-64 (16rem) + ~1rem padding on each side
+                        paddingRight: '20rem' // w-72 (18rem) + ~1rem padding on each side
+                    }}
+                >
+                    <div className="mx-auto my-8" style={{maxWidth: '1200px'}}>
                         <div 
                             ref={canvasRef} 
                             className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
                         >
-                             {dynamicRowHeight > 0 && (
+                            {dynamicRowHeight > 0 && (
                                 <ResponsiveGridLayout
                                     className="layout"
                                     layouts={{ lg: presentation.slides[currentPage]?.layout || [] }}
@@ -351,19 +504,37 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                 </ResponsiveGridLayout>
                             )}
                         </div>
-                         {!isSlides && (
-                            <div className="text-center mt-6">
-                                <button onClick={handleAddPage} className="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-medium shadow-sm border border-slate-300 flex items-center mx-auto">
-                                    <PlusCircle size={16} className="mr-2" />
-                                    Add blank card
-                                </button>
-                            </div>
-                        )}
                     </div>
-                </main>
-            </div>
+                </div>
+                
+                {/* Floating UI elements are siblings to the scrollable container */}
+                {!isNavigatorOpen && (
+                    <button onClick={() => setIsNavigatorOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-4 z-30 p-2 bg-white rounded-lg shadow-lg border border-slate-200 text-slate-600 hover:text-primary-600 hover:bg-primary-50">
+                        <LayoutGrid size={20} />
+                    </button>
+                )}
 
-            <ContentToolbar project={project} />
+                <aside className={`absolute top-4 left-4 bottom-4 w-64 z-20 transition-transform duration-300 ease-in-out ${isNavigatorOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1rem)]'}`}>
+                    <SlideNavigator 
+                        slides={presentation.slides} 
+                        currentPage={currentPage}
+                        project={project}
+                        presentation={presentation}
+                        navigatorViewMode={navigatorViewMode}
+                        setNavigatorViewMode={setNavigatorViewMode}
+                        onClose={() => setIsNavigatorOpen(false)}
+                        onSelectPage={setCurrentPage} 
+                        onAddPage={handleAddPage}
+                        onAddPageWithAI={handleAddPageWithAI}
+                        onDeletePage={handleDeletePage} 
+                        onReorderPages={handleReorderPages} 
+                    />
+                </aside>
+
+                 <aside className="absolute top-4 right-4 bottom-4 w-72 z-10">
+                    <ContentToolbar project={project} />
+                </aside>
+            </main>
         </div>
     );
 };

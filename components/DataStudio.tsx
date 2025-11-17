@@ -576,5 +576,3 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         </>
     );
 };
-
-export default DataStudio;

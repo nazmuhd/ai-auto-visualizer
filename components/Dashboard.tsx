@@ -21,7 +21,6 @@ import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateInitialPresentation } from '../services/geminiService.ts';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
-import { v4 as uuidv4 } from 'uuid';
 
 const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
 const DataStudio = lazy(() => import('./DataStudio.tsx').then(m => ({ default: m.DataStudio })));

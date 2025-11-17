@@ -1,19 +1,20 @@
 // Import the XLSX library. In a worker, we use importScripts.
 // NOTE: The 'XLSX' variable will be available in the global scope after this runs.
 importScripts('https://aistudiocdn.com/xlsx@0.18.5/dist/xlsx.full.min.js');
+import { DataRow, DataQualityReport } from '../types';
 
 // FIX: Declare the XLSX global variable that is loaded via `importScripts`.
 // This informs TypeScript that the variable exists at runtime, resolving compile-time errors.
 declare const XLSX: any;
 
 
-const parseFileContents = (data) => {
+const parseFileContents = (data: ArrayBuffer): Promise<DataRow[]> => {
     return new Promise((resolve, reject) => {
         try {
             const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null });
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null }) as DataRow[];
 
             if (jsonData.length === 0) {
                 reject(new Error("File appears to be empty or unreadable."));
@@ -27,7 +28,7 @@ const parseFileContents = (data) => {
 };
 
 
-const validateData = (data) => {
+const validateData = (data: DataRow[]): DataQualityReport => {
     const issues = [];
     let score = 100;
     const rowCount = data.length;
@@ -99,7 +100,7 @@ const validateData = (data) => {
     };
 };
 
-const sampleData = (data) => {
+const sampleData = (data: DataRow[]): DataRow[] => {
     if (data.length <= 20) {
         return data;
     }
@@ -111,38 +112,26 @@ const sampleData = (data) => {
 };
 
 
-self.onmessage = async (event) => {
-    const file = event.data;
+self.onmessage = async (event: MessageEvent) => {
+    const file = event.data as File;
     try {
         self.postMessage({ type: 'progress', payload: { status: 'Parsing file...', percentage: 25 } });
         
-        // FileReader is available in workers and is a reliable way to read a File object
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const fileData = e.target.result;
-                const parsedData = await parseFileContents(fileData);
+        const fileData = await file.arrayBuffer();
+        const parsedData = await parseFileContents(fileData);
 
-                self.postMessage({ type: 'progress', payload: { status: 'Validating data quality...', percentage: 75 } });
-                const report = validateData(parsedData);
+        self.postMessage({ type: 'progress', payload: { status: 'Validating data quality...', percentage: 75 } });
+        const report = validateData(parsedData);
 
-                self.postMessage({ type: 'progress', payload: { status: 'Generating smart sample for AI...', percentage: 90 } });
-                const smartSample = sampleData(parsedData);
+        self.postMessage({ type: 'progress', payload: { status: 'Generating smart sample for AI...', percentage: 90 } });
+        const smartSample = sampleData(parsedData);
 
-                self.postMessage({ 
-                    type: 'result', 
-                    payload: { data: parsedData, report, sample: smartSample }
-                });
-            } catch (error) {
-                 self.postMessage({ type: 'error', payload: error.message });
-            }
-        };
-        reader.onerror = (error) => {
-            self.postMessage({ type: 'error', payload: 'Error reading file inside worker.' });
-        };
-        reader.readAsBinaryString(file);
+        self.postMessage({ 
+            type: 'result', 
+            payload: { data: parsedData, report, sample: smartSample }
+        });
 
-    } catch (error) {
+    } catch (error: any) {
         self.postMessage({ type: 'error', payload: error.message });
     }
 };
