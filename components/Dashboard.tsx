@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
 import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, PresentationFormat, TextBlock, ReportTemplate, Presentation } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
-import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft, ArrowRight } from 'lucide-react';
+import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft, ArrowRight, MoreVertical } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
@@ -261,9 +262,24 @@ const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove
 const ReportHub: React.FC<{ 
     project: Project,
     onCreateReport: () => void,
-    onSelectPresentation: (id: string) => void 
-}> = ({ project, onCreateReport, onSelectPresentation }) => {
+    onSelectPresentation: (id: string) => void,
+    onRenamePresentation: (id: string) => void,
+    onDuplicatePresentation: (id: string) => void,
+    onDeletePresentation: (presentation: Presentation) => void,
+}> = ({ project, onCreateReport, onSelectPresentation, onRenamePresentation, onDuplicatePresentation, onDeletePresentation }) => {
     const presentations = project.presentations || [];
+    const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setMenuOpenFor(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     
     if (presentations.length === 0) {
         return (
@@ -296,13 +312,27 @@ const ReportHub: React.FC<{
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {presentations.map(p => (
-                    <button key={p.id} onClick={() => onSelectPresentation(p.id)} className="group text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-primary-500 hover:shadow-xl transition-all transform hover:-translate-y-1 bg-white">
-                        <div className="aspect-video w-full rounded-lg bg-slate-100 border border-slate-200 group-hover:bg-primary-50/50 flex items-center justify-center">
-                            <FileText size={40} className="text-slate-400 group-hover:text-primary-500" />
+                    <div key={p.id} className="group relative">
+                        <button onClick={() => onSelectPresentation(p.id)} className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-primary-500 hover:shadow-xl transition-all transform hover:-translate-y-1 bg-white">
+                            <div className="aspect-video w-full rounded-lg bg-slate-100 border border-slate-200 group-hover:bg-primary-50/50 flex items-center justify-center">
+                                <FileText size={40} className="text-slate-400 group-hover:text-primary-500" />
+                            </div>
+                            <h3 className="font-bold text-slate-800 mt-3 truncate">{p.name}</h3>
+                            <p className="text-sm text-slate-500">{p.slides.length} {p.format === 'slides' ? 'Slides' : 'Pages'}</p>
+                        </button>
+                        <div className="absolute top-2 right-2">
+                             <button onClick={() => setMenuOpenFor(p.id)} className="p-2 rounded-full text-slate-500 bg-white/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-slate-100 focus:opacity-100 transition-opacity">
+                                <MoreVertical size={18} />
+                             </button>
+                             {menuOpenFor === p.id && (
+                                <div ref={menuRef} className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-slate-100 py-1 z-10">
+                                    <button onClick={() => { onRenamePresentation(p.id); setMenuOpenFor(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center">Rename</button>
+                                    <button onClick={() => { onDuplicatePresentation(p.id); setMenuOpenFor(null); }} className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 flex items-center">Duplicate</button>
+                                    <button onClick={() => { onDeletePresentation(p); setMenuOpenFor(null); }} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center">Delete</button>
+                                </div>
+                             )}
                         </div>
-                        <h3 className="font-bold text-slate-800 mt-3 truncate">{p.name}</h3>
-                        <p className="text-sm text-slate-500">{p.slides.length} {p.format === 'slides' ? 'Slides' : 'Pages'}</p>
-                    </button>
+                    </div>
                 ))}
             </div>
         </div>
@@ -317,6 +347,9 @@ const ProjectWorkspace: React.FC<{
     setIsLayoutModalOpen: (isOpen: boolean) => void;
     onCreateReport: () => void;
     onSelectPresentation: (id: string) => void;
+    onRenamePresentation: (id: string) => void;
+    onDuplicatePresentation: (id: string) => void;
+    onDeletePresentation: (presentation: Presentation) => void;
     dashboardLayout: string;
     dateColumn: string | null;
     onChartUpdate: (updatedChart: ChartConfig) => void;
@@ -336,6 +369,7 @@ const ProjectWorkspace: React.FC<{
     onPresent: (id: string) => void;
 }> = ({ 
     project, filteredData, onOpenEditModal, setIsLayoutModalOpen, onCreateReport, onSelectPresentation, 
+    onRenamePresentation, onDuplicatePresentation, onDeletePresentation,
     saveStatus, onManualSave, globalFilters, timeFilter, onGlobalFilterChange, onTimeFilterChange, onRemoveFilter, 
     onKpiClick, onProjectUpdate, editingPresentationId, onBackToHub, onPresentationUpdate, onPresent, ...props 
 }) => {
@@ -379,12 +413,13 @@ const ProjectWorkspace: React.FC<{
     const ViewLoader = () => <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
     
     const presentationToEdit = project.presentations?.find(p => p.id === editingPresentationId);
-    const isReportStudioMode = currentView === 'report-studio' || !!editingPresentationId;
+    
+    const showProjectHeader = !editingPresentationId;
 
     return (
-        <div className={`w-full duration-300 ${isReportStudioMode ? 'h-full flex flex-col' : 'px-4 sm:px-6 lg:px-8 py-8'}`}>
-            {!editingPresentationId && (
-                <>
+        <div className={`w-full duration-300 ${editingPresentationId ? 'h-full flex flex-col' : ''}`}>
+            {showProjectHeader && (
+                <div className="px-4 sm:px-6 lg:px-8 py-8">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                         <div className="flex-1 min-w-0">
                             <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
@@ -409,7 +444,7 @@ const ProjectWorkspace: React.FC<{
                             )}
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-0">
                         <div className="p-1.5 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200"><TabButton view="dashboard" label="Dashboard" icon={BarChart3} /><TabButton view="report-studio" label="Report Studio" icon={Bot}/><TabButton view="data" label="Data Studio" icon={Database} /></div>
                         <div className="flex items-center space-x-2 w-full justify-end sm:w-auto">
                             {currentView === 'dashboard' && (
@@ -424,18 +459,18 @@ const ProjectWorkspace: React.FC<{
                             )}
                         </div>
                     </div>
-                </>
+                </div>
             )}
 
-            <div className={isReportStudioMode ? 'flex-1 min-h-0' : ''}>
+            <div className={`${editingPresentationId ? 'flex-1 min-h-0' : 'px-4 sm:px-6 lg:px-8 pb-8'}`}>
                 {currentView === 'dashboard' && (
-                <div className="w-full h-full overflow-y-auto custom-scrollbar">
+                <>
                     <GlobalFilterBar filters={globalFilters} onRemove={onRemoveFilter} />
                     <KpiSection kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
                     <DashboardView chartRows={chartRows} getGridColsClass={getGridColsClass} dataSource={{data: filteredData}} allData={project.dataSource.data} dateColumn={props.dateColumn} onChartUpdate={props.onChartUpdate} onSetMaximizedChart={props.onSetMaximizedChart} onGlobalFilterChange={onGlobalFilterChange} onTimeFilterChange={onTimeFilterChange} globalFilters={globalFilters} timeFilter={timeFilter} />
-                </div>
+                </>
                 )}
-                {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} />}
+                {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} onRenamePresentation={onRenamePresentation} onDuplicatePresentation={onDuplicatePresentation} onDeletePresentation={onDeletePresentation} />}
                 {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
                     <Suspense fallback={<ViewLoader />}>
                         <ReportStudio 
@@ -467,6 +502,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [projectToManage, setProjectToManage] = useState<Project | null>(null);
+    const [presentationToDelete, setPresentationToDelete] = useState<Presentation | null>(null);
+
     
     const [editingPresentationId, setEditingPresentationId] = useState<string | null>(null);
     const [presentingPresentationId, setPresentingPresentationId] = useState<string | null>(null);
@@ -946,6 +983,74 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         });
     }, [updateActiveProject]);
 
+    const handleRenamePresentation = useCallback((presId: string) => {
+        updateActiveProject(p => {
+            if (!p || !p.presentations) return p;
+            const presToRename = p.presentations.find(pr => pr.id === presId);
+            if (!presToRename) return p;
+
+            const newName = prompt("Enter new presentation name:", presToRename.name);
+            if (newName && newName.trim() !== "") {
+                const updatedPresentations = p.presentations.map(pr => 
+                    pr.id === presId ? { ...pr, name: newName.trim() } : pr
+                );
+                return { ...p, presentations: updatedPresentations };
+            }
+            return p;
+        });
+    }, [updateActiveProject]);
+
+    const handleDuplicatePresentation = useCallback((presId: string) => {
+        updateActiveProject(p => {
+            if (!p || !p.presentations) return p;
+            const originalPres = p.presentations.find(pr => pr.id === presId);
+            if (!originalPres) return p;
+
+            const idMapping = new Map<string, string>();
+
+            const newTextBlocks = (originalPres.textBlocks || []).map(tb => {
+                const newId = `${tb.id.startsWith('text_') ? 'text_' : ''}${uuidv4()}`;
+                idMapping.set(tb.id, newId);
+                return { ...tb, id: newId };
+            });
+
+            const newSlides = originalPres.slides.map(slide => {
+                const newLayout = slide.layout.map(item => {
+                    const mappedId = idMapping.get(item.i);
+                    return mappedId ? { ...item, i: mappedId } : item;
+                });
+                return { ...slide, id: `slide_${uuidv4()}`, layout: newLayout };
+            });
+
+            const newPresentation: Presentation = {
+                ...originalPres,
+                id: `pres_${uuidv4()}`,
+                name: `${originalPres.name} (Copy)`,
+                slides: newSlides,
+                textBlocks: newTextBlocks,
+            };
+
+            return { ...p, presentations: [...p.presentations, newPresentation] };
+        });
+    }, [updateActiveProject]);
+
+    const handleOpenDeletePresModal = (presentation: Presentation) => {
+        setPresentationToDelete(presentation);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleConfirmDeletePresentation = () => {
+        if (!presentationToDelete) return;
+        updateActiveProject(p => {
+            if (!p || !p.presentations) return p;
+            return {
+                ...p,
+                presentations: p.presentations.filter(pr => pr.id !== presentationToDelete.id)
+            };
+        });
+        setPresentationToDelete(null);
+    };
+
     const renderMainContent = () => {
         if (mainView === 'settings') {
             return <SettingsPage />;
@@ -972,6 +1077,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                         setIsLayoutModalOpen={setIsLayoutModalOpen}
                         onCreateReport={() => setIsReportTemplateModalOpen(true)}
                         onSelectPresentation={setEditingPresentationId}
+                        onRenamePresentation={handleRenamePresentation}
+                        onDuplicatePresentation={handleDuplicatePresentation}
+                        onDeletePresentation={handleOpenDeletePresModal}
                         dashboardLayout={dashboardLayout}
                         dateColumn={dateColumn}
                         onChartUpdate={handleChartUpdate}
@@ -1028,8 +1136,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 />
             )}
             <div className={`flex-1 flex flex-col transition-all duration-300 ${!isEditingOrPresenting ? (isSidebarOpen ? 'md:ml-64' : 'md:ml-20') : 'md:ml-0'}`}>
-                <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
-                <main ref={mainContentRef} className={`flex-1 ${isEditingOrPresenting ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
+                {!isEditingOrPresenting && (
+                    <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200"><div className="h-16 flex items-center justify-between px-4"><div className="flex items-center min-w-0"><button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 mr-2 text-slate-600 hover:text-primary-600"><Menu size={24} /></button><h2 className="text-lg font-bold text-slate-900 truncate" title={activeProject?.name || 'New Project'}>{activeProject?.name || 'New Project'}</h2></div></div></header>
+                )}
+                <main ref={mainContentRef} className={`flex-1 ${isEditingOrPresenting ? 'overflow-hidden flex flex-col' : 'overflow-y-auto custom-scrollbar'}`}>
                     {renderMainContent()}
                 </main>
             </div>
@@ -1047,7 +1157,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             <CreateProjectModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSave={handleCreateProject} />
             <SaveProjectModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveProject} defaultName={activeProject?.name || 'Untitled Project'} />
             <RenameProjectModal isOpen={isRenameModalOpen} onClose={() => setIsRenameModalOpen(false)} onSave={handleRenameProject} currentName={projectToManage?.name || ''} currentDescription={projectToManage?.description || ''} />
-            <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteProject} projectName={projectToManage?.name || ''} />
+            <DeleteConfirmationModal isOpen={isDeleteModalOpen && !!projectToManage} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteProject} projectName={projectToManage?.name || ''} />
+            <DeleteConfirmationModal isOpen={isDeleteModalOpen && !!presentationToDelete} onClose={() => { setIsDeleteModalOpen(false); setPresentationToDelete(null); }} onConfirm={handleConfirmDeletePresentation} projectName={presentationToDelete?.name || ''} />
             {maximizedChart && activeProject && <ChartMaximizeModal 
                 config={maximizedChart} 
                 data={filteredData} 

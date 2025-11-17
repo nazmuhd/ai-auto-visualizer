@@ -54,15 +54,15 @@ export const ContactPage: React.FC<Props> = ({ onNavigate }) => {
             <div className="space-y-8">
                <div className="space-y-4">
                 <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">Contact our sales team</h1>
-                <p className="text-lg text-slate-600">Learn how Dropbox can help your business to streamline collaboration and increase productivity.</p>
+                <p className="text-lg text-slate-600">Learn how AI Insights can help your business to streamline collaboration and increase productivity.</p>
               </div>
               
               <div>
                 <h2 className="text-base font-semibold text-slate-900">When connecting with our team, you can expect us to:</h2>
                 <ul className="mt-4 space-y-2 list-disc list-inside text-slate-600">
                   <li>Understand your current business processes</li>
-                  <li>Explore how Dropbox's functionality can help you to drastically improve your team's workflow</li>
-                  <li>Determine the ideal Dropbox plan and talk through pricing options</li>
+                  <li>Explore how our functionality can help you to drastically improve your team's workflow</li>
+                  <li>Determine the ideal plan and talk through pricing options</li>
                   <li>Answer any additional specific questions you have</li>
                 </ul>
               </div>
