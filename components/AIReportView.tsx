@@ -336,7 +336,7 @@ const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel
 );
 
 const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; }> = ({ activePanel, project, onClose }) => (
-    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg max-h-[700px] overflow-hidden ${activePanel ? 'w-72 border border-slate-200' : 'w-0 border-none'}`}>
+    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg h-full overflow-hidden ${activePanel ? 'w-72 border border-slate-200' : 'w-0 border-none'}`}>
         <div className="w-72 h-full flex flex-col">
             {activePanel === 'charts' ? (
                 <>
@@ -437,7 +437,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 if (ref) observer.unobserve(ref);
             });
         };
-    }, [presentation.slides]);
+    }, [presentation.slides, currentPage]);
 
 
     const kpiValues = useMemo(() => {
@@ -502,8 +502,9 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         }));
     };
     
-    const onDrop = (index: number, _: ReportLayoutItem[], item: ReportLayoutItem, e: DragEvent) => {
-        const data = JSON.parse(e.dataTransfer?.getData('application/json') || '{}');
+    // FIX: The onDrop event from react-grid-layout is typed as a generic Event, but it is a DragEvent. Cast to DragEvent to access dataTransfer property.
+    const onDrop = (index: number, _: ReportLayoutItem[], item: ReportLayoutItem, e: Event) => {
+        const data = JSON.parse((e as DragEvent).dataTransfer?.getData('application/json') || '{}');
         if (!data.type) return;
 
         let newItem: ReportLayoutItem | null = null;
@@ -587,7 +588,8 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                              return (
                                 <div
                                     key={slide.id}
-                                    ref={el => slideRefs.current[index] = el}
+                                    // FIX: Use a block body for the ref callback to ensure a void return type.
+                                    ref={el => { slideRefs.current[index] = el; }}
                                     data-slide-index={index}
                                     className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
                                 >
@@ -645,9 +647,11 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </aside>
 
-                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-center gap-2 z-10">
-                    <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
-                    <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
+                 <div className="absolute inset-y-4 right-4 flex items-center justify-end z-10 pointer-events-none">
+                    <div className="relative flex items-center gap-2 h-full w-auto pointer-events-auto">
+                        <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
+                        <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
+                    </div>
                 </div>
             </main>
         </div>
