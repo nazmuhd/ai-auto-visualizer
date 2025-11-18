@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, Presentation, Slide, ChartType } from '../types.ts';
+import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, ImageBlock, DataRow, Presentation, Slide, ChartType } from '../types.ts';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
-import { addSlideWithAI, editSlideWithAI } from '../services/geminiService.ts';
+import { addSlideWithAI, editSlideWithAI, generateImageFromPrompt } from '../services/geminiService.ts';
 import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2, Search, Image, LayoutDashboard, DollarSign, Table, PenSquare, LineChart, PieChart, ScatterChart, Heading1, Heading2, Heading3, Heading4, Pilcrow, Quote, ListOrdered, ListTodo } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -370,6 +370,145 @@ const BasicBlocksPanel = () => (
     </>
 );
 
+const ImageActionButton: React.FC<{ title: string; icon: React.ReactNode; onClick: () => void; }> = ({ title, icon, onClick }) => (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center justify-center p-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-center space-y-1 aspect-[1/1] transition-colors"
+    >
+      <div className="text-slate-500">{icon}</div>
+      <div className="text-xs font-semibold text-slate-700 leading-tight">{title}</div>
+    </button>
+);
+
+type BlockData = 
+    | { type: 'text', style: 'title' | 'subtitle' | 'body', title: string, content: string, w: number, h: number }
+    | { type: 'image', src: string, w: number, h: number };
+
+const ImagePanel: React.FC<{ onAddBlock: (data: BlockData) => void }> = ({ onAddBlock }) => {
+  const [mode, setMode] = useState<'select' | 'ai'>('select');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        onAddBlock({
+          type: 'image',
+          src: base64String,
+          w: 4,
+          h: 3,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGenerating(true);
+    setGeneratedImage(null);
+    setError(null);
+    try {
+        const imageSrc = await generateImageFromPrompt(aiPrompt);
+        setGeneratedImage(imageSrc);
+    } catch (e: any) {
+        setError(e.message || 'Failed to generate image.');
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
+  const resetAiMode = () => {
+    setMode('select');
+    setAiPrompt('');
+    setGeneratedImage(null);
+    setError(null);
+  };
+  
+  if (mode === 'ai') {
+    return (
+        <div className="flex flex-col h-full">
+            <header className="p-4 border-b border-slate-100 flex-shrink-0 flex items-center">
+                <button onClick={resetAiMode} className="p-1 mr-2 text-slate-500 hover:bg-slate-100 rounded-full"><ChevronLeft size={16}/></button>
+                <div>
+                    <h3 className="font-semibold text-slate-800">AI images</h3>
+                    <p className="text-xs text-slate-500">Generate a unique image from text.</p>
+                </div>
+            </header>
+            <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                <textarea 
+                    value={aiPrompt}
+                    onChange={e => setAiPrompt(e.target.value)}
+                    placeholder="e.g., A blue robot holding a red skateboard"
+                    className="w-full h-24 p-2 text-sm border border-slate-300 rounded-md resize-none focus:ring-primary-500"
+                />
+                <button 
+                    onClick={handleGenerate} 
+                    disabled={isGenerating || !aiPrompt.trim()}
+                    className="w-full flex items-center justify-center px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold disabled:bg-primary-300 hover:bg-primary-700"
+                >
+                    {isGenerating ? <Loader2 size={16} className="animate-spin mr-2" /> : <Sparkles size={16} className="mr-2"/>}
+                    Generate
+                </button>
+                {isGenerating && <p className="text-xs text-center text-slate-500">Generating your image, this may take a moment...</p>}
+                {error && <p className="text-xs text-center text-red-500">{error}</p>}
+                {generatedImage && (
+                    <div>
+                        <p className="text-xs text-slate-500 mb-2 text-center font-medium">Drag your image onto the slide!</p>
+                        <div
+                            draggable
+                            onDragStart={e => {
+                                e.dataTransfer.setData('application/json', JSON.stringify({
+                                    type: 'image',
+                                    src: generatedImage,
+                                    w: 4,
+                                    h: 4,
+                                }));
+                                e.dataTransfer.effectAllowed = 'copy';
+                            }}
+                            className="cursor-grab aspect-square rounded-lg overflow-hidden border-2 border-primary-400 border-dashed"
+                        >
+                            <img src={generatedImage} alt="AI generated image" className="w-full h-full object-cover"/>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+  }
+
+  return (
+    <>
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/png, image/jpeg, image/gif" className="hidden" />
+      <header className="p-4 border-b border-slate-100 flex-shrink-0">
+        <h3 className="font-semibold text-slate-800">Images</h3>
+        <p className="text-xs text-slate-500">Upload, browse, or generate images.</p>
+      </header>
+      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+        <div className="grid grid-cols-3 gap-2">
+            <ImageActionButton title="Image upload or URL" icon={<Image size={20}/>} onClick={handleUploadClick} />
+            <ImageActionButton title="Web image search" icon={<Search size={20}/>} onClick={() => alert('Coming soon!')} />
+            <ImageActionButton title="AI images" icon={<Sparkles size={20}/>} onClick={() => setMode('ai')} />
+            <ImageActionButton title="Icons (classic)" icon={<LayoutDashboard size={20}/>} onClick={() => alert('Coming soon!')} />
+            <ImageActionButton title="Icons (modern)" icon={<LayoutDashboard size={20}/>} onClick={() => alert('Coming soon!')} />
+        </div>
+      </div>
+    </>
+  );
+};
+
+
 const toolbarItems = [
     { id: 'search', icon: Search, label: 'Search' },
     { id: 'text', icon: TypeIcon, label: 'Text' },
@@ -390,7 +529,7 @@ const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel
     </div>
 );
 
-const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; }> = ({ activePanel, project, onClose }) => (
+const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; onAddBlock: (data: BlockData) => void; }> = ({ activePanel, project, onClose, onAddBlock }) => (
     <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg h-full overflow-hidden ${activePanel ? 'w-80 border border-slate-200' : 'w-0 border-none'}`}>
         <div className="w-80 h-full flex flex-col">
             {activePanel === 'charts' ? (
@@ -416,6 +555,8 @@ const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onCl
                 </>
             ) : activePanel === 'text' ? (
                 <BasicBlocksPanel />
+            ) : activePanel === 'image' ? (
+                <ImagePanel onAddBlock={onAddBlock} />
             ) : activePanel ? (
                 <div className="p-4 text-center text-sm text-slate-400 flex items-center justify-center h-full">Functionality not yet implemented.</div>
             ) : null}
@@ -550,33 +691,58 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             slides: p.slides.map((s, i) => i === index ? { ...s, layout: newLayout } : s)
         }));
     };
+
+    const handleAddBlock = (data: BlockData) => {
+        const newBlockId = `${data.type}_${uuidv4()}`;
+        let newItem: ReportLayoutItem;
+    
+        if (data.type === 'text') {
+            const newBlock: TextBlock = { id: newBlockId, type: 'text', title: data.title, content: data.content, style: data.style };
+            handlePresentationUpdate(p => ({ ...p, textBlocks: [...(p.textBlocks || []), newBlock] }));
+        } else if (data.type === 'image') {
+            const newBlock: ImageBlock = { id: newBlockId, type: 'image', src: data.src };
+            handlePresentationUpdate(p => ({ ...p, imageBlocks: [...(p.imageBlocks || []), newBlock] }));
+        }
+    
+        newItem = { i: newBlockId, x: 0, y: Infinity, w: data.w, h: data.h };
+    
+        handlePresentationUpdate(p => ({
+            ...p,
+            slides: p.slides.map((s, i) => i === currentPage ? { ...s, layout: [...s.layout, newItem] } : s)
+        }));
+    };
     
     const onDrop = (index: number, _: ReportLayoutItem[], item: ReportLayoutItem, e: Event) => {
         const data = JSON.parse((e as DragEvent).dataTransfer?.getData('application/json') || '{}');
         if (!data.type) return;
 
-        let newItem: ReportLayoutItem | null = null;
-        if (data.type === 'chart') {
-            if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
-            newItem = { ...item, i: data.id, w: 6, h: 4 };
-        } else if (data.type === 'kpi') {
-            if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
-            newItem = { ...item, i: data.id, w: 3, h: 2 };
-        } else if (data.type === 'text') {
-            const newBlock: TextBlock = {
-                id: `text_${uuidv4()}`,
-                type: 'text',
-                title: data.title || `New ${data.style} Block`,
-                content: data.content || '',
-                style: data.style,
-            };
-            handlePresentationUpdate(p => ({ ...p, textBlocks: [...(p.textBlocks || []), newBlock] }));
-            newItem = { ...item, i: newBlock.id, w: data.w || 6, h: data.h || 2 };
-        }
-        
-        if (newItem) {
-            const newLayout = [...presentation.slides[index].layout, newItem];
-            handleLayoutChange(index, newLayout);
+        let newItem: ReportLayoutItem;
+
+        if (data.type === 'chart' || data.type === 'kpi') {
+             if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
+             newItem = { ...item, i: data.id, w: data.type === 'chart' ? 6 : 3, h: data.type === 'chart' ? 4 : 2 };
+             const newLayout = [...presentation.slides[index].layout, newItem];
+             handleLayoutChange(index, newLayout);
+        } else if (data.type === 'text' || data.type === 'image') {
+            const newBlockId = `${data.type}_${uuidv4()}`;
+            let newBlock;
+
+            if (data.type === 'text') {
+                newBlock = { id: newBlockId, type: 'text', title: data.title || `New ${data.style} Block`, content: data.content || '', style: data.style };
+            } else { // image
+                newBlock = { id: newBlockId, type: 'image', src: data.src };
+            }
+            
+            handlePresentationUpdate(p => {
+                const newImageBlocks = data.type === 'image' ? [...(p.imageBlocks || []), newBlock as ImageBlock] : p.imageBlocks;
+                const newTextBlocks = data.type === 'text' ? [...(p.textBlocks || []), newBlock as TextBlock] : p.textBlocks;
+                newItem = { ...item, i: newBlockId, w: data.w || 6, h: data.h || (data.type === 'image' ? 3 : 2) };
+                
+                const newSlides = p.slides.map((s, i) => 
+                    i === index ? { ...s, layout: [...s.layout, newItem] } : s
+                );
+                return { ...p, imageBlocks: newImageBlocks, textBlocks: newTextBlocks, slides: newSlides };
+            });
         }
     };
     
@@ -585,6 +751,9 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
          handleLayoutChange(slideIndex, newLayout);
          if (itemId.startsWith('text_')) {
             handlePresentationUpdate(p => ({...p, textBlocks: (p.textBlocks || []).filter(b => b.id !== itemId)}));
+         }
+         if (itemId.startsWith('image_')) {
+            handlePresentationUpdate(p => ({...p, imageBlocks: (p.imageBlocks || []).filter(b => b.id !== itemId)}));
          }
     };
     
@@ -597,6 +766,15 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
 
         const textBlock = presentation.textBlocks?.find(b => b.id === item.i);
         if(textBlock) return <div className="w-full h-full"><EditableTextBlock block={textBlock} onUpdate={b => handlePresentationUpdate(p => ({ ...p, textBlocks: (p.textBlocks || []).map(tb => tb.id === b.id ? b : tb)}))} /></div>;
+
+        const imageBlock = presentation.imageBlocks?.find(b => b.id === item.i);
+        if (imageBlock) {
+            return (
+                <div className="w-full h-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                    <img src={imageBlock.src} alt={imageBlock.alt || 'User image'} className="w-full h-full object-contain" />
+                </div>
+            );
+        }
 
         return <div className="p-2 text-xs text-red-500 bg-red-50">Content not found for ID: {item.i}</div>;
     }
@@ -702,7 +880,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
 
                  <div className="absolute inset-y-4 right-4 flex items-center justify-end z-10 pointer-events-none">
                     <div className="relative flex items-center gap-2 h-full w-auto pointer-events-auto">
-                        <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
+                        <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} onAddBlock={handleAddBlock} />
                         <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
                     </div>
                 </div>

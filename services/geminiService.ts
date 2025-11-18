@@ -649,3 +649,27 @@ export const editSlideWithAI = async (
         throw new Error("Failed to edit the slide with AI. Please try rephrasing your request.");
     }
 };
+
+export const generateImageFromPrompt = async (prompt: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/jpeg',
+              aspectRatio: '1:1',
+            },
+        });
+
+        if (!response.generatedImages || response.generatedImages.length === 0) {
+            throw new Error("AI did not generate an image.");
+        }
+
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        return `data:image/jpeg;base64,${base64ImageBytes}`;
+    } catch (error) {
+        console.error("Gemini Image Generation Error:", error);
+        throw new Error("Failed to generate the AI image. Please try a different prompt.");
+    }
+};

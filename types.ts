@@ -50,6 +50,13 @@ export interface TextBlock {
     style?: 'title' | 'subtitle' | 'body';
 }
 
+export interface ImageBlock {
+    id: string;
+    type: 'image';
+    src: string; // base64 data URL
+    alt?: string;
+}
+
 export interface AnalysisResult {
     summary: string[];
     kpis: KpiConfig[];
@@ -95,6 +102,7 @@ export interface Presentation {
     slides: Slide[];
     themeSettings?: object;
     textBlocks?: TextBlock[];
+    imageBlocks?: ImageBlock[];
     header?: TextBlock;
     footer?: TextBlock;
 }
