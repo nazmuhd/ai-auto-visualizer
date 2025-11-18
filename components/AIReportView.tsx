@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, Presentation, Slide } from '../types.ts';
+import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, Presentation, Slide, ChartType } from '../types.ts';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
 import { addSlideWithAI } from '../services/geminiService.ts';
-// FIX: Renamed `Type` to `TypeIcon` to avoid a name collision with the `Type` enum from `@google/genai` which is used in `geminiService`.
-import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2, Search, Image, LayoutDashboard, DollarSign, Table, PenSquare, LineChart, PieChart, ScatterChart } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -265,38 +264,109 @@ const SlideNavigator: React.FC<{
     );
 };
 
-const DraggableItem: React.FC<{ type: string; id: string; name: string; icon: React.ElementType; }> = ({ type, id, name, icon: Icon }) => (
-    <div draggable unselectable="on" onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify({ type, id }))} className="flex items-center p-2 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-grab"><Icon size={16} className="mr-2 text-slate-500" /><span className="text-sm font-medium text-slate-700 truncate">{name}</span></div>
-);
-const DraggableTextBlock: React.FC<{ style: 'title' | 'body'; name: string; icon: React.ElementType; }> = ({ style, name, icon: Icon }) => (
-    <div draggable unselectable="on" onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify({ type: 'text', style }))} className="flex items-center p-2 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-grab"><Icon size={16} className="mr-2 text-slate-500" /><span className="text-sm font-medium text-slate-700">{name}</span></div>
-);
+const getIconForChartType = (type: ChartType) => {
+    switch (type) {
+        case 'bar': case 'stacked-bar': return BarChart3;
+        case 'line': case 'area': return LineChart;
+        case 'pie': return PieChart;
+        case 'scatter': case 'bubble': return ScatterChart;
+        case 'combo': return BarChart3;
+        default: return BarChart3;
+    }
+};
 
-const ContentToolbar: React.FC<{ project: Project }> = ({ project }) => {
+const DraggableChartItem: React.FC<{ chart: ChartConfig }> = ({ chart }) => {
+    const Icon = getIconForChartType(chart.type);
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-lg h-full p-4 overflow-y-auto custom-scrollbar">
-            <div className="space-y-6">
-                <div>
-                    <h3 className="font-bold text-slate-800 text-base mb-2">Text Blocks</h3>
-                    <p className="text-xs text-slate-500 mb-3">Drag elements onto your slide.</p>
-                    <div className="space-y-2">
-                        <DraggableTextBlock style="title" name="Title" icon={TypeIcon} />
-                        <DraggableTextBlock style="body" name="Body Text" icon={AlignJustify} />
-                    </div>
-                </div>
-                <div className="border-t border-slate-200 pt-4">
-                    <h3 className="font-bold text-slate-800 text-base mb-3">Dashboard Content</h3>
-                    <div className="space-y-2">
-                         <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Charts</h4>
-                        {project.analysis?.charts.map(c => <DraggableItem key={c.id} type="chart" id={c.id} name={c.title} icon={BarChart3} />)}
-                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4">KPIs</h4>
-                        {project.analysis?.kpis.map(k => <DraggableItem key={k.id} type="kpi" id={k.id} name={k.title} icon={TrendingUp} />)}
-                    </div>
-                </div>
-            </div>
+        <div
+            draggable
+            unselectable="on"
+            onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify({ type: 'chart', id: chart.id }))}
+            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-grab text-center space-y-1 aspect-square"
+        >
+            <Icon size={24} className="text-slate-500" />
+            <span className="text-xs font-medium text-slate-700 leading-tight line-clamp-2">{chart.title}</span>
         </div>
     );
 };
+
+const DraggableKpiItem: React.FC<{ kpi: KpiConfig }> = ({ kpi }) => {
+    return (
+        <div
+            draggable
+            unselectable="on"
+            onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify({ type: 'kpi', id: kpi.id }))}
+            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-grab text-center space-y-1 aspect-square"
+        >
+            <TrendingUp size={24} className="text-slate-500" />
+            <span className="text-xs font-medium text-slate-700 leading-tight line-clamp-2">{kpi.title}</span>
+        </div>
+    );
+};
+
+const toolbarItems = [
+    { id: 'search', icon: Search, label: 'Search' },
+    { id: 'text', icon: TypeIcon, label: 'Text' },
+    { id: 'image', icon: Image, label: 'Image' },
+    { id: 'elements', icon: LayoutDashboard, label: 'Elements' },
+    { id: 'new', icon: DollarSign, label: 'New Feature', badge: true },
+    { id: 'charts', icon: BarChart3, label: 'Charts & Graphs' },
+    { id: 'tables', icon: Table, label: 'Tables' },
+    { id: 'layouts', icon: LayoutGrid, label: 'Layouts' },
+    { id: 'draw', icon: PenSquare, label: 'Draw' },
+];
+
+const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel: string | null) => void }> = ({ activePanel, setActivePanel }) => (
+    <div className="w-16 bg-white border border-slate-200 rounded-xl shadow-lg flex flex-col items-center py-2">
+        <div className="flex-1 flex flex-col items-center space-y-1">
+            {toolbarItems.map(item => {
+                if (item.id === 'charts') { // Separator before charts
+                    return <React.Fragment key="sep"><div className="h-px w-8 bg-slate-200 my-1" /><button key={item.id} title={item.label} onClick={() => setActivePanel(activePanel === item.id ? null : item.id)} className={`p-3 rounded-lg relative ${activePanel === item.id ? 'bg-primary-100 text-primary-600' : 'text-slate-500 hover:bg-slate-100'}`}><item.icon size={20}/>{item.badge && <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white font-bold px-1 rounded-full">NEW</span>}</button></React.Fragment>;
+                }
+                return <button key={item.id} title={item.label} onClick={() => setActivePanel(activePanel === item.id ? null : item.id)} className={`p-3 rounded-lg relative ${activePanel === item.id ? 'bg-primary-100 text-primary-600' : 'text-slate-500 hover:bg-slate-100'}`}><item.icon size={20}/>{item.badge && <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white font-bold px-1 rounded-full">NEW</span>}</button>
+            })}
+        </div>
+    </div>
+);
+
+const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; }> = ({ activePanel, project, onClose }) => (
+    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl border border-slate-200 shadow-lg h-full overflow-hidden ${activePanel ? 'w-72' : 'w-0'}`}>
+        <div className="w-72 h-full flex flex-col">
+            {activePanel === 'charts' ? (
+                <>
+                    <header className="p-4 border-b border-slate-100 flex-shrink-0">
+                        <h3 className="font-semibold text-slate-800">Charts & graphs</h3>
+                        <p className="text-xs text-slate-500">Visualize data and information.</p>
+                    </header>
+                    <div className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-4">
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-600 mb-2">KPIs</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {project.analysis?.kpis.map(kpi => <DraggableKpiItem key={kpi.id} kpi={kpi} />)}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-600 mb-2">Charts</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {project.analysis?.charts.map(chart => <DraggableChartItem key={chart.id} chart={chart} />)}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-600 mb-2">Freeform diagrams</h4>
+                            <div className="space-y-2 opacity-50 cursor-not-allowed">
+                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Blank diagram</p></div>
+                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Weekly calendar</p></div>
+                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Gantt chart</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div className="p-4 text-center text-sm text-slate-400">Functionality not yet implemented.</div>
+            )}
+        </div>
+    </div>
+);
 
 
 // --- MAIN PRESENTATION STUDIO COMPONENT ---
@@ -314,6 +384,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [visibleSlides, setVisibleSlides] = useState<Set<number>>(new Set([0]));
     const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
     const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('filmstrip');
+    const [activePanel, setActivePanel] = useState<string | null>('charts');
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -428,9 +499,12 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         if (!data.type) return;
 
         let newItem: ReportLayoutItem | null = null;
-        if (['chart', 'kpi'].includes(data.type)) {
+        if (data.type === 'chart') {
             if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
-            newItem = { ...item, i: data.id, w: data.type === 'chart' ? 6 : 3, h: data.type === 'chart' ? 5 : 2 };
+            newItem = { ...item, i: data.id, w: 6, h: 5 };
+        } else if (data.type === 'kpi') {
+            if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
+            newItem = { ...item, i: data.id, w: 3, h: 2 };
         } else if (data.type === 'text') {
             const newBlock: TextBlock = { id: `text_${uuidv4()}`, type: 'text', title: `New ${data.style} Block`, content: '', style: data.style };
             handlePresentationUpdate(p => ({ ...p, textBlocks: [...(p.textBlocks || []), newBlock] }));
@@ -497,8 +571,8 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     ref={scrollContainerRef}
                     className="absolute inset-0 overflow-y-auto custom-scrollbar transition-all duration-300"
                     style={{
-                        paddingLeft: isNavigatorOpen ? '18rem' : '5rem', // w-64 (16rem) + ~1rem padding on each side
-                        paddingRight: '20rem' // w-72 (18rem) + ~1rem padding on each side
+                        paddingLeft: isNavigatorOpen ? '18rem' : '5rem',
+                        paddingRight: activePanel ? '24rem' : '5rem'
                     }}
                 >
                     <div className="mx-auto my-8 space-y-8" style={{maxWidth: '1200px'}}>
@@ -565,9 +639,10 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </aside>
 
-                 <aside className="absolute top-4 right-4 bottom-4 w-72 z-10">
-                    <ContentToolbar project={project} />
-                </aside>
+                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-start z-10 h-[80vh] max-h-[700px]">
+                    <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
+                    <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
+                </div>
             </main>
         </div>
     );
