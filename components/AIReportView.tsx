@@ -3,7 +3,7 @@ import { Project, ReportLayoutItem, KpiConfig, ChartConfig, TextBlock, DataRow, 
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
-import { addSlideWithAI } from '../services/geminiService.ts';
+import { addSlideWithAI, editSlideWithAI } from '../services/geminiService.ts';
 import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2, Search, Image, LayoutDashboard, DollarSign, Table, PenSquare, LineChart, PieChart, ScatterChart } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -38,6 +38,8 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
     const [content, setContent] = useState(block.content);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
+    const isPlaceholder = !content && !isEditing;
+
     useEffect(() => { setContent(block.content); }, [block.content]);
     
     useEffect(() => {
@@ -62,26 +64,38 @@ const EditableTextBlock: React.FC<{ block: TextBlock, onUpdate: (updatedBlock: T
         e.target.style.height = `${e.target.scrollHeight}px`;
     }
     
-    const renderedContent = content.replace(/\n/g, '<br />') || `<p class="text-slate-400 italic">Double-click to add text...</p>`;
+    const textClasses = useMemo(() => {
+        switch (block.style) {
+            case 'title': return 'text-3xl font-bold';
+            case 'subtitle': return 'text-xl font-semibold';
+            default: return '';
+        }
+    }, [block.style]);
 
     if (isEditing) {
         return (
-            <textarea
-                ref={textAreaRef}
-                value={content}
-                onChange={handleContentChange}
-                onBlur={handleSave}
-                className="w-full h-auto min-h-full p-4 bg-primary-50/50 border-0 outline-none focus:ring-2 focus:ring-primary-500 rounded-lg resize-none prose prose-sm max-w-none prose-p:my-1"
-                rows={1}
-            />
+             <div className="bg-white rounded-lg border border-slate-100 shadow-sm w-full h-full">
+                <textarea
+                    ref={textAreaRef}
+                    value={content}
+                    onChange={handleContentChange}
+                    onBlur={handleSave}
+                    className={`w-full h-auto min-h-full p-4 bg-primary-50/50 border-0 outline-none focus:ring-2 focus:ring-primary-500 rounded-lg resize-none prose prose-sm max-w-none prose-p:my-1 ${textClasses}`}
+                    rows={1}
+                />
+            </div>
         );
     }
     return (
-        <div
-            onDoubleClick={() => setIsEditing(true)}
-            className="p-4 h-full w-full prose prose-sm max-w-none prose-p:my-1 cursor-text"
-            dangerouslySetInnerHTML={{ __html: renderedContent }}
-        />
+        <div onDoubleClick={() => setIsEditing(true)} className={`p-0 h-full w-full cursor-text`}>
+            {isPlaceholder ? (
+                 <div className="bg-white rounded-lg border border-slate-100 shadow-sm w-full h-full flex items-center p-4">
+                    <p className="text-slate-400 italic">Double-click to add text...</p>
+                 </div>
+            ) : (
+                <div className={`bg-white rounded-lg border border-slate-100 shadow-sm w-full h-full p-4 prose prose-sm max-w-none prose-p:my-1 ${textClasses}`} dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />') }} />
+            )}
+        </div>
     );
 };
 
@@ -107,8 +121,8 @@ const SlidePreview: React.FC<{
     const maxRows = isSlides ? 8 : 12;
 
     return (
-        <div className={`relative w-full rounded-md bg-white overflow-hidden shadow-sm border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}>
-            <div className={`grid grid-cols-12 gap-px`} style={{gridTemplateRows: `repeat(${maxRows}, 1fr)`, height: '100%'}}>
+        <div className={`relative w-full rounded-md bg-slate-200 overflow-hidden shadow-inner border border-slate-200 aspect-video`}>
+            <div className={`grid grid-cols-12 gap-px p-1`} style={{gridTemplateRows: `repeat(${maxRows}, 1fr)`, height: '100%'}}>
                 {slide.layout.map(item => {
                     const type = getItemType(item.i);
                     const rowEnd = Math.min(item.y + item.h, maxRows);
@@ -116,11 +130,11 @@ const SlidePreview: React.FC<{
                         gridColumn: `${item.x + 1} / span ${item.w}`,
                         gridRow: `${item.y + 1} / span ${rowEnd - item.y}`,
                     };
-                    let bgColor = 'bg-slate-200';
-                    if (type === 'chart') bgColor = 'bg-sky-200';
-                    if (type === 'kpi') bgColor = 'bg-emerald-200';
-                    if (type === 'text') bgColor = 'bg-slate-300';
-                    if (type === 'title') bgColor = 'bg-slate-400';
+                    let bgColor = 'bg-slate-300';
+                    if (type === 'chart') bgColor = 'bg-sky-300';
+                    if (type === 'kpi') bgColor = 'bg-emerald-300';
+                    if (type === 'text') bgColor = 'bg-slate-400';
+                    if (type === 'title') bgColor = 'bg-slate-500';
 
                     return <div key={item.i} style={style} className={`${bgColor} rounded-sm`}></div>;
                 })}
@@ -208,8 +222,9 @@ const SlideNavigator: React.FC<{
                 </div>
                 <div className="relative" ref={newMenuRef}>
                     <div className="flex">
-                        <button onClick={onAddPage} className="flex-1 px-4 py-2 bg-primary-100/80 text-primary-700 hover:bg-primary-100 rounded-l-lg font-semibold flex items-center justify-center text-sm"><Plus size={16} className="mr-1.5"/> New</button>
-                        <button onClick={() => setIsNewMenuOpen(p => !p)} className="px-2 bg-primary-100/80 text-primary-700 hover:bg-primary-100 rounded-r-lg"><ChevronDown size={16} /></button>
+                        <button onClick={() => setIsNewMenuOpen(p => !p)} className="flex-1 px-4 py-2 bg-primary-100/80 text-primary-700 hover:bg-primary-100 rounded-lg font-semibold flex items-center justify-center text-sm">
+                            <Plus size={16} className="mr-1.5"/> New <ChevronDown size={16} className="ml-auto"/>
+                        </button>
                     </div>
                     {isNewMenuOpen && (
                         <div className="absolute top-full mt-2 w-60 bg-white rounded-lg shadow-xl border border-slate-100 py-1.5 z-20">
@@ -234,16 +249,12 @@ const SlideNavigator: React.FC<{
                 <ul className="flex-1 overflow-y-auto mt-3 -mx-1 px-1 space-y-4 custom-scrollbar">
                     {slides.map((slide, index) => (
                         <li key={slide.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className="group cursor-pointer relative" onClick={() => onSelectPage(index)}>
-                             <div className="flex items-start space-x-2">
-                                 <div className={`flex-1 transition-all duration-200 ${currentPage === index ? 'ring-2 ring-primary-500 ring-offset-2 rounded-lg' : ''}`}>
-                                    <SlidePreview slide={slide} project={project} presentation={presentation} isSlides={isSlides} />
-                                 </div>
-                                 <div className="flex flex-col pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="p-1 text-slate-400 cursor-move"><GripVertical size={14} /></div>
-                                    <button onClick={(e) => { e.stopPropagation(); onDeletePage(index); }} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
-                                 </div>
+                             <div className={`p-1 rounded-lg transition-all duration-200 ${currentPage === index ? 'bg-primary-100' : ''}`}>
+                                <div className={`transition-all duration-200 relative ${currentPage === index ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-white rounded-lg' : 'ring-1 ring-slate-200 rounded-lg'}`}>
+                                   <SlidePreview slide={slide} project={project} presentation={presentation} isSlides={isSlides} />
+                                   <div className="absolute top-1 left-1 bg-black/40 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">{index + 1}</div>
+                                </div>
                              </div>
-                             <span className="absolute bottom-2 left-2 text-xs font-medium text-slate-500 bg-white/70 px-1.5 py-0.5 rounded">{index + 1}</span>
                         </li>
                     ))}
                 </ul>
@@ -317,15 +328,10 @@ const toolbarItems = [
 ];
 
 const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel: string | null) => void }> = ({ activePanel, setActivePanel }) => (
-    <div className="w-16 bg-white border border-slate-200 rounded-xl shadow-lg flex flex-col items-center py-2">
-        <div className="flex-1 flex flex-col items-center space-y-1">
-            {toolbarItems.map(item => {
-                if (item.id === 'charts') { // Separator before charts
-                    return <React.Fragment key="sep"><div className="h-px w-8 bg-slate-200 my-1" /><button key={item.id} title={item.label} onClick={() => setActivePanel(activePanel === item.id ? null : item.id)} className={`p-3 rounded-lg relative ${activePanel === item.id ? 'bg-primary-100 text-primary-600' : 'text-slate-500 hover:bg-slate-100'}`}><item.icon size={20}/>{item.badge && <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white font-bold px-1 rounded-full">NEW</span>}</button></React.Fragment>;
-                }
-                return <button key={item.id} title={item.label} onClick={() => setActivePanel(activePanel === item.id ? null : item.id)} className={`p-3 rounded-lg relative ${activePanel === item.id ? 'bg-primary-100 text-primary-600' : 'text-slate-500 hover:bg-slate-100'}`}><item.icon size={20}/>{item.badge && <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white font-bold px-1 rounded-full">NEW</span>}</button>
-            })}
-        </div>
+    <div className="w-14 bg-white rounded-full shadow-lg flex flex-col items-center py-2 space-y-1">
+        {toolbarItems.map(item => {
+            return <button key={item.id} title={item.label} onClick={() => setActivePanel(activePanel === item.id ? null : item.id)} className={`p-3 rounded-full relative transition-colors ${activePanel === item.id ? 'bg-primary-100 text-primary-600' : 'text-slate-500 hover:bg-slate-100'}`}><item.icon size={20}/>{item.badge && <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white font-bold px-1 rounded-full">NEW</span>}</button>
+        })}
     </div>
 );
 
@@ -383,10 +389,15 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [currentPage, setCurrentPage] = useState(0);
     const [visibleSlides, setVisibleSlides] = useState<Set<number>>(new Set([0]));
     const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
-    const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('filmstrip');
-    const [activePanel, setActivePanel] = useState<string | null>('charts');
+    const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('list');
+    const [activePanel, setActivePanel] = useState<string | null>(null);
+    const [aiEditPrompt, setAiEditPrompt] = useState('');
+    const [isAiEditing, setIsAiEditing] = useState(false);
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    
+    // FIX: Hoist `isSlides` declaration before its use in `handleAiEditCurrentSlide`.
+    const isSlides = presentation.format === 'slides';
 
     useEffect(() => {
         slideRefs.current = presentation.slides.map(() => null);
@@ -501,7 +512,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         let newItem: ReportLayoutItem | null = null;
         if (data.type === 'chart') {
             if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
-            newItem = { ...item, i: data.id, w: 6, h: 5 };
+            newItem = { ...item, i: data.id, w: 6, h: 4 };
         } else if (data.type === 'kpi') {
             if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
             newItem = { ...item, i: data.id, w: 3, h: 2 };
@@ -524,6 +535,33 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             handlePresentationUpdate(p => ({...p, textBlocks: (p.textBlocks || []).filter(b => b.id !== itemId)}));
          }
     };
+    
+     const handleAiEditCurrentSlide = useCallback(async () => {
+        if (!aiEditPrompt.trim() || !project.analysis) return;
+        setIsAiEditing(true);
+        try {
+            const { updatedLayout, newTextBlocks } = await editSlideWithAI(
+                presentation.slides[currentPage],
+                presentation.textBlocks || [],
+                project.analysis,
+                aiEditPrompt,
+                isSlides
+            );
+            handlePresentationUpdate(p => ({
+                ...p,
+                slides: p.slides.map((s, i) => i === currentPage ? { ...s, layout: updatedLayout } : s),
+                textBlocks: [...(p.textBlocks || []), ...newTextBlocks],
+            }));
+            setAiEditPrompt('');
+        } catch (err) {
+             console.error("Failed to edit AI slide", err);
+             alert("Sorry, I couldn't edit the slide. Please try rephrasing your request.");
+        } finally {
+            setIsAiEditing(false);
+        }
+
+    }, [aiEditPrompt, project, presentation, currentPage, isSlides, handlePresentationUpdate]);
+
 
     const renderGridItemContent = (item: ReportLayoutItem) => {
         const chart = project.analysis?.charts.find(c => c.id === item.i);
@@ -537,8 +575,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
 
         return <div className="p-2 text-xs text-red-500 bg-red-50">Content not found for ID: {item.i}</div>;
     }
-
-    const isSlides = presentation.format === 'slides';
 
     return (
         <div className="flex flex-col h-full w-full bg-slate-100">
@@ -583,7 +619,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                     key={slide.id}
                                     ref={el => slideRefs.current[index] = el}
                                     data-slide-index={index}
-                                    className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
+                                    className={`relative bg-[#FBF9F6] shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
                                 >
                                     {visibleSlides.has(index) ? (
                                         <ResponsiveGridLayout
@@ -639,10 +675,29 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </aside>
 
-                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-start z-10 h-[80vh] max-h-[700px]">
+                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-start gap-2 z-10 h-[80vh] max-h-[700px]">
                     <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
                     <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
                 </div>
+                
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-xl">
+                    <div className="relative">
+                        <Sparkles size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-500" />
+                        <input
+                            type="text"
+                            value={aiEditPrompt}
+                            onChange={e => setAiEditPrompt(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleAiEditCurrentSlide()}
+                            placeholder={`e.g., "Add a title called 'Sales Summary' and show the top 3 KPIs"`}
+                            className="w-full pl-12 pr-28 py-3 bg-white rounded-full shadow-lg border border-slate-200 focus:ring-2 focus:ring-primary-400 outline-none"
+                            disabled={isAiEditing}
+                        />
+                         <button onClick={handleAiEditCurrentSlide} disabled={isAiEditing || !aiEditPrompt.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-slate-800 text-white rounded-full font-semibold text-sm hover:bg-black disabled:bg-slate-300 flex items-center">
+                            {isAiEditing ? <Loader2 size={16} className="animate-spin" /> : 'Generate'}
+                         </button>
+                    </div>
+                </div>
+
             </main>
         </div>
     );
