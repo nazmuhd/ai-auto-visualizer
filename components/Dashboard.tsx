@@ -240,7 +240,6 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
 };
 
 const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = memo(({ filters, onRemove }) => {
-    // FIX: Explicitly type `values` to ensure it is treated as a Set, resolving potential type inference issues.
     const filterEntries = Object.entries(filters).flatMap(([col, values]: [string, Set<string>]) => Array.from(values).map(val => ({ col, val })));
     if (filterEntries.length === 0) return null;
 
@@ -620,7 +619,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             });
         }
         
-        // FIX: Explicitly type `allowedValues` to ensure it is treated as a Set, resolving potential type inference issues.
         Object.entries(globalFilters).forEach(([col, allowedValues]: [string, Set<string>]) => {
             if (allowedValues.size > 0) {
                 result = result.filter(row => allowedValues.has(String(row[col])));

@@ -4,7 +4,7 @@ import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer } from './charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
 import { addSlideWithAI, editSlideWithAI } from '../services/geminiService.ts';
-import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2, Search, Image, LayoutDashboard, DollarSign, Table, PenSquare, LineChart, PieChart, ScatterChart } from 'lucide-react';
+import { BarChart3, TrendingUp, Type as TypeIcon, AlignJustify, PlusCircle, File, GripVertical, Trash2, ChevronLeft, MonitorPlay, Sparkles, LayoutGrid, List, X, ChevronDown, Plus, Send, Loader2, Search, Image, LayoutDashboard, DollarSign, Table, PenSquare, LineChart, PieChart, ScatterChart, Heading1, Heading2, Heading3, Heading4, Pilcrow, Quote, ListOrdered, ListTodo } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -315,6 +315,61 @@ const DraggableKpiItem: React.FC<{ kpi: KpiConfig }> = ({ kpi }) => {
     );
 };
 
+const DraggableBlock: React.FC<{ title: string; description: string; icon: React.ReactNode; dragData: object; }> = ({ title, description, icon, dragData }) => (
+    <div
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
+      className="flex flex-col items-center justify-center p-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 cursor-grab text-center space-y-1 aspect-[1/1]"
+    >
+      <div className="text-slate-500">{icon}</div>
+      <div className="text-xs font-semibold text-slate-700 leading-tight">{title}</div>
+      <div className="text-[10px] text-slate-400 font-mono">{description}</div>
+    </div>
+);
+
+const basicBlocks = [
+    { type: 'heading', label: 'Text', items: [
+        { title: 'Title', description: '! Title', icon: <TypeIcon size={20}/>, data: { type: 'text', style: 'title', title: 'Title', content: 'Title', w: 12, h: 1 }},
+        { title: 'Heading 1', description: '# Heading 1', icon: <Heading1 size={20}/>, data: { type: 'text', style: 'subtitle', title: 'Heading 1', content: '# Heading 1', w: 12, h: 1 }},
+        { title: 'Heading 2', description: '## Heading 2', icon: <Heading2 size={20}/>, data: { type: 'text', style: 'body', title: 'Heading 2', content: '## Heading 2', w: 12, h: 1 }},
+        { title: 'Heading 3', description: '### Heading 3', icon: <Heading3 size={20}/>, data: { type: 'text', style: 'body', title: 'Heading 3', content: '### Heading 3', w: 12, h: 1 }},
+        { title: 'Text', description: 'Plain text', icon: <Pilcrow size={20}/>, data: { type: 'text', style: 'body', title: 'Text', content: 'Your text here.', w: 6, h: 2 }},
+        { title: 'Blockquote', description: '> Quote', icon: <Quote size={20}/>, data: { type: 'text', style: 'body', title: 'Quote', content: '> Your quote here.', w: 12, h: 1 }},
+    ]},
+    { type: 'heading', label: 'Tables', items: [
+        { title: '2x2 table', description: '/table', icon: <Table size={20}/>, data: { type: 'text', style: 'body', title: 'Table', content: '<table><thead><tr><th>Header 1</th><th>Header 2</th></tr></thead><tbody><tr><td>Cell 1</td><td>Cell 2</td></tr></tbody></table>', w: 6, h: 3 }},
+        { title: '3x3 table', description: '/table', icon: <Table size={20}/>, data: { type: 'text', style: 'body', title: 'Table', content: '<table><thead><tr><th>H1</th><th>H2</th><th>H3</th></tr></thead><tbody><tr><td>C1</td><td>C2</td><td>C3</td></tr><tr><td>C4</td><td>C5</td><td>C6</td></tr></tbody></table>', w: 8, h: 4 }},
+        { title: '4x4 table', description: '/table', icon: <Table size={20}/>, data: { type: 'text', style: 'body', title: 'Table', content: '<table><thead><tr><th>H1</th><th>H2</th><th>H3</th><th>H4</th></tr></thead><tbody><tr><td>C1</td><td>C2</td><td>C3</td><td>C4</td></tr><tr><td>C5</td><td>C6</td><td>C7</td><td>C8</td></tr><tr><td>C9</td><td>C10</td><td>C11</td><td>C12</td></tr></tbody></table>', w: 12, h: 5 }},
+    ]},
+    { type: 'heading', label: 'Lists', items: [
+        { title: 'Bulleted list', description: '- Item', icon: <List size={20}/>, data: { type: 'text', style: 'body', title: 'List', content: '<ul><li>List item 1</li><li>List item 2</li></ul>', w: 4, h: 2 }},
+        { title: 'Numbered list', description: '1. Item', icon: <ListOrdered size={20}/>, data: { type: 'text', style: 'body', title: 'List', content: '<ol><li>List item 1</li><li>List item 2</li></ol>', w: 4, h: 2 }},
+        { title: 'Todo list', description: '[] Item', icon: <ListTodo size={20}/>, data: { type: 'text', style: 'body', title: 'List', content: '<ul style="list-style-type:none; padding-left: 0;"><li><input type="checkbox" /> To-do item</li><li><input type="checkbox" /> To-do item</li></ul>', w: 4, h: 2 }},
+    ]},
+];
+
+const BasicBlocksPanel = () => (
+    <>
+        <header className="p-4 border-b border-slate-100 flex-shrink-0">
+            <h3 className="font-semibold text-slate-800">Basic blocks</h3>
+            <p className="text-xs text-slate-500">Add common elements like text.</p>
+        </header>
+        <div className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-4">
+            {basicBlocks.map(section => (
+                <div key={section.label}>
+                    <h4 className="text-sm font-semibold text-slate-600 mb-2">{section.label}</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        {section.items.map(item => <DraggableBlock key={item.title} title={item.title} description={item.description} icon={item.icon} dragData={item.data} />)}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </>
+);
+
 const toolbarItems = [
     { id: 'search', icon: Search, label: 'Search' },
     { id: 'text', icon: TypeIcon, label: 'Text' },
@@ -336,8 +391,8 @@ const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel
 );
 
 const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; }> = ({ activePanel, project, onClose }) => (
-    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg h-full overflow-hidden ${activePanel ? 'w-72 border border-slate-200' : 'w-0 border-none'}`}>
-        <div className="w-72 h-full flex flex-col">
+    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg h-full overflow-hidden ${activePanel ? 'w-80 border border-slate-200' : 'w-0 border-none'}`}>
+        <div className="w-80 h-full flex flex-col">
             {activePanel === 'charts' ? (
                 <>
                     <header className="p-4 border-b border-slate-100 flex-shrink-0">
@@ -357,19 +412,13 @@ const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onCl
                                 {project.analysis?.charts.map(chart => <DraggableChartItem key={chart.id} chart={chart} />)}
                             </div>
                         </div>
-                        <div>
-                            <h4 className="text-sm font-semibold text-slate-600 mb-2">Freeform diagrams</h4>
-                            <div className="space-y-2 opacity-50 cursor-not-allowed">
-                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Blank diagram</p></div>
-                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Weekly calendar</p></div>
-                                 <div className="p-3 rounded-lg bg-slate-100 text-center"><p className="text-xs font-medium text-slate-700">Gantt chart</p></div>
-                            </div>
-                        </div>
                     </div>
                 </>
-            ) : (
-                <div className="p-4 text-center text-sm text-slate-400">Functionality not yet implemented.</div>
-            )}
+            ) : activePanel === 'text' ? (
+                <BasicBlocksPanel />
+            ) : activePanel ? (
+                <div className="p-4 text-center text-sm text-slate-400 flex items-center justify-center h-full">Functionality not yet implemented.</div>
+            ) : null}
         </div>
     </div>
 );
@@ -502,7 +551,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         }));
     };
     
-    // FIX: The onDrop event from react-grid-layout is typed as a generic Event, but it is a DragEvent. Cast to DragEvent to access dataTransfer property.
     const onDrop = (index: number, _: ReportLayoutItem[], item: ReportLayoutItem, e: Event) => {
         const data = JSON.parse((e as DragEvent).dataTransfer?.getData('application/json') || '{}');
         if (!data.type) return;
@@ -515,9 +563,15 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             if (presentation.slides[index].layout.some(l => l.i === data.id)) return;
             newItem = { ...item, i: data.id, w: 3, h: 2 };
         } else if (data.type === 'text') {
-            const newBlock: TextBlock = { id: `text_${uuidv4()}`, type: 'text', title: `New ${data.style} Block`, content: '', style: data.style };
+            const newBlock: TextBlock = {
+                id: `text_${uuidv4()}`,
+                type: 'text',
+                title: data.title || `New ${data.style} Block`,
+                content: data.content || '',
+                style: data.style,
+            };
             handlePresentationUpdate(p => ({ ...p, textBlocks: [...(p.textBlocks || []), newBlock] }));
-            newItem = { ...item, i: newBlock.id, w: data.style === 'title' ? 12 : 6, h: data.style === 'title' ? 1 : 2 };
+            newItem = { ...item, i: newBlock.id, w: data.w || 6, h: data.h || 2 };
         }
         
         if (newItem) {
@@ -579,7 +633,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     className="absolute inset-0 overflow-y-auto custom-scrollbar transition-all duration-300"
                     style={{
                         paddingLeft: isNavigatorOpen ? '18rem' : '5rem',
-                        paddingRight: activePanel ? '24rem' : '5rem'
+                        paddingRight: activePanel ? '21rem' : '5rem'
                     }}
                 >
                     <div className="mx-auto my-8 space-y-8" style={{maxWidth: '1200px'}}>
@@ -588,7 +642,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                              return (
                                 <div
                                     key={slide.id}
-                                    // FIX: Use a block body for the ref callback to ensure a void return type.
                                     ref={el => { slideRefs.current[index] = el; }}
                                     data-slide-index={index}
                                     className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}

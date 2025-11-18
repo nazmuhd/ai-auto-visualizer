@@ -23,20 +23,13 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onNavigate }) => {
   const heroRef = useRef<HTMLDivElement>(null);
 
   return (
-    <section 
-      className="py-32" 
-      style={{ 
-        backgroundColor: '#f8fafc', // slate-50
-        backgroundImage: 'linear-gradient(rgba(0,0,0,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.03) 1px,transparent 1px)',
-        backgroundSize: '2rem 2rem' 
-      }}
-    >
+    <section className="py-32 bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" ref={heroRef}>
         <div className="flex flex-col lg:flex-row items-start gap-8">
           <div className="flex-1">
             <TimelineContent
               as="h2"
-              className="text-3xl !leading-tight font-medium text-slate-900 mb-8"
+              className="sm:text-4xl text-2xl md:text-5xl !leading-tight font-medium text-slate-900 mb-8"
             >
               We are{" "}
               <TimelineContent
