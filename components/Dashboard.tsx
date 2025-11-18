@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback, memo, lazy, Suspense } from 'react';
-import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, PresentationFormat, TextBlock, ReportTemplate, Presentation } from '../types.ts';
+
+import React, { useMemo, useState, useRef, useEffect, useCallback, memo } from 'react';
+import { AnalysisResult, DataRow, ChartConfig, LoadingState, DataQualityReport, Project, KpiConfig, LayoutInfo, SaveStatus, ReportLayoutItem, PresentationFormat, ReportTemplate, Presentation, ContentBlock } from '../types.ts';
 import { ChartRenderer, TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Download, Menu, FileText, BarChart3, Bot, UploadCloud, Edit3, Edit, LayoutGrid, PlusCircle, CheckCircle, Eye, EyeOff, GripVertical, Settings, Loader2, TrendingUp, TrendingDown, Minus, Filter, X, Save, MonitorPlay, Database, ChevronLeft, ArrowRight, MoreVertical } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,10 +23,9 @@ import { processFile } from '../services/dataParser.ts';
 import { analyzeData, generateInitialPresentation } from '../services/geminiService.ts';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
-
-const ReportStudio = lazy(() => import('./AIReportView.tsx').then(m => ({ default: m.ReportStudio })));
-const DataStudio = lazy(() => import('./DataStudio.tsx').then(m => ({ default: m.DataStudio })));
-const PresentationView = lazy(() => import('./PresentationView.tsx').then(m => ({ default: m.PresentationView })));
+import { ReportStudio } from './AIReportView.tsx';
+import { DataStudio } from './DataStudio.tsx';
+import { PresentationView } from './PresentationView.tsx';
 
 
 interface DashboardProps {
@@ -240,6 +240,7 @@ const SaveStatusIndicator: React.FC<{ status: SaveStatus }> = ({ status }) => {
 };
 
 const GlobalFilterBar: React.FC<{ filters: Record<string, Set<string>>, onRemove: (column: string, value?: string) => void }> = memo(({ filters, onRemove }) => {
+    // FIX: Explicitly type `values` to ensure it is treated as a Set, resolving potential type inference issues.
     const filterEntries = Object.entries(filters).flatMap(([col, values]: [string, Set<string>]) => Array.from(values).map(val => ({ col, val })));
     if (filterEntries.length === 0) return null;
 
@@ -471,17 +472,15 @@ const ProjectWorkspace: React.FC<{
                 )}
                 {currentView === 'report-studio' && !editingPresentationId && <ReportHub project={project} onCreateReport={onCreateReport} onSelectPresentation={onSelectPresentation} onRenamePresentation={onRenamePresentation} onDuplicatePresentation={onDuplicatePresentation} onDeletePresentation={onDeletePresentation} />}
                 {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
-                    <Suspense fallback={<ViewLoader />}>
-                        <ReportStudio 
-                            project={project}
-                            presentation={presentationToEdit}
-                            onPresentationUpdate={onPresentationUpdate}
-                            onBackToHub={onBackToHub}
-                            onPresent={onPresent}
-                        />
-                    </Suspense>
+                    <ReportStudio 
+                        project={project}
+                        presentation={presentationToEdit}
+                        onPresentationUpdate={onPresentationUpdate}
+                        onBackToHub={onBackToHub}
+                        onPresent={onPresent}
+                    />
                 )}
-                {currentView === 'data' && <div className="h-full"><Suspense fallback={<ViewLoader />}><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></Suspense></div>}
+                {currentView === 'data' && <div className="h-full"><DataStudio project={project} onProjectUpdate={onProjectUpdate} /></div>}
             </div>
         </div>
     );
@@ -619,6 +618,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             });
         }
         
+        // FIX: Explicitly type `allowedValues` to ensure it is treated as a Set, resolving potential type inference issues.
         Object.entries(globalFilters).forEach(([col, allowedValues]: [string, Set<string>]) => {
             if (allowedValues.size > 0) {
                 result = result.filter(row => allowedValues.has(String(row[col])));
@@ -1006,10 +1006,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
             const idMapping = new Map<string, string>();
 
-            const newTextBlocks = (originalPres.textBlocks || []).map(tb => {
-                const newId = `${tb.id.startsWith('text_') ? 'text_' : ''}${uuidv4()}`;
-                idMapping.set(tb.id, newId);
-                return { ...tb, id: newId };
+            // Handle new 'blocks' structure, fallback to legacy 'textBlocks' for migration
+            // Cast to 'any' to safely access legacy properties
+            const sourceBlocks: ContentBlock[] = originalPres.blocks || (originalPres as any).textBlocks || [];
+            
+            const newBlocks = sourceBlocks.map((b: any) => {
+                // Preserve prefix if present, otherwise generate new id
+                const prefix = b.id.split('_')[0] + '_'; 
+                const newId = `${prefix.length > 1 ? prefix : ''}${uuidv4()}`;
+                idMapping.set(b.id, newId);
+                return { ...b, id: newId };
             });
 
             const newSlides = originalPres.slides.map(slide => {
@@ -1025,8 +1031,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 id: `pres_${uuidv4()}`,
                 name: `${originalPres.name} (Copy)`,
                 slides: newSlides,
-                textBlocks: newTextBlocks,
+                blocks: newBlocks,
             };
+            
+            // Remove legacy textBlocks if it exists on the new object
+            if ('textBlocks' in newPresentation) {
+                delete (newPresentation as any).textBlocks;
+            }
 
             return { ...p, presentations: [...p.presentations, newPresentation] };
         });
@@ -1143,13 +1154,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             </div>
             
             {presentingPresentationId && activeProject && presentationToPresent && (
-                <Suspense fallback={<div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
-                    <PresentationView 
-                        project={activeProject} 
-                        presentation={presentationToPresent} 
-                        onClose={() => setPresentingPresentationId(null)} 
-                    />
-                </Suspense>
+                <PresentationView 
+                    project={activeProject} 
+                    presentation={presentationToPresent} 
+                    onClose={() => setPresentingPresentationId(null)} 
+                />
             )}
 
             <CreateProjectModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSave={handleCreateProject} />

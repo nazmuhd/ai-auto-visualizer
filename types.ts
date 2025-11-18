@@ -1,3 +1,4 @@
+
 export type DataRow = Record<string, any>;
 
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
@@ -42,19 +43,22 @@ export interface KpiConfig {
     multiplier?: number;
 }
 
-export interface TextBlock {
+export interface ContentBlock {
     id: string;
-    type: 'text';
-    title: string;
-    content: string;
-    style?: 'title' | 'subtitle' | 'body';
-}
-
-export interface ImageBlock {
-    id: string;
-    type: 'image';
-    src: string; // base64 data URL
-    alt?: string;
+    type: 'text' | 'image' | 'video' | 'shape' | 'table';
+    title?: string;
+    content?: string; // For text content, image URL, video URL, or table JSON
+    style?: 'title' | 'subtitle' | 'body' | 'h1' | 'h2' | 'quote' | 'bullet' | 'number' | 'todo' | 'note' | 'warning' | 'rect' | 'circle' | 'triangle' | 'arrow' | 'line' | 'filled'; 
+    props?: Record<string, any>; // Flexible props for specific rendering (e.g. colors, border)
+    // Advanced Shape/Theme Properties
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    rotation?: number;
+    opacity?: number;
+    // Placeholder Logic
+    isPlaceholder?: boolean;
+    placeholderType?: 'text' | 'chart' | 'image';
 }
 
 export interface AnalysisResult {
@@ -90,9 +94,31 @@ export interface ReportLayoutItem {
 }
 
 // --- Presentation Studio 2.0 Types ---
+export type LayoutId = 'BLANK' | 'TITLE_SLIDE' | 'TITLE_CONTENT' | 'TWO_CONTENT' | 'SECTION_HEADER';
+
+export interface PresentationTheme {
+    colors: {
+        accent1: string;
+        accent2: string;
+        accent3: string;
+        accent4: string;
+        accent5: string;
+        accent6: string;
+        background: string;
+        text: string;
+    };
+    fonts: {
+        heading: string;
+        body: string;
+    };
+}
+
 export interface Slide {
     id: string;
     layout: ReportLayoutItem[];
+    layoutId?: LayoutId;
+    sectionTitle?: string; // If present, starts a new section
+    notes?: string; // Speaker notes
 }
 
 export interface Presentation {
@@ -100,11 +126,11 @@ export interface Presentation {
     name: string;
     format: 'slides' | 'document';
     slides: Slide[];
-    themeSettings?: object;
-    textBlocks?: TextBlock[];
-    imageBlocks?: ImageBlock[];
-    header?: TextBlock;
-    footer?: TextBlock;
+    theme?: PresentationTheme;
+    blocks?: ContentBlock[]; // Renamed from textBlocks to support all content types
+    header?: ContentBlock;
+    footer?: ContentBlock;
+    themeSettings?: object; // Legacy
 }
 
 export interface Project {

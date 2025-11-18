@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, DataRow, ChartConfig, KpiConfig, TextBlock, ReportTemplate, Presentation, Slide, ReportLayoutItem } from '../types.ts';
+import { AnalysisResult, DataRow, ChartConfig, KpiConfig, ContentBlock, ReportTemplate, Presentation, Slide, ReportLayoutItem } from '../types.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 // Initialize the Gemini API client
@@ -100,7 +101,7 @@ const presentationSchema = {
                 required: ['layout']
             }
         },
-        textBlocks: {
+        blocks: {
             type: Type.ARRAY,
             description: "Any text blocks needed for the presentation, like titles or summaries.",
             items: {
@@ -116,7 +117,7 @@ const presentationSchema = {
             }
         }
     },
-    required: ['name', 'slides', 'textBlocks']
+    required: ['name', 'slides', 'blocks']
 };
 
 const slideLayoutSchema = {
@@ -137,7 +138,7 @@ const slideLayoutSchema = {
                 required: ['i', 'x', 'y', 'w', 'h'],
             }
         },
-        newTextBlocks: {
+        newBlocks: {
             type: Type.ARRAY,
             description: "Any NEW text blocks created for this slide. Do not include existing ones.",
             items: {
@@ -153,7 +154,7 @@ const slideLayoutSchema = {
             }
         }
     },
-    required: ['layout', 'newTextBlocks']
+    required: ['layout', 'newBlocks']
 };
 
 export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> => {
@@ -467,7 +468,7 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
     PRESENTATION REQUIREMENTS:
     - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
     - Grid System: The layout is a 12-column grid.
-    - Text Blocks: Any text you generate (titles, insights) must be created as a TextBlock object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+    - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
     - Content Placement:
         ${slideInstructions}
     
@@ -498,16 +499,16 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
                 id: `slide_${uuidv4()}`,
                 layout: slide.layout || [],
             })),
-            textBlocks: rawResult.textBlocks || [],
+            blocks: rawResult.blocks || [],
         };
         
         if (template.format === 'document') {
-            const headerBlock: TextBlock = { id: `header_${uuidv4()}`, type: 'text', title: 'Report Header', content: `${projectName} - ${new Date().toLocaleDateString()}` };
-            const footerBlock: TextBlock = { id: `footer_${uuidv4()}`, type: 'text', title: 'Report Footer', content: 'Page %page% of %total%' };
+            const headerBlock: ContentBlock = { id: `header_${uuidv4()}`, type: 'text', title: 'Report Header', content: `${projectName} - ${new Date().toLocaleDateString()}` };
+            const footerBlock: ContentBlock = { id: `footer_${uuidv4()}`, type: 'text', title: 'Report Footer', content: 'Page %page% of %total%' };
             presentation.header = headerBlock;
             presentation.footer = footerBlock;
-            if (!presentation.textBlocks) presentation.textBlocks = [];
-            presentation.textBlocks.push(headerBlock, footerBlock);
+            if (!presentation.blocks) presentation.blocks = [];
+            presentation.blocks.push(headerBlock, footerBlock);
         }
 
         return presentation;
@@ -523,7 +524,7 @@ export const addSlideWithAI = async (
     analysis: AnalysisResult,
     projectName: string,
     isSlides: boolean
-): Promise<{ newSlide: Slide; newTextBlocks: TextBlock[] }> => {
+): Promise<{ newSlide: Slide; newBlocks: ContentBlock[] }> => {
     const analysisContext = JSON.stringify({
         availableKpis: analysis.kpis.map(k => ({ id: k.id, title: k.title })),
         availableCharts: analysis.charts.map(c => ({ id: c.id, title: c.title })),
@@ -543,12 +544,12 @@ export const addSlideWithAI = async (
     "${prompt}"
 
     REQUIREMENTS:
-    - Text Blocks: Any text you generate (titles, insights) must be created as a NEW TextBlock object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+    - Blocks: Any text you generate (titles, insights) must be created as a NEW Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
     - Content Placement: Intelligently arrange the requested items on the slide. Use appropriate text blocks to fulfill the request.
     
     OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema, containing the 'layout' for the new slide and a list of any 'newTextBlocks' you created.
-    - Ensure all 'i' values in the layout correspond to an ID from the available context or a newly created text block ID.
+    - Generate a JSON object that strictly adheres to the provided schema, containing the 'layout' for the new slide and a list of any 'newBlocks' you created.
+    - Ensure all 'i' values in the layout correspond to an ID from the available context or a newly created block ID.
     `;
 
     try {
@@ -570,7 +571,7 @@ export const addSlideWithAI = async (
             layout: rawResult.layout || [],
         };
 
-        return { newSlide, newTextBlocks: rawResult.newTextBlocks || [] };
+        return { newSlide, newBlocks: rawResult.newBlocks || [] };
 
     } catch (error) {
         console.error("Gemini Add Slide Error:", error);
@@ -580,19 +581,19 @@ export const addSlideWithAI = async (
 
 export const editSlideWithAI = async (
     currentSlide: Slide,
-    allTextBlocks: TextBlock[],
+    allBlocks: ContentBlock[],
     analysis: AnalysisResult,
     prompt: string,
     isSlides: boolean
-): Promise<{ updatedLayout: ReportLayoutItem[]; newTextBlocks: TextBlock[] }> => {
+): Promise<{ updatedLayout: ReportLayoutItem[]; newBlocks: ContentBlock[] }> => {
     
     const itemsOnSlide = currentSlide.layout.map(item => {
         const chart = analysis.charts.find(c => c.id === item.i);
         if (chart) return `Chart: "${chart.title}" (ID: ${item.i})`;
         const kpi = analysis.kpis.find(k => k.id === item.i);
         if (kpi) return `KPI: "${kpi.title}" (ID: ${item.i})`;
-        const text = allTextBlocks.find(t => t.id === item.i);
-        if (text) return `Text: "${text.content.substring(0, 50)}..." (ID: ${item.i})`;
+        const text = allBlocks.find(t => t.id === item.i);
+        if (text) return `Text: "${text.content?.substring(0, 50)}..." (ID: ${item.i})`;
         return `Unknown item (ID: ${item.i})`;
     }).join('\n');
 
@@ -618,12 +619,12 @@ export const editSlideWithAI = async (
 
     REQUIREMENTS:
     - You MUST return a complete new layout for the slide.
-    - If you add new text content, create it as a NEW TextBlock object in the 'newTextBlocks' array. Use unique IDs (e.g., 'text_uuid').
+    - If you add new text content, create it as a NEW Block object in the 'newBlocks' array. Use unique IDs (e.g., 'text_uuid').
     - You can use any available items from the project context, not just the ones already on the slide.
     - You can remove existing items by simply omitting them from the new layout.
     
     OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema, containing the new 'layout' and any 'newTextBlocks' you created.
+    - Generate a JSON object that strictly adheres to the provided schema, containing the new 'layout' and any 'newBlocks' you created.
     `;
 
     try {
@@ -642,34 +643,10 @@ export const editSlideWithAI = async (
 
         return {
             updatedLayout: rawResult.layout || [],
-            newTextBlocks: rawResult.newTextBlocks || [],
+            newBlocks: rawResult.newBlocks || [],
         };
     } catch (error) {
         console.error("Gemini Edit Slide Error:", error);
         throw new Error("Failed to edit the slide with AI. Please try rephrasing your request.");
-    }
-};
-
-export const generateImageFromPrompt = async (prompt: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
-            config: {
-              numberOfImages: 1,
-              outputMimeType: 'image/jpeg',
-              aspectRatio: '1:1',
-            },
-        });
-
-        if (!response.generatedImages || response.generatedImages.length === 0) {
-            throw new Error("AI did not generate an image.");
-        }
-
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
-    } catch (error) {
-        console.error("Gemini Image Generation Error:", error);
-        throw new Error("Failed to generate the AI image. Please try a different prompt.");
     }
 };

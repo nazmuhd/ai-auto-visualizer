@@ -1,24 +1,12 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState } from 'react';
 import { LandingPage } from './components/LandingPage.tsx';
 import { LoginPage } from './components/pages/LoginPage.tsx';
 import { SignupPage } from './components/pages/SignupPage.tsx';
 import { AboutPage } from './components/pages/AboutPage.tsx';
 import { PricingPage } from './components/pages/PricingPage.tsx';
 import { ContactPage } from './components/pages/ContactPage.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
 import { Page } from './types.ts';
-import { Loader2 } from 'lucide-react';
-
-const Dashboard = lazy(() => import('./components/Dashboard.tsx').then(m => ({ default: m.Dashboard })));
-
-const FullscreenLoader = () => (
-  <div className="w-screen h-screen flex items-center justify-center bg-slate-50">
-    <div className="text-center flex flex-col items-center">
-      <Loader2 size={32} className="text-primary-600 animate-spin mb-4" />
-      <p className="text-lg font-semibold text-slate-700">Loading Dashboard...</p>
-    </div>
-  </div>
-);
-
 
 function App() {
   const [page, setPage] = useState<Page>('landing');
@@ -59,11 +47,7 @@ function App() {
         return <ContactPage {...commonProps} />;
       case 'dashboard':
         if (userEmail) {
-          return (
-            <Suspense fallback={<FullscreenLoader />}>
-              <Dashboard userEmail={userEmail} onLogout={handleLogout} />
-            </Suspense>
-          );
+          return <Dashboard userEmail={userEmail} onLogout={handleLogout} />;
         }
         setPage('login');
         return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
