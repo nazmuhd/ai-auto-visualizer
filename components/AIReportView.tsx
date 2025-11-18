@@ -336,7 +336,7 @@ const IconToolbar: React.FC<{ activePanel: string | null; setActivePanel: (panel
 );
 
 const FlyoutPanel: React.FC<{ activePanel: string | null; project: Project; onClose: () => void; }> = ({ activePanel, project, onClose }) => (
-    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl border border-slate-200 shadow-lg h-full overflow-hidden ${activePanel ? 'w-72' : 'w-0'}`}>
+    <div className={`transition-all duration-300 ease-in-out bg-white rounded-xl shadow-lg max-h-[700px] overflow-hidden ${activePanel ? 'w-72 border border-slate-200' : 'w-0 border-none'}`}>
         <div className="w-72 h-full flex flex-col">
             {activePanel === 'charts' ? (
                 <>
@@ -391,12 +391,9 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [isNavigatorOpen, setIsNavigatorOpen] = useState(true);
     const [navigatorViewMode, setNavigatorViewMode] = useState<'filmstrip' | 'list'>('list');
     const [activePanel, setActivePanel] = useState<string | null>(null);
-    const [aiEditPrompt, setAiEditPrompt] = useState('');
-    const [isAiEditing, setIsAiEditing] = useState(false);
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     
-    // FIX: Hoist `isSlides` declaration before its use in `handleAiEditCurrentSlide`.
     const isSlides = presentation.format === 'slides';
 
     useEffect(() => {
@@ -536,33 +533,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
          }
     };
     
-     const handleAiEditCurrentSlide = useCallback(async () => {
-        if (!aiEditPrompt.trim() || !project.analysis) return;
-        setIsAiEditing(true);
-        try {
-            const { updatedLayout, newTextBlocks } = await editSlideWithAI(
-                presentation.slides[currentPage],
-                presentation.textBlocks || [],
-                project.analysis,
-                aiEditPrompt,
-                isSlides
-            );
-            handlePresentationUpdate(p => ({
-                ...p,
-                slides: p.slides.map((s, i) => i === currentPage ? { ...s, layout: updatedLayout } : s),
-                textBlocks: [...(p.textBlocks || []), ...newTextBlocks],
-            }));
-            setAiEditPrompt('');
-        } catch (err) {
-             console.error("Failed to edit AI slide", err);
-             alert("Sorry, I couldn't edit the slide. Please try rephrasing your request.");
-        } finally {
-            setIsAiEditing(false);
-        }
-
-    }, [aiEditPrompt, project, presentation, currentPage, isSlides, handlePresentationUpdate]);
-
-
     const renderGridItemContent = (item: ReportLayoutItem) => {
         const chart = project.analysis?.charts.find(c => c.id === item.i);
         if (chart) return <div className="w-full h-full"><ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} /></div>;
@@ -577,7 +547,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     }
 
     return (
-        <div className="flex flex-col h-full w-full bg-slate-100">
+        <div className="flex flex-col h-full w-full bg-[#F0F2F5]">
             <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 h-16 flex justify-between items-center z-20">
                 <div className="flex items-center gap-4">
                     <button onClick={onBackToHub} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900">
@@ -619,7 +589,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                     key={slide.id}
                                     ref={el => slideRefs.current[index] = el}
                                     data-slide-index={index}
-                                    className={`relative bg-[#FBF9F6] shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
+                                    className={`relative bg-white shadow-lg border border-slate-200 ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'}`}
                                 >
                                     {visibleSlides.has(index) ? (
                                         <ResponsiveGridLayout
@@ -653,7 +623,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 
                 {/* Floating UI elements are siblings to the scrollable container */}
                 {!isNavigatorOpen && (
-                    <button onClick={() => setIsNavigatorOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-4 z-30 p-2 bg-white rounded-lg shadow-lg border border-slate-200 text-slate-600 hover:text-primary-600 hover:bg-primary-50">
+                    <button onClick={() => setIsNavigatorOpen(true)} className="absolute top-1/2 -translate-y-1/2 left-4 z-30 p-2 bg-white rounded-full shadow-lg border border-slate-200 text-slate-600 hover:text-primary-600 hover:bg-primary-50">
                         <LayoutGrid size={20} />
                     </button>
                 )}
@@ -675,29 +645,10 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </aside>
 
-                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-start gap-2 z-10 h-[80vh] max-h-[700px]">
+                 <div className="absolute top-1/2 -translate-y-1/2 right-4 flex items-center gap-2 z-10">
                     <FlyoutPanel activePanel={activePanel} project={project} onClose={() => setActivePanel(null)} />
                     <IconToolbar activePanel={activePanel} setActivePanel={setActivePanel} />
                 </div>
-                
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-xl">
-                    <div className="relative">
-                        <Sparkles size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-500" />
-                        <input
-                            type="text"
-                            value={aiEditPrompt}
-                            onChange={e => setAiEditPrompt(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleAiEditCurrentSlide()}
-                            placeholder={`e.g., "Add a title called 'Sales Summary' and show the top 3 KPIs"`}
-                            className="w-full pl-12 pr-28 py-3 bg-white rounded-full shadow-lg border border-slate-200 focus:ring-2 focus:ring-primary-400 outline-none"
-                            disabled={isAiEditing}
-                        />
-                         <button onClick={handleAiEditCurrentSlide} disabled={isAiEditing || !aiEditPrompt.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-slate-800 text-white rounded-full font-semibold text-sm hover:bg-black disabled:bg-slate-300 flex items-center">
-                            {isAiEditing ? <Loader2 size={16} className="animate-spin" /> : 'Generate'}
-                         </button>
-                    </div>
-                </div>
-
             </main>
         </div>
     );
