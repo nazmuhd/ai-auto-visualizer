@@ -2,6 +2,7 @@
 import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, ReportTemplate, Presentation, Slide, ContentBlock, ReportLayoutItem } from '../../types.ts';
+import { PromptBuilder } from '../../lib/prompt-builder.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 const presentationSchema = {
@@ -107,24 +108,20 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
         - SUBSEQUENT PAGES: Add up to 4 charts, placing 1 or 2 charts per page. For each chart, add a small text block with an insight.
         `;
     
-    const prompt = `
-    ROLE: Expert Presentation Designer.
-    TASK: Create a professional, multi-page presentation structure in JSON format based on the provided analysis.
-
-    ANALYSIS CONTEXT (Available items and their IDs):
-    ${analysisContext}
-
-    PRESENTATION REQUIREMENTS:
-    - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-    - Grid System: The layout is a 12-column grid.
-    - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
-    - Content Placement:
-        ${slideInstructions}
-    
-    OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema.
-    - Ensure all 'i' values in layouts correspond to an ID from the available context or a newly created text block ID.
-    `;
+    const prompt = new PromptBuilder('Expert Presentation Designer')
+        .setTask('Create a professional, multi-page presentation structure in JSON format based on the provided analysis.')
+        .addContext('ANALYSIS CONTEXT', analysisContext)
+        .addContext('PRESENTATION REQUIREMENTS', `
+            - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+            - Grid System: The layout is a 12-column grid.
+            - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+            - Content Placement: ${slideInstructions}
+        `)
+        .addContext('OUTPUT', `
+            - Generate a JSON object that strictly adheres to the provided schema.
+            - Ensure all 'i' values in layouts correspond to an ID from the available context or a newly created text block ID.
+        `)
+        .build();
 
     try {
         const response = await ai.models.generateContent({
@@ -175,15 +172,10 @@ export const improveText = async (text: string, promptType: 'improve' | 'summari
         ? "Summarize the following text into a concise paragraph, capturing the main point."
         : "Proofread the following text. Correct any grammar or spelling mistakes and return only the corrected text. Do not change the meaning or tone unless it's grammatically necessary.";
 
-    const prompt = `
-    ROLE: Expert Editor & Business Writer.
-    TASK: ${goal}
-
-    ORIGINAL TEXT:
-    "${text}"
-
-    REVISED TEXT:
-    `;
+    const prompt = new PromptBuilder('Expert Editor & Business Writer')
+        .setTask(goal)
+        .addContext('ORIGINAL TEXT', text)
+        .build();
 
     try {
         const response = await ai.models.generateContent({
@@ -200,7 +192,7 @@ export const improveText = async (text: string, promptType: 'improve' | 'summari
 };
 
 export const addSlideWithAI = async (
-    prompt: string,
+    promptUser: string,
     analysis: AnalysisResult,
     projectName: string,
     isSlides: boolean
@@ -210,27 +202,20 @@ export const addSlideWithAI = async (
         availableCharts: analysis.charts.map(c => ({ id: c.id, title: c.title })),
     });
 
-    const aiPrompt = `
-    ROLE: Expert Presentation Designer.
-    TASK: Create a SINGLE new slide structure in JSON format based on a user's request.
-
-    CONTEXT:
-    - Project Name: "${projectName}"
-    - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-    - Grid System: The layout is a 12-column grid.
-    - Available Items: ${analysisContext}
-
-    USER'S REQUEST for the new slide:
-    "${prompt}"
-
-    REQUIREMENTS:
-    - Blocks: Any text you generate (titles, insights) must be created as a NEW Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
-    - Content Placement: Intelligently arrange the requested items on the slide. Use appropriate text blocks to fulfill the request.
-    
-    OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema, containing the 'layout' for the new slide and a list of any 'newBlocks' you created.
-    - Ensure all 'i' values in the layout correspond to an ID from the available context or a newly created block ID.
-    `;
+    const aiPrompt = new PromptBuilder('Expert Presentation Designer')
+        .setTask('Create a SINGLE new slide structure in JSON format based on a user\'s request.')
+        .addContext('CONTEXT', `
+            - Project Name: "${projectName}"
+            - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+            - Grid System: The layout is a 12-column grid.
+            - Available Items: ${analysisContext}
+        `)
+        .addContext('USER REQUEST', promptUser)
+        .addContext('REQUIREMENTS', `
+            - Blocks: Any text you generate (titles, insights) must be created as a NEW Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+            - Content Placement: Intelligently arrange the requested items on the slide. Use appropriate text blocks to fulfill the request.
+        `)
+        .build();
 
     try {
         const response = await ai.models.generateContent({
@@ -263,7 +248,7 @@ export const editSlideWithAI = async (
     currentSlide: Slide,
     allBlocks: ContentBlock[],
     analysis: AnalysisResult,
-    prompt: string,
+    promptUser: string,
     isSlides: boolean
 ): Promise<{ updatedLayout: ReportLayoutItem[]; newBlocks: ContentBlock[] }> => {
     
@@ -282,30 +267,22 @@ export const editSlideWithAI = async (
         availableCharts: analysis.charts.map(c => ({ id: c.id, title: c.title })),
     });
 
-    const aiPrompt = `
-    ROLE: Expert Presentation Designer.
-    TASK: Revise the layout of a SINGLE slide based on a user's request. You can add, remove, or rearrange items.
-
-    CONTEXT:
-    - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-    - Grid System: A 12-column grid.
-    - Items currently on the slide:
-    ${itemsOnSlide || 'This slide is currently empty.'}
-    - Full list of available items for this project:
-    ${analysisContext}
-
-    USER'S EDIT REQUEST:
-    "${prompt}"
-
-    REQUIREMENTS:
-    - You MUST return a complete new layout for the slide.
-    - If you add new text content, create it as a NEW Block object in the 'newBlocks' array. Use unique IDs (e.g., 'text_uuid').
-    - You can use any available items from the project context, not just the ones already on the slide.
-    - You can remove existing items by simply omitting them from the new layout.
-    
-    OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema, containing the new 'layout' and any 'newBlocks' you created.
-    `;
+    const aiPrompt = new PromptBuilder('Expert Presentation Designer')
+        .setTask('Revise the layout of a SINGLE slide based on a user\'s request. You can add, remove, or rearrange items.')
+        .addContext('CONTEXT', `
+            - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+            - Grid System: A 12-column grid.
+            - Items currently on the slide: ${itemsOnSlide || 'This slide is currently empty.'}
+            - Full list of available items for this project: ${analysisContext}
+        `)
+        .addContext('USER REQUEST', promptUser)
+        .addContext('REQUIREMENTS', `
+            - You MUST return a complete new layout for the slide.
+            - If you add new text content, create it as a NEW Block object in the 'newBlocks' array. Use unique IDs (e.g., 'text_uuid').
+            - You can use any available items from the project context, not just the ones already on the slide.
+            - You can remove existing items by simply omitting them from the new layout.
+        `)
+        .build();
 
     try {
         const response = await ai.models.generateContent({

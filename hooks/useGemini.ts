@@ -1,7 +1,9 @@
 
 import { useState, useCallback, useRef } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { analyzeData as analyzeDataService } from '../services/ai/analysisService.ts';
 import { generateInitialPresentation } from '../services/ai/presentationService.ts';
+import { queryDataWithAI, generateFormulaFromNaturalLanguage } from '../services/ai/queryService.ts';
 import { DataRow, AnalysisResult, ReportTemplate, Presentation } from '../types.ts';
 
 const ANALYSIS_STEPS = [
@@ -23,10 +25,9 @@ const REPORT_STEPS = [
 ];
 
 export const useGemini = () => {
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    // We still keep local progress state because useMutation's 'pending' is just a boolean,
+    // and we want to show granular progress updates which are simulated.
     const [analysisProgress, setAnalysisProgress] = useState<{ status: string, percentage: number } | null>(null);
-    
     const progressInterval = useRef<number | null>(null);
 
     const startProgressSimulation = (steps: typeof ANALYSIS_STEPS) => {
@@ -40,10 +41,9 @@ export const useGemini = () => {
             if (stepIndex < steps.length) {
                 setAnalysisProgress({ status: steps[stepIndex].status, percentage: steps[stepIndex].pct });
             } else {
-                // Just hold at the last step
                 if (progressInterval.current) clearInterval(progressInterval.current);
             }
-        }, 1500); // Change step every 1.5 seconds
+        }, 1500);
     };
 
     const stopProgressSimulation = () => {
@@ -51,56 +51,104 @@ export const useGemini = () => {
             clearInterval(progressInterval.current);
             progressInterval.current = null;
         }
+        setAnalysisProgress(null);
     };
 
-    const analyzeData = useCallback(async (sample: DataRow[]): Promise<AnalysisResult | undefined> => {
-        setIsAnalyzing(true);
-        setAnalysisError(null);
-        startProgressSimulation(ANALYSIS_STEPS);
-        
-        try {
-            const result = await analyzeDataService(sample);
-            return result;
-        } catch (err: any) {
-            setAnalysisError(err.message || "Failed to analyze data.");
-            return undefined;
-        } finally {
+    // -- Mutation: Analyze Data --
+    const analysisMutation = useMutation({
+        mutationFn: async (sample: DataRow[]) => {
+            return await analyzeDataService(sample);
+        },
+        onMutate: () => {
+            startProgressSimulation(ANALYSIS_STEPS);
+        },
+        onSettled: () => {
             stopProgressSimulation();
-            setIsAnalyzing(false);
-            setAnalysisProgress(null);
         }
-    }, []);
+    });
+
+    // -- Mutation: Generate Presentation --
+    const presentationMutation = useMutation({
+        mutationFn: async (params: { analysis: AnalysisResult, template: ReportTemplate, projectName: string }) => {
+            return await generateInitialPresentation(params.analysis, params.template, params.projectName);
+        },
+        onMutate: () => {
+            startProgressSimulation(REPORT_STEPS);
+        },
+        onSettled: () => {
+            stopProgressSimulation();
+        }
+    });
+
+    // -- Mutation: Ask AI (Data Studio) --
+    const queryDataMutation = useMutation({
+        mutationFn: async (params: { data: DataRow[], question: string }) => {
+            return await queryDataWithAI(params.data, params.question);
+        }
+    });
+
+    // -- Mutation: Generate Formula (Data Studio) --
+    const formulaMutation = useMutation({
+        mutationFn: async (params: { query: string, columns: string[] }) => {
+            return await generateFormulaFromNaturalLanguage(params.query, params.columns);
+        }
+    });
+
+    const analyzeData = useCallback(async (sample: DataRow[]): Promise<AnalysisResult | undefined> => {
+        try {
+            return await analysisMutation.mutateAsync(sample);
+        } catch (error) {
+            console.error("Analysis failed", error);
+            return undefined;
+        }
+    }, [analysisMutation]);
 
     const generatePresentation = useCallback(async (analysis: AnalysisResult, template: ReportTemplate, projectName: string): Promise<Presentation | undefined> => {
-        setIsAnalyzing(true);
-        setAnalysisError(null);
-        startProgressSimulation(REPORT_STEPS);
-
         try {
-            const presentation = await generateInitialPresentation(analysis, template, projectName);
-            return presentation;
-        } catch (err: any) {
-            setAnalysisError(err.message || "Failed to generate presentation.");
+            return await presentationMutation.mutateAsync({ analysis, template, projectName });
+        } catch (error) {
+            console.error("Presentation generation failed", error);
             return undefined;
-        } finally {
-            stopProgressSimulation();
-            setIsAnalyzing(false);
-            setAnalysisProgress(null);
         }
-    }, []);
+    }, [presentationMutation]);
+
+    const queryData = useCallback(async (data: DataRow[], question: string): Promise<string | undefined> => {
+        try {
+            return await queryDataMutation.mutateAsync({ data, question });
+        } catch (error) {
+            console.error("Data query failed", error);
+            throw error;
+        }
+    }, [queryDataMutation]);
+
+    const generateFormula = useCallback(async (query: string, columns: string[]): Promise<string | undefined> => {
+        try {
+            return await formulaMutation.mutateAsync({ query, columns });
+        } catch (error) {
+            console.error("Formula generation failed", error);
+            throw error;
+        }
+    }, [formulaMutation]);
     
     const resetGemini = useCallback(() => {
         stopProgressSimulation();
-        setIsAnalyzing(false);
-        setAnalysisError(null);
-        setAnalysisProgress(null);
-    }, []);
+        analysisMutation.reset();
+        presentationMutation.reset();
+        queryDataMutation.reset();
+        formulaMutation.reset();
+    }, [analysisMutation, presentationMutation, queryDataMutation, formulaMutation]);
 
     return {
         analyzeData,
         generatePresentation,
-        isAnalyzing,
-        analysisError,
+        queryData,
+        generateFormula,
+        // Unified loading state
+        isAnalyzing: analysisMutation.isPending || presentationMutation.isPending,
+        isQuerying: queryDataMutation.isPending,
+        isGeneratingFormula: formulaMutation.isPending,
+        // Unified error state message
+        analysisError: analysisMutation.error?.message || presentationMutation.error?.message || null,
         analysisProgress,
         resetGemini
     };

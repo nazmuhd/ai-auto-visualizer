@@ -8,7 +8,7 @@ importScripts('https://aistudiocdn.com/xlsx@0.18.5/dist/xlsx.full.min.js');
 declare const XLSX: any;
 
 // Type definitions are manually duplicated here because workers can't use ES module imports.
-type DataRow = Record<string, any>;
+type ParserDataRow = Record<string, any>;
 interface DataIssue {
     type: 'missing_values' | 'duplicates' | 'data_type_mismatch' | 'empty_file';
     severity: 'low' | 'medium' | 'high';
@@ -24,13 +24,13 @@ interface DataQualityReport {
 }
 
 
-const parseFileContents = (data: ArrayBuffer): Promise<DataRow[]> => {
+const parseFileContents = (data: ArrayBuffer): Promise<ParserDataRow[]> => {
     return new Promise((resolve, reject) => {
         try {
             const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null }) as DataRow[];
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null }) as ParserDataRow[];
 
             if (jsonData.length === 0) {
                 reject(new Error("File appears to be empty or unreadable."));
@@ -44,7 +44,7 @@ const parseFileContents = (data: ArrayBuffer): Promise<DataRow[]> => {
 };
 
 
-const validateData = (data: DataRow[]): DataQualityReport => {
+const validateData = (data: ParserDataRow[]): DataQualityReport => {
     const issues = [];
     let score = 100;
     const rowCount = data.length;
@@ -116,7 +116,7 @@ const validateData = (data: DataRow[]): DataQualityReport => {
     };
 };
 
-const sampleData = (data: DataRow[]): DataRow[] => {
+const sampleData = (data: ParserDataRow[]): ParserDataRow[] => {
     if (data.length <= 20) {
         return data;
     }

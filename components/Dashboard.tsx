@@ -10,9 +10,9 @@ import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { EmbeddedDataPreview } from './EmbeddedDataPreview.tsx';
 import { PresentationView } from './PresentationView.tsx';
-import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx'; // Import new skeleton
+import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx';
 
-// Feature Components (using new barrel files)
+// Feature Components
 import { DashboardWorkspace, ProjectEmptyState } from '../features/dashboard/index.ts';
 
 // Modals
@@ -94,14 +94,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     // --- Computed ---
     const dateColumn = useMemo(() => {
-        const data = activeProject?.dataSource.data;
+        if (!activeProject || !activeProject.dataSource) return null;
+        const data = activeProject.dataSource.data;
         if (!data || data.length < 5) return null;
         const columns = Object.keys(data[0]);
         return columns.find(col => !isNaN(Date.parse(String(data[4]?.[col])))) || null;
     }, [activeProject]);
 
     const filteredData = useMemo(() => {
-        if (!activeProject) return [];
+        if (!activeProject || !activeProject.dataSource) return [];
         let result = activeProject.dataSource.data;
 
         if (dateColumn && timeFilter.type !== 'all') {
@@ -145,11 +146,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleFileSelect = useCallback(async (file: File) => {
         const result = await processFile(file);
         if (result) {
-             let projectToUpdate = activeProject;
-             if (projectToUpdate && projectToUpdate.dataSource.data.length === 0) {
+             if (activeProject && activeProject.dataSource && activeProject.dataSource.data.length === 0) {
                  updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: result.data } }));
              } else {
-                 // Temporary project
+                 // New temporary project
                  const newProject = {
                     id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
                     dataSource: { name: file.name, data: result.data }, analysis: null,
@@ -342,7 +342,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setIsGeneratingReport(true); // START LOADING
         
         try {
-             // Use the enhanced generatePresentation from useGemini hook which handles progress
              const pres = await generatePresentation(activeProject.analysis!, template, activeProject.name);
              if (pres) {
                  updateActiveProject((p: any) => ({ ...p, presentations: [...(p.presentations || []), pres] }));

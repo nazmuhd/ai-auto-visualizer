@@ -1,156 +1,88 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Project, SaveStatus } from '../types.ts';
-
-const STORAGE_KEY = 'ai-insights-projects';
+import { useCallback, useEffect } from 'react';
+import { Project } from '../types.ts';
+import { useAppStore } from '../stores/useAppStore.ts';
 
 export const useProjects = () => {
-    const [savedProjects, setSavedProjects] = useState<Project[]>([]);
-    const [activeProject, setActiveProject] = useState<Project | null>(null);
-    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-    const saveStatusTimeoutRef = useRef<number | null>(null);
+    const projects = useAppStore(state => state.projects); // Now returns ProjectMetadata[] but Dashboard expects Project[] type compatible interface for display
+    const activeProject = useAppStore(state => state.activeProject);
+    const saveStatus = useAppStore(state => state.saveStatus);
+    
+    const storeCreateProject = useAppStore(state => state.createProject);
+    const storeSaveProject = useAppStore(state => state.saveActiveProject);
+    const storeLoadProject = useAppStore(state => state.loadProject);
+    const storeDeleteProject = useAppStore(state => state.deleteProject);
+    const storeUpdateActive = useAppStore(state => state.updateActiveProject);
+    const storeReset = useAppStore(state => state.resetActiveProject);
+    const storeSetActive = useAppStore(state => state.setActiveProject);
+    const setSaveStatus = useAppStore(state => state.setSaveStatus);
 
-    // Load projects on mount
+    // Access Temporal Store for Undo/Redo
+    const { undo, redo, clear, past, future } = useAppStore.temporal.getState();
+    
+    // Subscribe to temporal changes to trigger re-renders when history changes if needed
+    // For now, we just expose the functions.
+
+    // Clear history when project changes
     useEffect(() => {
-        try {
-            const storedProjects = localStorage.getItem(STORAGE_KEY);
-            if (storedProjects) {
-                const projects: Project[] = JSON.parse(storedProjects, (key, value) => {
-                    if ((key === 'createdAt' || key === 'lastSaved') && typeof value === 'string') {
-                        return new Date(value);
-                    }
-                    return value;
-                });
-                setSavedProjects(projects);
-            }
-        } catch (e) {
-            console.error("Failed to load projects from local storage", e);
-        }
-    }, []);
+        clear();
+    }, [activeProject?.id, clear]);
 
-    // Helper to save to LS
-    const persistProjects = (projects: Project[]) => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-        } catch (e) {
-            console.error("Failed to save projects to local storage", e);
-        }
-    };
-
+    // Mapping new store actions to old hook interface for compatibility
+    
     const createProject = useCallback((name: string, description: string) => {
-        const newProject: Project = {
-            id: new Date().toISOString(), 
-            name, 
-            description, 
-            createdAt: new Date(), 
-            lastSaved: new Date(),
-            dataSource: { name: 'No data source', data: [] }, 
-            analysis: null,
-        };
-        const updatedProjects = [newProject, ...savedProjects];
-        setSavedProjects(updatedProjects);
-        persistProjects(updatedProjects);
-        setActiveProject(newProject);
-        return newProject;
-    }, [savedProjects]);
+        return storeCreateProject(name, description);
+    }, [storeCreateProject]);
 
     const saveProject = useCallback((name: string, description: string) => {
-        if (!activeProject) return;
-        
-        setSaveStatus('saving');
-        // If it was an unsaved draft (id starts with unsaved_), generate a real ID
-        const isDraft = activeProject.id.startsWith('unsaved_');
-        const finalId = isDraft ? new Date().toISOString() : activeProject.id;
-        
-        const finalProject: Project = { 
-            ...activeProject, 
-            id: finalId, 
-            name, 
-            description, 
-            createdAt: activeProject.createdAt || new Date(), 
-            lastSaved: new Date() 
-        };
-
-        let updatedProjects: Project[];
-        if (isDraft) {
-            updatedProjects = [finalProject, ...savedProjects];
-        } else {
-            updatedProjects = savedProjects.map(p => p.id === finalProject.id ? finalProject : p);
-        }
-
-        setSavedProjects(updatedProjects);
-        persistProjects(updatedProjects);
-        setActiveProject(finalProject);
-        
-        setTimeout(() => {
-            setSaveStatus('saved');
-            if (saveStatusTimeoutRef.current) clearTimeout(saveStatusTimeoutRef.current);
-            saveStatusTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
-        }, 500);
-    }, [activeProject, savedProjects]);
+        storeSaveProject(name, description);
+    }, [storeSaveProject]);
 
     const manualSave = useCallback(() => {
-        if (!activeProject) return;
-        if (activeProject.id.startsWith('unsaved_')) {
-            // Cannot manual save a draft without a name/modal interaction usually, 
-            // but this method assumes the project is already established.
-            // We'll treat this as updating the current active project state in memory mostly,
-            // unless it's already in the list.
-             console.warn("Cannot manual save a draft without full metadata. Use saveProject instead.");
-             return;
-        }
-        saveProject(activeProject.name, activeProject.description);
-    }, [activeProject, saveProject]);
+        storeSaveProject();
+    }, [storeSaveProject]);
 
     const updateActiveProject = useCallback((updater: (prev: Project) => Project) => {
-        setActiveProject(prev => {
-            if (!prev) return null;
-            const updatedProject = updater(prev);
-            
-            // If we modify a saved project, mark it as unsaved in UI status
-            if (!prev.id.startsWith('unsaved_')) {
-                setSaveStatus('unsaved');
-            }
-            return updatedProject;
-        });
-    }, []);
+        storeUpdateActive(updater);
+    }, [storeUpdateActive]);
 
     const selectProject = useCallback((projectId: string) => {
-        const project = savedProjects.find(p => p.id === projectId);
-        if (project) {
-            setActiveProject(project);
-            setSaveStatus('idle');
-        }
-    }, [savedProjects]);
+        storeLoadProject(projectId);
+    }, [storeLoadProject]);
 
+    // The sidebar expects a Project object, but metadata is sufficient for it.
+    // We cast metadata to Project type for now since Project interface is superset of Metadata
     const deleteProject = useCallback((project: Project) => {
-        const updatedProjects = savedProjects.filter(p => p.id !== project.id);
-        setSavedProjects(updatedProjects);
-        persistProjects(updatedProjects);
-        if (activeProject?.id === project.id) {
-            setActiveProject(null);
-        }
-    }, [savedProjects, activeProject]);
+        storeDeleteProject(project.id);
+    }, [storeDeleteProject]);
 
     const renameProject = useCallback((project: Project, name: string, description: string) => {
-        const updatedProject = { ...project, name, description, lastSaved: new Date() };
-        const updatedProjects = savedProjects.map(p => p.id === project.id ? updatedProject : p);
-        setSavedProjects(updatedProjects);
-        persistProjects(updatedProjects);
-        if (activeProject?.id === project.id) setActiveProject(updatedProject);
-    }, [savedProjects, activeProject]);
-    
-    const resetActiveProject = useCallback(() => {
-        setActiveProject(null);
-        setSaveStatus('idle');
-    }, []);
+        // If we are renaming the active project
+        if (activeProject?.id === project.id) {
+            storeUpdateActive(p => ({ ...p, name, description }));
+            storeSaveProject(name, description);
+        } else {
+            // Renaming a project in the list that isn't open.
+            // We need to load, update, save.
+            // This is a bit heavy but correct for keeping consistency.
+            // Ideally backend handles this. For local:
+            // TODO: Optimization in Phase 2 for metadata-only updates
+            const fullProject = useAppStore.getState().loadProject(project.id); // This sets it active side effect? 
+            // Ideally we add a specific rename action to store that handles metadata only if possible
+            // For now, let's just rely on opening it if the user renames it.
+            storeLoadProject(project.id);
+            setTimeout(() => {
+                 storeSaveProject(name, description);
+            }, 100);
+        }
+    }, [activeProject, storeUpdateActive, storeSaveProject, storeLoadProject]);
 
     return {
-        savedProjects,
+        savedProjects: projects as any as Project[], // Type casting for compat. Sidebar only reads metadata fields.
         activeProject,
         saveStatus,
         setSaveStatus,
-        setActiveProject, // Exposed for raw setting if needed (e.g. file upload initialization)
+        setActiveProject: storeSetActive,
         updateActiveProject,
         createProject,
         saveProject,
@@ -158,6 +90,11 @@ export const useProjects = () => {
         selectProject,
         deleteProject,
         renameProject,
-        resetActiveProject
+        resetActiveProject: storeReset,
+        // New Undo/Redo capabilities
+        undo,
+        redo,
+        canUndo: useAppStore.temporal.getState().past.length > 0,
+        canRedo: useAppStore.temporal.getState().future.length > 0
     };
 };
