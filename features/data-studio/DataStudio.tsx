@@ -6,9 +6,9 @@ import {
     ChevronLeft, ChevronRight, Maximize, Minimize, ChevronsLeft, ChevronsRight, PanelLeft, PanelRight
 } from 'lucide-react';
 import { ChooseColumnsModal } from '../../components/modals/ChooseColumnsModal.tsx';
-import { FilterRowsModal } from '../../components/modals/FilterRowsModal.tsx';
-import { AddColumnModal } from '../../components/modals/AddColumnModal.tsx';
-import { GroupByModal } from '../../components/modals/GroupByModal.tsx';
+import { FilterRowsModal } from './components/modals/FilterRowsModal.tsx';
+import { AddColumnModal } from './components/modals/AddColumnModal.tsx';
+import { GroupByModal } from './components/modals/GroupByModal.tsx';
 
 import { AppliedStepsPanel } from './components/AppliedStepsPanel.tsx';
 import { AskAI } from './components/AskAI.tsx';

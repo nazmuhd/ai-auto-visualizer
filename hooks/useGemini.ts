@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useRef } from 'react';
-import { analyzeData as analyzeDataService, generateInitialPresentation } from '../services/geminiService.ts';
+import { analyzeData as analyzeDataService } from '../services/ai/analysisService.ts';
+import { generateInitialPresentation } from '../services/ai/presentationService.ts';
 import { DataRow, AnalysisResult, ReportTemplate, Presentation } from '../types.ts';
 
 const ANALYSIS_STEPS = [

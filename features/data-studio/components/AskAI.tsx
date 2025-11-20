@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DataRow, ChatMessage } from '../../../types.ts';
-import { queryDataWithAI } from '../../../services/geminiService.ts';
+import { queryDataWithAI } from '../../../services/ai/queryService.ts';
 import { Sparkles, Bot, User, Loader2, Send } from 'lucide-react';
 
 interface Props {

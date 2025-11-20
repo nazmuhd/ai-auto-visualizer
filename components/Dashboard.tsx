@@ -20,11 +20,13 @@ import { CreateProjectModal } from './modals/CreateProjectModal.tsx';
 import { SaveProjectModal } from './modals/SaveProjectModal.tsx';
 import { RenameProjectModal } from './modals/RenameProjectModal.tsx';
 import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal.tsx';
-import { ChartMaximizeModal } from './modals/ChartMaximizeModal.tsx';
-import { LayoutSelectionModal } from './modals/LayoutSelectionModal.tsx';
-import { DashboardSettingsModal } from './modals/DashboardSettingsModal.tsx';
-import { KpiDetailModal } from './modals/KpiDetailModal.tsx';
-import { ReportTemplateSelectionModal } from './modals/ReportTemplateSelectionModal.tsx';
+
+// Feature Specific Modals
+import { ChartMaximizeModal } from '../features/dashboard/components/modals/ChartMaximizeModal.tsx';
+import { LayoutSelectionModal } from '../features/dashboard/components/modals/LayoutSelectionModal.tsx';
+import { DashboardSettingsModal } from '../features/dashboard/components/modals/DashboardSettingsModal.tsx';
+import { KpiDetailModal } from '../features/dashboard/components/modals/KpiDetailModal.tsx';
+import { ReportTemplateSelectionModal } from '../features/report-studio/components/modals/ReportTemplateSelectionModal.tsx';
 
 // Pages
 import { SettingsPage } from './pages/SettingsPage.tsx';
