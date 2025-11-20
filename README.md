@@ -28,14 +28,19 @@ Upload your data (CSV, Excel) and let our AI analyze it to automatically generat
 
 -   **Frontend**: React, TypeScript
 -   **Styling**: Tailwind CSS
+-   **State Management**: Zustand + Zundo (Undo/Redo)
 -   **AI**: Google Gemini API (`@google/genai`)
+    -   **Caching**: TanStack Query (React Query)
     -   **Data Analysis**: `gemini-2.5-flash`
     -   **Report Generation**: `gemini-2.5-pro`
+-   **Persistence**: Hybrid Storage
+    -   **IndexedDB (Dexie.js)**: Large datasets
+    -   **LocalStorage**: Metadata
+-   **Processing**: Web Workers (Off-main-thread parsing & calculations)
 -   **Charting**: Recharts
 -   **Layout**: React Grid Layout
 -   **File Parsing**: SheetJS (xlsx)
--   **PDF Generation**: jsPDF, html2canvas
--   **Persistence**: Browser Local Storage
+-   **PDF Generation**: PptxGenJS
 
 ---
 
@@ -58,7 +63,7 @@ This application is designed to run directly in a browser environment that suppo
     ```
 
 2.  **Set up the API Key:**
-    The application expects the Google Gemini API key to be available as an environment variable named `API_KEY`. The execution environment (like Google's internal development platform) is responsible for injecting this variable. For local testing, you would need to simulate this environment or modify the code in `services/geminiService.ts` to temporarily hardcode your key (not recommended for production).
+    The application expects the Google Gemini API key to be available as an environment variable named `API_KEY`. The execution environment (like Google's internal development platform) is responsible for injecting this variable. For local testing, you would need to simulate this environment or modify the code in `services/ai/client.ts` to temporarily hardcode your key (not recommended for production).
 
 3.  **Run the application:**
     Serve the project's root directory using a local web server. For example, using the "Live Server" extension in VS Code, you can right-click `index.html` and select "Open with Live Server".
@@ -90,11 +95,19 @@ This project is a static web application and can be deployed to any static hosti
 │   ├── Dashboard.tsx     # Main dashboard workspace logic
 │   ├── Sidebar.tsx       # Project navigation sidebar
 │   ├── ChartRenderer.tsx # Renders individual charts and their controls
-│   ├── AIReportView.tsx  # Drag-and-drop report editor
 │   ├── GetStartedHub.tsx # Initial landing/upload screen
 │   └── ...               # Other UI components (modals, charts, etc.)
 │
+├── features/             # Feature-based modules
+│   ├── dashboard/        # Analytics view
+│   ├── report-studio/    # Presentation builder
+│   └── data-studio/      # Data manipulation
+│
+├── stores/               # State management
+│   └── useAppStore.ts    # Global Zustand store
+│
 └── services/             # Business logic and external API interactions
-    ├── geminiService.ts  # All interactions with the Google Gemini API
+    ├── ai/               # AI integration services
+    ├── storageAdapter.ts # Persistence logic
     └── dataParser.ts     # In-browser file parsing and validation logic
 ```
