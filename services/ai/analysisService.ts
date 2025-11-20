@@ -1,9 +1,11 @@
 
-import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../../types.ts';
 import { PromptBuilder } from '../../lib/prompt-builder.ts';
+import { generateStructuredContent } from './resilience.ts';
+import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { ai } from "./client.ts"; // Still needed for simple text calls like insights
 
 // --- 1. Premade Chart Templates Library ---
 export const CHART_TEMPLATES: Record<string, any> = {
@@ -17,34 +19,32 @@ export const CHART_TEMPLATES: Record<string, any> = {
     'tmpl_bubble_plot': { type: 'bubble', defaultTitle: 'Multi-dimensional Analysis', defaultDescription: 'Relating three numerical variables simultaneously.' }
 };
 
-const analysisSchema = {
+// --- 2. Gemini Schema (for API Config) ---
+const analysisGeminiSchema = {
     type: Type.OBJECT,
     properties: {
         summary: {
             type: Type.ARRAY,
-            description: "Executive summary as a list of 3-4 distinct, high-value bullet points.",
             items: { type: Type.STRING }
         },
         kpis: {
             type: Type.ARRAY,
-            description: "Between 5 and 10 key performance indicators (KPIs) that are most critical to understanding this dataset. Prioritize strategic metrics.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    title: { type: Type.STRING, description: "User-friendly title (e.g., 'Total Revenue')." },
-                    column: { type: Type.STRING, description: "Exact column name to calculate from." },
-                    operation: { type: Type.STRING, enum: ['sum', 'average', 'count_distinct'], description: "Aggregation method." },
-                    format: { type: Type.STRING, enum: ['number', 'currency', 'percent'], description: "Best display format for this metric." },
-                    trendDirection: { type: Type.STRING, enum: ['higher-is-better', 'lower-is-better'], description: "Is a higher value for this KPI generally good or bad?" },
-                    primaryCategory: { type: Type.STRING, nullable: true, description: "If this KPI is a breakdown by a category (e.g., 'Sales for North America'), provide the category column name here (e.g., 'Region')." },
-                    primaryCategoryValue: { type: Type.STRING, nullable: true, description: "If primaryCategory is set, provide the specific value for this KPI (e.g., 'North America')." }
+                    title: { type: Type.STRING },
+                    column: { type: Type.STRING },
+                    operation: { type: Type.STRING, enum: ['sum', 'average', 'count_distinct'] },
+                    format: { type: Type.STRING, enum: ['number', 'currency', 'percent'] },
+                    trendDirection: { type: Type.STRING, enum: ['higher-is-better', 'lower-is-better'] },
+                    primaryCategory: { type: Type.STRING, nullable: true },
+                    primaryCategoryValue: { type: Type.STRING, nullable: true }
                 },
                 required: ['title', 'column', 'operation', 'format', 'trendDirection']
             }
         },
         recommendedCharts: {
             type: Type.ARRAY,
-            description: "Between 5 and 8 diverse chart configurations matching data to templates. Prioritize quality over quantity and aim for a variety of chart types.",
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -56,8 +56,8 @@ const analysisSchema = {
                         properties: {
                             x: { type: Type.STRING },
                             y: { type: Type.STRING },
-                            z: { type: Type.STRING, nullable: true, description: "For bubble charts, the column for bubble size." },
-                            color: { type: Type.STRING, nullable: true, description: "For multi-series charts, the column for color category." },
+                            z: { type: Type.STRING, nullable: true },
+                            color: { type: Type.STRING, nullable: true },
                             aggregation: { type: Type.STRING, enum: ['sum', 'average', 'count', 'none'], nullable: true }
                         },
                         required: ['x', 'y']
@@ -69,6 +69,39 @@ const analysisSchema = {
     },
     required: ['summary', 'kpis', 'recommendedCharts']
 };
+
+// --- 3. Zod Schema (for Runtime Validation) ---
+// Note: This matches the Gemini schema structure but uses Zod for enforcement.
+const zKpi = z.object({
+    title: z.string(),
+    column: z.string(),
+    operation: z.enum(['sum', 'average', 'count_distinct']),
+    format: z.enum(['number', 'currency', 'percent']),
+    trendDirection: z.enum(['higher-is-better', 'lower-is-better']).optional(),
+    primaryCategory: z.string().optional().nullable(),
+    primaryCategoryValue: z.string().optional().nullable(),
+});
+
+const zChartRec = z.object({
+    templateId: z.string(), // We validate existence in code
+    titleOverride: z.string().optional().nullable(),
+    insightDescription: z.string().optional().nullable(),
+    mapping: z.object({
+        x: z.string(),
+        y: z.string(),
+        z: z.string().optional().nullable(),
+        color: z.string().optional().nullable(),
+        aggregation: z.enum(['sum', 'average', 'count', 'none']).optional().nullable()
+    })
+});
+
+const zAnalysisResult = z.object({
+    summary: z.array(z.string()),
+    kpis: z.array(zKpi),
+    recommendedCharts: z.array(zChartRec)
+});
+
+type AnalysisAIResponse = z.infer<typeof zAnalysisResult>;
 
 export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> => {
     let columnsInfo = "Unknown";
@@ -92,9 +125,9 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
             1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
             2. KPIs: Identify between 5 and 10 KPIs. For each KPI:
                 - Define HOW to calculate it (e.g., SUM of 'Revenue').
-                - Determine trend direction: Is a higher value better or worse? (e.g., higher revenue is good, higher costs are bad).
-                - If a KPI represents a specific segment (e.g., "Sales - North America"), identify its category column (e.g., 'Region') and its value (e.g., 'North America').
-            3. CHARTS: Map the data to a diverse set of between 5 and 8 chart templates that reveal different aspects of the data. Choose the most insightful charts.
+                - Determine trend direction: Is a higher value better or worse?
+                - If a KPI represents a specific segment (e.g., "Sales - North America"), identify its category column and value.
+            3. CHARTS: Map the data to a diverse set of between 5 and 8 chart templates.
         `)
         .addContext('AVAILABLE CHART TEMPLATES', `
             - tmpl_bar_comparison (Good for: Ranking)
@@ -109,33 +142,28 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
         .build();
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: analysisSchema,
-                temperature: 0.2,
-            }
-        });
-
-        if (!response.text) throw new Error("Gemini returned an empty response.");
-        const rawResult = JSON.parse(response.text) as any;
+        // Use the resilience layer
+        const rawResult = await generateStructuredContent<AnalysisAIResponse>(
+            'gemini-2.5-flash',
+            prompt,
+            analysisGeminiSchema,
+            zAnalysisResult
+        );
 
         const finalCharts: ChartConfig[] = [];
         const availableColumns = sample.length > 0 ? Object.keys(sample[0]) : [];
 
         if (rawResult.recommendedCharts && Array.isArray(rawResult.recommendedCharts)) {
-             rawResult.recommendedCharts.forEach((rec: any, index: number) => {
+             rawResult.recommendedCharts.forEach((rec, index) => {
                 const tmpl = CHART_TEMPLATES[rec.templateId];
-                if (!tmpl) return;
+                if (!tmpl) return; // Skip invalid templates
                 if (!availableColumns.includes(rec.mapping.x) || !availableColumns.includes(rec.mapping.y)) return;
 
                 const validatedMapping = { ...rec.mapping };
                 if (validatedMapping.color && !availableColumns.includes(validatedMapping.color)) validatedMapping.color = undefined;
                 if (validatedMapping.z && !availableColumns.includes(validatedMapping.z)) validatedMapping.z = undefined;
                 
-                // For stacked bar, color is essential. If AI misses it, don't create the chart.
+                // For stacked bar, color is essential.
                 if (tmpl.type === 'stacked-bar' && !validatedMapping.color) return;
 
                 finalCharts.push({
@@ -143,23 +171,29 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
                     type: tmpl.type,
                     title: rec.titleOverride || tmpl.defaultTitle,
                     description: rec.insightDescription || tmpl.defaultDescription,
-                    mapping: validatedMapping
+                    mapping: validatedMapping as any // Type assertion safe due to validation above
                 });
             });
         }
         
-        const finalKpis: KpiConfig[] = (Array.isArray(rawResult.kpis) ? rawResult.kpis : []).map(kpi => ({...kpi, id: uuidv4()}));
+        const finalKpis: KpiConfig[] = (rawResult.kpis || []).map(kpi => ({
+            ...kpi, 
+            id: uuidv4(),
+            isCustom: false,
+            visible: true
+        }));
 
         // Fallbacks
-        const finalSummary = Array.isArray(rawResult.summary) ? rawResult.summary : ["Analysis complete."];
+        const finalSummary = rawResult.summary.length > 0 ? rawResult.summary : ["Analysis complete."];
         if (finalKpis.length < 3 && availableColumns.length > 0) {
-            finalKpis.push({ id: uuidv4(), title: 'Total Rows', column: availableColumns[0], operation: 'count_distinct', format: 'number', trendDirection: 'higher-is-better' });
+            finalKpis.push({ id: uuidv4(), title: 'Total Rows', column: availableColumns[0], operation: 'count_distinct', format: 'number', trendDirection: 'higher-is-better', visible: true });
         }
 
         if (finalCharts.length === 0 && availableColumns.length >= 2) {
              finalCharts.push({
                  id: 'fallback_chart', type: 'bar', title: 'Data Overview', description: 'Automatic fallback chart.',
-                 mapping: { x: availableColumns[0], y: availableColumns[1], aggregation: 'count' }
+                 mapping: { x: availableColumns[0], y: availableColumns[1], aggregation: 'count' },
+                 visible: true
              });
         }
 
@@ -169,14 +203,18 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
             charts: finalCharts
         };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Analysis Error:", error);
-        throw new Error("Failed to analyze data. The AI model may be experiencing issues. Please try again.");
+        // Re-throw with a user-friendly message, or the original message if it's from our resilience layer
+        if (error.message.includes("Schema validation failed") || error.message.includes("AI Generation failed")) {
+            throw error;
+        }
+        throw new Error("Failed to analyze data. The AI model could not process the structure.");
     }
 };
 
 export const generateChartInsight = async (chart: ChartConfig, data: DataRow[], promptType: 'summary' | 'insights'): Promise<string> => {
-    // PromptBuilder handles truncation internally if data is too large
+    // PromptBuilder handles truncation internally
     const prompt = new PromptBuilder('Expert Data Analyst')
         .setTask(promptType === 'summary' 
             ? "Write a concise, one-paragraph summary of the key takeaway from this chart."
@@ -195,6 +233,8 @@ export const generateChartInsight = async (chart: ChartConfig, data: DataRow[], 
         .build();
 
     try {
+        // Simple text generation doesn't need structured resilience, 
+        // but we still wrap it to be safe against basic failures
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,

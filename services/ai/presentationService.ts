@@ -3,25 +3,26 @@ import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, ReportTemplate, Presentation, Slide, ContentBlock, ReportLayoutItem } from '../../types.ts';
 import { PromptBuilder } from '../../lib/prompt-builder.ts';
+import { generateStructuredContent } from './resilience.ts';
+import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
-const presentationSchema = {
+// --- GEMINI SCHEMAS (for API) ---
+const presentationGeminiSchema = {
     type: Type.OBJECT,
     properties: {
-        name: { type: Type.STRING, description: "A concise, professional name for the presentation." },
+        name: { type: Type.STRING },
         slides: {
             type: Type.ARRAY,
-            description: "An array of slides. The first slide should be a title slide. Subsequent slides should present KPIs and charts logically.",
             items: {
                 type: Type.OBJECT,
                 properties: {
                     layout: {
                         type: Type.ARRAY,
-                        description: "Array of grid layout items for this slide.",
                         items: {
                             type: Type.OBJECT,
                             properties: {
-                                i: { type: Type.STRING, description: "The ID of the item (chart, kpi, or text block ID)." },
+                                i: { type: Type.STRING },
                                 x: { type: Type.INTEGER },
                                 y: { type: Type.INTEGER },
                                 w: { type: Type.INTEGER },
@@ -36,15 +37,14 @@ const presentationSchema = {
         },
         blocks: {
             type: Type.ARRAY,
-            description: "Any text blocks needed for the presentation, like titles or summaries.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING, description: "A unique ID for the text block, prefixed with 'text_'." },
+                    id: { type: Type.STRING },
                     type: { type: Type.STRING, enum: ['text'] },
                     title: { type: Type.STRING },
                     content: { type: Type.STRING },
-                    style: { type: Type.STRING, enum: ['title', 'subtitle', 'body'] },
+                    style: { type: Type.STRING, enum: ['title', 'subtitle', 'body', 'h1', 'h2'] },
                 },
                 required: ['id', 'type', 'title', 'content', 'style'],
             }
@@ -53,16 +53,15 @@ const presentationSchema = {
     required: ['name', 'slides', 'blocks']
 };
 
-const slideLayoutSchema = {
+const slideLayoutGeminiSchema = {
     type: Type.OBJECT,
     properties: {
         layout: {
             type: Type.ARRAY,
-            description: "Array of grid layout items for this slide.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    i: { type: Type.STRING, description: "The ID of the item (chart, kpi, or text block ID)." },
+                    i: { type: Type.STRING },
                     x: { type: Type.INTEGER },
                     y: { type: Type.INTEGER },
                     w: { type: Type.INTEGER },
@@ -73,11 +72,10 @@ const slideLayoutSchema = {
         },
         newBlocks: {
             type: Type.ARRAY,
-            description: "Any NEW text blocks created for this slide. Do not include existing ones.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING, description: "A unique ID for the text block, prefixed with 'text_'." },
+                    id: { type: Type.STRING },
                     type: { type: Type.STRING, enum: ['text'] },
                     title: { type: Type.STRING },
                     content: { type: Type.STRING },
@@ -89,6 +87,39 @@ const slideLayoutSchema = {
     },
     required: ['layout', 'newBlocks']
 };
+
+// --- ZOD SCHEMAS (for Validation) ---
+const zLayoutItem = z.object({
+    i: z.string(),
+    x: z.number().int(),
+    y: z.number().int(),
+    w: z.number().int(),
+    h: z.number().int(),
+});
+
+const zBlock = z.object({
+    id: z.string(),
+    type: z.literal('text'), // AI mostly generates text blocks
+    title: z.string().optional(),
+    content: z.string(),
+    style: z.enum(['title', 'subtitle', 'body', 'h1', 'h2', 'quote', 'bullet', 'number', 'todo', 'note', 'warning']).optional().or(z.string()),
+});
+
+const zPresentationResult = z.object({
+    name: z.string(),
+    slides: z.array(z.object({
+        layout: z.array(zLayoutItem)
+    })),
+    blocks: z.array(zBlock)
+});
+
+const zSlideResult = z.object({
+    layout: z.array(zLayoutItem),
+    newBlocks: z.array(zBlock)
+});
+
+type PresentationAIResponse = z.infer<typeof zPresentationResult>;
+type SlideAIResponse = z.infer<typeof zSlideResult>;
 
 export const generateInitialPresentation = async (analysis: AnalysisResult, template: ReportTemplate, projectName: string): Promise<Presentation> => {
     const analysisContext = JSON.stringify({
@@ -124,18 +155,12 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
         .build();
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: presentationSchema,
-                temperature: 0.3,
-            }
-        });
-
-        if (!response.text) throw new Error("Gemini returned an empty presentation structure.");
-        const rawResult = JSON.parse(response.text) as any;
+        const rawResult = await generateStructuredContent<PresentationAIResponse>(
+            'gemini-2.5-pro',
+            prompt,
+            presentationGeminiSchema,
+            zPresentationResult
+        );
 
         const presentation: Presentation = {
             id: `pres_${uuidv4()}`,
@@ -145,7 +170,11 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
                 id: `slide_${uuidv4()}`,
                 layout: slide.layout || [],
             })),
-            blocks: rawResult.blocks || [],
+            blocks: (rawResult.blocks || []).map((b: any) => ({
+                ...b,
+                type: 'text', // Ensure type is set
+                style: b.style as any 
+            })),
         };
         
         if (template.format === 'document') {
@@ -159,9 +188,9 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
 
         return presentation;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Presentation Generation Error:", error);
-        throw new Error("Failed to generate the AI presentation. The model may be having trouble with the request. Please try again.");
+        throw new Error(error.message || "Failed to generate the AI presentation.");
     }
 };
 
@@ -218,29 +247,29 @@ export const addSlideWithAI = async (
         .build();
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: aiPrompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: slideLayoutSchema,
-                temperature: 0.3,
-            }
-        });
-
-        if (!response.text) throw new Error("AI returned an empty slide structure.");
-        const rawResult = JSON.parse(response.text) as any;
+        const rawResult = await generateStructuredContent<SlideAIResponse>(
+            'gemini-2.5-flash',
+            aiPrompt,
+            slideLayoutGeminiSchema,
+            zSlideResult
+        );
 
         const newSlide: Slide = {
             id: `slide_${uuidv4()}`,
             layout: rawResult.layout || [],
         };
 
-        return { newSlide, newBlocks: rawResult.newBlocks || [] };
+        const safeBlocks: ContentBlock[] = (rawResult.newBlocks || []).map(b => ({
+            ...b, 
+            type: 'text', 
+            style: b.style as any 
+        }));
 
-    } catch (error) {
+        return { newSlide, newBlocks: safeBlocks };
+
+    } catch (error: any) {
         console.error("Gemini Add Slide Error:", error);
-        throw new Error("Failed to generate the AI slide. The model may be having trouble with the request.");
+        throw new Error(error.message || "Failed to generate the AI slide.");
     }
 };
 
@@ -285,25 +314,25 @@ export const editSlideWithAI = async (
         .build();
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: aiPrompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: slideLayoutSchema,
-                temperature: 0.4,
-            }
-        });
+        const rawResult = await generateStructuredContent<SlideAIResponse>(
+            'gemini-2.5-flash',
+            aiPrompt,
+            slideLayoutGeminiSchema,
+            zSlideResult
+        );
 
-        if (!response.text) throw new Error("AI returned an empty response for the slide edit.");
-        const rawResult = JSON.parse(response.text) as any;
+        const safeBlocks: ContentBlock[] = (rawResult.newBlocks || []).map(b => ({
+            ...b, 
+            type: 'text', 
+            style: b.style as any 
+        }));
 
         return {
             updatedLayout: rawResult.layout || [],
-            newBlocks: rawResult.newBlocks || [],
+            newBlocks: safeBlocks,
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Edit Slide Error:", error);
-        throw new Error("Failed to edit the slide with AI. Please try rephrasing your request.");
+        throw new Error(error.message || "Failed to edit the slide with AI.");
     }
 };
