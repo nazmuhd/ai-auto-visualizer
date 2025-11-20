@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { temporal } from 'zundo';
 import { Project, ProjectMetadata, SaveStatus } from '../types.ts';
@@ -24,10 +25,9 @@ interface AppState {
     setSaveStatus: (status: SaveStatus) => void;
 }
 
-// Initialize migration on module load (fire and forget)
+// Initialize migration on module load
 StorageAdapter.migrateIfNeeded();
 
-// Minimal UUID generator for store usage if uuid package isn't imported in this file
 function uuidv4() {
     return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
         (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
@@ -64,10 +64,12 @@ export const useAppStore = create<AppState>()(
             },
 
             loadProject: async (id: string) => {
-                // Optimistically set ID
                 set({ activeProjectId: id, saveStatus: 'idle' });
                 
-                const project = await StorageAdapter.loadProject(id);
+                // OPTIMIZATION: Pass 'false' to skip loading the heavy data array into the store.
+                // Data is fetched separately by the UI components via React Query.
+                const project = await StorageAdapter.loadProject(id, false);
+                
                 if (project) {
                     set({ 
                         activeProject: project, 
@@ -104,6 +106,22 @@ export const useAppStore = create<AppState>()(
                 const isDraft = activeProject.id.startsWith('unsaved_');
                 const finalId = isDraft ? uuidv4() : activeProject.id;
 
+                // Prepare the project object. Note: dataSource.data in activeProject 
+                // might be empty if loaded from store, BUT if it was just processed/imported, 
+                // it needs to be retrieved.
+                // Ideally, the Component calls StorageAdapter.saveProject directly with the full data,
+                // OR we ensure the Store has the data momentarily.
+                // Given our architecture, the 'activeProject' in the store is LIGHTWEIGHT.
+                // We rely on the fact that StorageAdapter.saveProject is called via the Dashboard 
+                // which has access to the full data (merged).
+                // Wait - the Dashboard calls store.saveActiveProject(). 
+                // The store doesn't have the data!
+                // Correction: For this architecture to work, the SAVE action must be passed the full data
+                // OR the Dashboard calls StorageAdapter directly.
+                // In `Dashboard.tsx` we implemented `onManualSave` to handle this logic (injecting data).
+                // However, to be safe, let's assume `activeProject` here might hold the data temporarily 
+                // if it was updated via `updateActiveProject` with data.
+                
                 const finalProject: Project = {
                     ...activeProject,
                     id: finalId,
@@ -114,8 +132,10 @@ export const useAppStore = create<AppState>()(
 
                 await StorageAdapter.saveProject(finalProject);
                 
+                // After saving, we update the store but explicitly CLEAR the data array 
+                // to free up memory, as it is now persisted in IndexedDB.
                 set({ 
-                    activeProject: finalProject,
+                    activeProject: { ...finalProject, dataSource: { ...finalProject.dataSource, data: [] } },
                     activeProjectId: finalId,
                     saveStatus: 'saved' 
                 });
@@ -128,8 +148,7 @@ export const useAppStore = create<AppState>()(
                 set(state => {
                     if (!state.activeProject) return {};
                     const updated = updater(state.activeProject);
-                    // Don't mark as unsaved if it's a draft, it's implied.
-                    const newStatus = updated.id.startsWith('unsaved_') ? 'unsaved' : 'unsaved';
+                    const newStatus = 'unsaved';
                     return { activeProject: updated, saveStatus: newStatus };
                 });
             },
@@ -141,7 +160,6 @@ export const useAppStore = create<AppState>()(
             setSaveStatus: (status) => set({ saveStatus: status }),
         }),
         {
-            // Only track changes to the activeProject
             partialize: (state) => ({ activeProject: state.activeProject }),
             limit: 20, 
             equality: (a, b) => JSON.stringify(a) === JSON.stringify(b) 

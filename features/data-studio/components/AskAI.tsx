@@ -13,7 +13,7 @@ export const AskAI: React.FC<Props> = ({ data }) => {
         { role: 'ai', content: "Hello! Ask me anything about your current data view." }
     ]);
     const [input, setInput] = useState('');
-    const { queryData, isQuerying } = useGemini();
+    const { queryData, isStreaming } = useGemini();
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -26,19 +26,38 @@ export const AskAI: React.FC<Props> = ({ data }) => {
     }, [data]);
 
     const handleSendMessage = async () => {
-        if (!input.trim() || isQuerying) return;
+        if (!input.trim() || isStreaming) return;
         
         const userMessage: ChatMessage = { role: 'user', content: input };
         setMessages(prev => [...prev, userMessage]);
         setInput('');
 
+        // Add placeholder AI message immediately
+        setMessages(prev => [...prev, { role: 'ai', content: '' }]);
+
         try {
-            const aiResponse = await queryData(sampleData, userMessage.content);
-            if (aiResponse) {
-                setMessages(prev => [...prev, { role: 'ai', content: aiResponse }]);
-            }
+            let currentText = '';
+            await queryData(sampleData, userMessage.content, (chunk) => {
+                currentText += chunk;
+                setMessages(prev => {
+                    const newMsgs = [...prev];
+                    // Update last message (which is the AI placeholder)
+                    const lastMsg = newMsgs[newMsgs.length - 1];
+                    if (lastMsg.role === 'ai') {
+                        lastMsg.content = currentText;
+                    }
+                    return newMsgs;
+                });
+            });
         } catch (error) {
-            setMessages(prev => [...prev, { role: 'ai', content: "Sorry, I encountered an error processing that request." }]);
+             setMessages(prev => {
+                const newMsgs = [...prev];
+                const lastMsg = newMsgs[newMsgs.length - 1];
+                if (lastMsg.role === 'ai' && !lastMsg.content) {
+                    lastMsg.content = "Sorry, I encountered an error processing that request.";
+                }
+                return newMsgs;
+            });
         }
     };
     
@@ -49,17 +68,18 @@ export const AskAI: React.FC<Props> = ({ data }) => {
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                         {msg.role === 'ai' && <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0"><Bot size={18} className="text-primary-600"/></div>}
-                        <div className={`p-3 rounded-2xl max-w-sm whitespace-pre-wrap ${msg.role === 'user' ? 'bg-primary-600 text-white rounded-br-lg' : 'bg-slate-200 text-slate-800 rounded-bl-lg'}`}>{msg.content}</div>
+                        <div className={`p-3 rounded-2xl max-w-sm whitespace-pre-wrap ${msg.role === 'user' ? 'bg-primary-600 text-white rounded-br-lg' : 'bg-slate-200 text-slate-800 rounded-bl-lg'}`}>
+                            {msg.content || (isStreaming && i === messages.length - 1 ? <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span><span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span></span> : msg.content)}
+                        </div>
                         {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center flex-shrink-0"><User size={18} className="text-white"/></div>}
                     </div>
                 ))}
-                {isQuerying && <div className="flex items-start gap-3"><div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0"><Bot size={18} className="text-primary-600"/></div><div className="p-3 rounded-2xl bg-slate-200"><Loader2 size={16} className="text-slate-500 animate-spin" /></div></div>}
                 <div ref={messagesEndRef} />
             </div>
             <footer className="p-4 border-t border-slate-100 flex-shrink-0">
                 <div className="relative">
-                     <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="e.g., What is the total revenue?" className="w-full pr-12 pl-4 py-2.5 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" disabled={isQuerying} />
-                    <button onClick={handleSendMessage} disabled={isQuerying || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-primary-600 text-white hover:bg-primary-700 disabled:bg-slate-300"><Send size={16} /></button>
+                     <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="e.g., What is the total revenue?" className="w-full pr-12 pl-4 py-2.5 border bg-white text-slate-900 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none" disabled={isStreaming} />
+                    <button onClick={handleSendMessage} disabled={isStreaming || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-primary-600 text-white hover:bg-primary-700 disabled:bg-slate-300"><Send size={16} /></button>
                 </div>
             </footer>
         </div>

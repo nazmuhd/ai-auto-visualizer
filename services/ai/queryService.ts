@@ -3,7 +3,11 @@ import { ai } from "./client.ts";
 import { DataRow } from '../../types.ts';
 import { PromptBuilder } from '../../lib/prompt-builder.ts';
 
-export const queryDataWithAI = async (sample: DataRow[], question: string): Promise<string> => {
+export const streamDataQuery = async (
+    sample: DataRow[], 
+    question: string, 
+    onChunk: (text: string) => void
+): Promise<void> => {
     let columnsInfo = "Unknown";
     if (sample.length > 0) {
         const firstRow = sample[0];
@@ -25,7 +29,7 @@ export const queryDataWithAI = async (sample: DataRow[], question: string): Prom
         .build();
 
     try {
-        const response = await ai.models.generateContent({
+        const result = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -33,11 +37,12 @@ export const queryDataWithAI = async (sample: DataRow[], question: string): Prom
             }
         });
         
-        if (!response.text) {
-            return "Sorry, I couldn't process that request.";
+        for await (const chunk of result) {
+            const text = chunk.text;
+            if (text) {
+                onChunk(text);
+            }
         }
-        
-        return response.text;
 
     } catch (error) {
         console.error("Gemini Data Query Error:", error);

@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { analyzeData as analyzeDataService } from '../services/ai/analysisService.ts';
 import { generateInitialPresentation } from '../services/ai/presentationService.ts';
-import { queryDataWithAI, generateFormulaFromNaturalLanguage } from '../services/ai/queryService.ts';
+import { streamDataQuery, generateFormulaFromNaturalLanguage } from '../services/ai/queryService.ts';
 import { DataRow, AnalysisResult, ReportTemplate, Presentation } from '../types.ts';
 
 const ANALYSIS_STEPS = [
@@ -28,6 +28,7 @@ export const useGemini = () => {
     // We still keep local progress state because useMutation's 'pending' is just a boolean,
     // and we want to show granular progress updates which are simulated.
     const [analysisProgress, setAnalysisProgress] = useState<{ status: string, percentage: number } | null>(null);
+    const [isStreaming, setIsStreaming] = useState(false);
     const progressInterval = useRef<number | null>(null);
 
     const startProgressSimulation = (steps: typeof ANALYSIS_STEPS) => {
@@ -80,12 +81,18 @@ export const useGemini = () => {
         }
     });
 
-    // -- Mutation: Ask AI (Data Studio) --
-    const queryDataMutation = useMutation({
-        mutationFn: async (params: { data: DataRow[], question: string }) => {
-            return await queryDataWithAI(params.data, params.question);
+    // -- Streaming Query Data (Manual implementation for streams) --
+    const queryData = useCallback(async (data: DataRow[], question: string, onChunk: (text: string) => void) => {
+        setIsStreaming(true);
+        try {
+            await streamDataQuery(data, question, onChunk);
+        } catch (error) {
+            console.error("Data query failed", error);
+            throw error;
+        } finally {
+            setIsStreaming(false);
         }
-    });
+    }, []);
 
     // -- Mutation: Generate Formula (Data Studio) --
     const formulaMutation = useMutation({
@@ -112,15 +119,6 @@ export const useGemini = () => {
         }
     }, [presentationMutation]);
 
-    const queryData = useCallback(async (data: DataRow[], question: string): Promise<string | undefined> => {
-        try {
-            return await queryDataMutation.mutateAsync({ data, question });
-        } catch (error) {
-            console.error("Data query failed", error);
-            throw error;
-        }
-    }, [queryDataMutation]);
-
     const generateFormula = useCallback(async (query: string, columns: string[]): Promise<string | undefined> => {
         try {
             return await formulaMutation.mutateAsync({ query, columns });
@@ -134,18 +132,18 @@ export const useGemini = () => {
         stopProgressSimulation();
         analysisMutation.reset();
         presentationMutation.reset();
-        queryDataMutation.reset();
         formulaMutation.reset();
-    }, [analysisMutation, presentationMutation, queryDataMutation, formulaMutation]);
+        setIsStreaming(false);
+    }, [analysisMutation, presentationMutation, formulaMutation]);
 
     return {
         analyzeData,
         generatePresentation,
-        queryData,
+        queryData, // Now supports streaming callback
         generateFormula,
         // Unified loading state
         isAnalyzing: analysisMutation.isPending || presentationMutation.isPending,
-        isQuerying: queryDataMutation.isPending,
+        isStreaming,
         isGeneratingFormula: formulaMutation.isPending,
         // Unified error state message
         analysisError: analysisMutation.error?.message || presentationMutation.error?.message || null,

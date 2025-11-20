@@ -1,3 +1,4 @@
+
 import { Project, ProjectMetadata } from '../types.ts';
 import { db } from '../db/db.ts';
 
@@ -80,7 +81,12 @@ export const StorageAdapter = {
         }
     },
 
-    loadProject: async (id: string): Promise<Project | null> => {
+    /**
+     * Loads the project structure from LocalStorage.
+     * @param id Project ID
+     * @param loadData If true, also fetches the heavy data from IndexedDB. If false, data is empty.
+     */
+    loadProject: async (id: string, loadData: boolean = true): Promise<Project | null> => {
         try {
             // 1. Load structure from LocalStorage
             const json = localStorage.getItem(`${KEYS.PROJECT_PREFIX}${id}`);
@@ -88,13 +94,17 @@ export const StorageAdapter = {
             
             const project: Project = JSON.parse(json, dateReviver);
 
-            // 2. Load large data from IndexedDB
-            const dataRecord = await db.projectData.get(id);
-            
-            if (dataRecord) {
-                project.dataSource.data = dataRecord.data;
+            // 2. Load large data from IndexedDB if requested
+            if (loadData) {
+                const dataRecord = await db.projectData.get(id);
+                if (dataRecord) {
+                    project.dataSource.data = dataRecord.data;
+                } else {
+                    console.warn(`Data missing for project ${id} in IndexedDB.`);
+                    project.dataSource.data = [];
+                }
             } else {
-                console.warn(`Data missing for project ${id} in IndexedDB.`);
+                // Ensure it's initialized array even if skipped
                 project.dataSource.data = [];
             }
 
@@ -102,6 +112,21 @@ export const StorageAdapter = {
         } catch (e) {
             console.error(`Failed to load project ${id}`, e);
             return null;
+        }
+    },
+
+    /**
+     * Fetches specifically the raw data rows for a project from IndexedDB.
+     * Used for decoupling large data from the main store.
+     */
+    getProjectData: async (id: string): Promise<any[]> => {
+        try {
+            if (id.startsWith('unsaved_')) return []; // Unsaved projects handle data in memory/store until saved
+            const dataRecord = await db.projectData.get(id);
+            return dataRecord ? dataRecord.data : [];
+        } catch (e) {
+            console.error(`Failed to load data for project ${id}`, e);
+            return [];
         }
     },
 

@@ -1,6 +1,6 @@
 
-import React, { useMemo, useState, useCallback, useRef } from 'react';
-import { ChartConfig, KpiConfig, LayoutInfo, Presentation, ReportTemplate } from '../types.ts';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { ChartConfig, KpiConfig, LayoutInfo, Presentation, ReportTemplate, Project } from '../types.ts';
 import { TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,6 +34,7 @@ import { AccountPage } from './pages/AccountPage.tsx';
 
 // Hooks
 import { useResponsiveSidebar, useProjects, useDataProcessing, useGemini } from '../hooks/index.ts';
+import { useProjectData } from '../hooks/useProjectData.ts';
 
 interface DashboardProps {
     userEmail: string;
@@ -52,9 +53,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     // --- Hooks Integration ---
     const [isSidebarOpen, setIsSidebarOpen] = useResponsiveSidebar();
     const { 
-        savedProjects, activeProject, saveStatus, createProject, saveProject, manualSave, 
+        savedProjects, activeProject: activeProjectMeta, saveStatus, createProject, saveProject, manualSave, 
         selectProject, deleteProject, renameProject, resetActiveProject, updateActiveProject, setActiveProject 
     } = useProjects();
+    
+    // DECOUPLING: Fetch raw data separately using React Query to keep main store light
+    const { data: rawData, isLoading: isDataLoading, setProjectData } = useProjectData(activeProjectMeta?.id || null);
+
+    // Reconstitute the full project object for child components by merging metadata and raw data
+    const activeProject = useMemo(() => {
+        if (!activeProjectMeta) return null;
+        
+        return {
+            ...activeProjectMeta,
+            dataSource: {
+                ...activeProjectMeta.dataSource,
+                // Use rawData from React Query if available, otherwise fallback to what's in store (likely empty for persisted projects)
+                data: rawData.length > 0 ? rawData : activeProjectMeta.dataSource.data
+            }
+        };
+    }, [activeProjectMeta, rawData]);
+
     
     const { 
         processFile, isProcessing, progress, report: validationReport, error: processError, 
@@ -141,24 +160,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         return result;
     }, [activeProject, globalFilters, timeFilter, dateColumn]);
 
+    // Update Project Data Callback
+    const handleProjectUpdate = useCallback((updater: (prev: Project) => Project) => {
+        if (!activeProject) return;
+        const updated = updater(activeProject);
+        
+        // Sync data change to React Query cache
+        if (updated.dataSource.data !== activeProject.dataSource.data) {
+            setProjectData(updated.dataSource.data);
+        }
+        
+        // Update Store (Metadata)
+        updateActiveProject(updater);
+    }, [activeProject, updateActiveProject, setProjectData]);
+
+
     // --- Handlers ---
     
     const handleFileSelect = useCallback(async (file: File) => {
         const result = await processFile(file);
         if (result) {
              if (activeProject && activeProject.dataSource && activeProject.dataSource.data.length === 0) {
-                 updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: result.data } }));
+                 // Updating existing empty project
+                 setProjectData(result.data); // Update Data Cache directly
+                 updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: [] } })); // Keep store light
              } else {
                  // New temporary project
                  const newProject = {
                     id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
-                    dataSource: { name: file.name, data: result.data }, analysis: null,
+                    dataSource: { name: file.name, data: [] }, analysis: null, 
                  };
+                 setProjectData(result.data); // Update Data Cache directly
                  setActiveProject(newProject as any);
              }
              setHasConfirmedPreview(false); 
         }
-    }, [activeProject, processFile, updateActiveProject, setActiveProject]);
+    }, [activeProject, processFile, updateActiveProject, setActiveProject, setProjectData]);
 
     const handleConfirmPreview = useCallback(async () => {
         if (!activeProject) return;
@@ -212,9 +249,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     }, [createProject, resetProcessing]);
 
     const handleSaveProject = useCallback((name: string, description: string) => {
-        saveProject(name, description);
+        // Manually inject data into the store's activeProject before saving
+        // because the store keeps it empty.
+        if (activeProject) {
+             updateActiveProject(p => ({ ...p, dataSource: { ...p.dataSource, data: activeProject.dataSource.data } }));
+             // Small timeout to allow state propagation before save triggers
+             setTimeout(() => saveProject(name, description), 0);
+        }
         setIsSaveModalOpen(false);
-    }, [saveProject]);
+    }, [saveProject, activeProject, updateActiveProject]);
 
     const handleSelectProject = useCallback((projectId: string) => {
         selectProject(projectId);
@@ -225,7 +268,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setIsSettingsModalOpen(false);
         setMainView('dashboard');
         setIsGeneratingReport(false);
-        setHasConfirmedPreview(true); // Loaded projects are already confirmed
+        setHasConfirmedPreview(true);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
         mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }, [selectProject, setIsSidebarOpen]);
@@ -339,7 +382,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleTemplateSelected = async (template: ReportTemplate) => {
         if (!activeProject || !activeProject.analysis) return;
         setIsReportTemplateModalOpen(false);
-        setIsGeneratingReport(true); // START LOADING
+        setIsGeneratingReport(true);
         
         try {
              const pres = await generatePresentation(activeProject.analysis!, template, activeProject.name);
@@ -351,7 +394,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             console.error(e);
             alert("Failed to generate presentation. Please try again.");
         } finally {
-            setIsGeneratingReport(false); // STOP LOADING
+            setIsGeneratingReport(false);
         }
     };
     
@@ -423,26 +466,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         if (mainView === 'settings') return <SettingsPage />;
         if (mainView === 'account') return <AccountPage userEmail={userEmail} onLogout={onLogout} />;
 
-        // 1. CSV Parsing Loading State
         if (isProcessing) {
             return <LoadingSkeleton mode="parsing" status={progress?.status} progress={progress?.percentage} />;
         }
 
-        // 2. Dashboard Analysis Loading State
         if (isAnalyzing && !isGeneratingReport) {
              return <LoadingSkeleton mode="dashboard" status={analysisProgress?.status || "Analyzing data..."} progress={analysisProgress?.percentage} />;
         }
 
-        // 3. Report Generation Loading State
         if (isGeneratingReport) {
             return <LoadingSkeleton mode="report" status={analysisProgress?.status || "Drafting presentation..."} progress={analysisProgress?.percentage} />;
+        }
+
+        // Loading state for Project Data Retrieval (React Query)
+        if (isDataLoading && activeProjectMeta?.id && !activeProjectMeta.id.startsWith('unsaved_')) {
+             return <LoadingSkeleton mode="dashboard" status="Loading project data..." progress={undefined} />;
         }
 
         if (!activeProject) {
              return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={null} />;
         }
         
-        if (activeProject.dataSource.data.length === 0) {
+        if (activeProject.dataSource.data.length === 0 && !activeProject.id.startsWith('unsaved_')) {
+             return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
+        }
+        
+        if (activeProject.dataSource.data.length === 0 && activeProject.id.startsWith('unsaved_')) {
              return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
         }
 
@@ -466,14 +515,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onChartUpdate={handleChartUpdate}
                 onSetMaximizedChart={setMaximizedChart}
                 saveStatus={saveStatus}
-                onManualSave={manualSave}
+                onManualSave={() => handleSaveProject(activeProject.name, activeProject.description)}
                 globalFilters={globalFilters}
                 timeFilter={timeFilter}
                 onGlobalFilterChange={handleGlobalFilterChange}
                 onTimeFilterChange={(filter) => setTimeFilter(filter)}
                 onRemoveFilter={handleRemoveFilter}
                 onKpiClick={handleKpiClick}
-                onProjectUpdate={updateActiveProject}
+                onProjectUpdate={handleProjectUpdate}
                 editingPresentationId={editingPresentationId}
                 onBackToHub={() => setEditingPresentationId(null)}
                 onPresentationUpdate={handlePresentationUpdate}
@@ -485,7 +534,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
              return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={analysisError || processError || 'An error occurred.'} />;
         }
 
-        // Default fallback
         return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={null} />;
     };
 
