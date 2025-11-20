@@ -33,9 +33,6 @@ import { AccountPage } from './pages/AccountPage.tsx';
 // Hooks
 import { useResponsiveSidebar, useProjects, useDataProcessing, useGemini } from '../hooks/index.ts';
 
-// Services (for direct calls when needed)
-import { generateInitialPresentation } from '../services/geminiService.ts';
-
 interface DashboardProps {
     userEmail: string;
     onLogout: () => void;
@@ -63,7 +60,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     } = useDataProcessing();
     
     const { 
-        analyzeData, isAnalyzing, analysisProgress, analysisError, resetGemini 
+        analyzeData, generatePresentation, isAnalyzing, analysisProgress, analysisError, resetGemini 
     } = useGemini();
 
     // --- Local UI State ---
@@ -76,7 +73,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     const [editingPresentationId, setEditingPresentationId] = useState<string | null>(null);
     const [presentingPresentationId, setPresentingPresentationId] = useState<string | null>(null);
-    const [isGeneratingReport, setIsGeneratingReport] = useState(false); // New state for report loading
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false); 
 
     const [maximizedChart, setMaximizedChart] = useState<ChartConfig | null>(null);
     const [selectedKpi, setSelectedKpi] = useState<KpiConfig | null>(null);
@@ -343,7 +340,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setIsGeneratingReport(true); // START LOADING
         
         try {
-             const pres = await generateInitialPresentation(activeProject.analysis!, template, activeProject.name);
+             // Use the enhanced generatePresentation from useGemini hook which handles progress
+             const pres = await generatePresentation(activeProject.analysis!, template, activeProject.name);
              if (pres) {
                  updateActiveProject((p: any) => ({ ...p, presentations: [...(p.presentations || []), pres] }));
                  setEditingPresentationId(pres.id);
@@ -430,13 +428,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         }
 
         // 2. Dashboard Analysis Loading State
-        if (isAnalyzing) {
-             return <LoadingSkeleton mode="dashboard" status={analysisProgress?.status} progress={analysisProgress?.percentage} />;
+        if (isAnalyzing && !isGeneratingReport) {
+             return <LoadingSkeleton mode="dashboard" status={analysisProgress?.status || "Analyzing data..."} progress={analysisProgress?.percentage} />;
         }
 
         // 3. Report Generation Loading State
         if (isGeneratingReport) {
-            return <LoadingSkeleton mode="report" status="Drafting your presentation with AI..." progress={75} />;
+            return <LoadingSkeleton mode="report" status={analysisProgress?.status || "Drafting presentation..."} progress={analysisProgress?.percentage} />;
         }
 
         if (!activeProject) {
