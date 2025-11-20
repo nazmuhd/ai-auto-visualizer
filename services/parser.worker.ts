@@ -1,3 +1,4 @@
+
 // Import the XLSX library. In a worker, we use importScripts.
 // NOTE: The 'XLSX' variable will be available in the global scope after this runs.
 importScripts('https://aistudiocdn.com/xlsx@0.18.5/dist/xlsx.full.min.js');
@@ -130,15 +131,17 @@ const sampleData = (data: DataRow[]): DataRow[] => {
 self.onmessage = async (event: MessageEvent) => {
     const file = event.data as File;
     try {
-        self.postMessage({ type: 'progress', payload: { status: 'Parsing file...', percentage: 25 } });
+        self.postMessage({ type: 'progress', payload: { status: 'Reading file stream...', percentage: 15 } });
         
         const fileData = await file.arrayBuffer();
+        
+        self.postMessage({ type: 'progress', payload: { status: 'Parsing binary data...', percentage: 40 } });
         const parsedData = await parseFileContents(fileData);
 
-        self.postMessage({ type: 'progress', payload: { status: 'Validating data quality...', percentage: 75 } });
+        self.postMessage({ type: 'progress', payload: { status: 'Validating data integrity...', percentage: 75 } });
         const report = validateData(parsedData);
 
-        self.postMessage({ type: 'progress', payload: { status: 'Generating smart sample for AI...', percentage: 90 } });
+        self.postMessage({ type: 'progress', payload: { status: 'Optimizing data for AI...', percentage: 90 } });
         const smartSample = sampleData(parsedData);
 
         self.postMessage({ 
