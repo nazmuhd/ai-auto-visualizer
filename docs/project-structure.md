@@ -1,3 +1,4 @@
+
 # Project Structure
 
 ## Root Directory
@@ -46,7 +47,7 @@ Pure functions and API integrations.
 *   `storageAdapter.ts`: Abstraction layer for Hybrid Storage (LocalStorage + IndexedDB).
 *   `dataParser.ts`: Main thread parsing logic.
 *   `parser.worker.ts`: Web Worker for file parsing.
-*   `calculator.worker.ts`: Web Worker for data transformation (Filter, Sort, Group By).
+*   `calculator.worker.ts`: Web Worker for data transformation (Filter, Sort, Group By) and **secure formula evaluation (RPN)**.
 *   `pptxEngine.ts`: PowerPoint generation logic.
 
 ### `types/`

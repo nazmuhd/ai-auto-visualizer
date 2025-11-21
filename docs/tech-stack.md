@@ -1,3 +1,4 @@
+
 # Tech Stack
 
 ## Core
@@ -19,6 +20,7 @@
 -   **Parsing**: SheetJS (`xlsx`)
 -   **Validation**: Zod
 -   **Workers**: Native Web Workers for off-main-thread processing.
+-   **Formula Engine**: Custom RPN Parser (Zero-dependency, Secure)
 
 ## Visualization
 -   **Charts**: Recharts

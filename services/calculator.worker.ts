@@ -10,38 +10,134 @@ type GroupByTransformation = { type: 'group_by'; payload: { groupByColumns: stri
 type HideColumnsTransformation = { type: 'hide_columns'; payload: { columns: string[]; } };
 type Transformation = SortTransformation | FilterTransformation | AddColumnTransformation | RenameColumnTransformation | TransformTextTransformation | GroupByTransformation | HideColumnsTransformation;
 
-const evaluateFormula = (formula: string, row: CalcDataRow): number | string => {
-    const columnRegex = /\[([^\]]+)\]/g;
-    let expression = formula;
-    let match;
-    const columnsInFormula = new Set<string>();
+// --- Safe Formula Engine (Tokenizer & RPN Evaluator) ---
 
-    while ((match = columnRegex.exec(formula)) !== null) {
-        columnsInFormula.add(match[1]);
-    }
-    
-    const argValues: (string | number)[] = [];
-    const argNames: string[] = [];
+type TokenType = 'NUMBER' | 'OPERATOR' | 'VARIABLE' | 'LPAREN' | 'RPAREN';
+type Token = { type: TokenType, value: string };
 
-    for (const col of columnsInFormula) {
-        if (col in row) {
-            const val = Number(row[col]);
-            if (isNaN(val)) return 'Error: Non-numeric value';
-            argNames.push(col.replace(/\s/g, '_'));
-            argValues.push(val);
-            expression = expression.replace(`[${col}]`, col.replace(/\s/g, '_'));
+const tokenize = (formula: string): Token[] => {
+    const tokens: Token[] = [];
+    let i = 0;
+    while (i < formula.length) {
+        const char = formula[i];
+        
+        // Skip whitespace
+        if (/\s/.test(char)) {
+            i++;
+            continue;
+        }
+        
+        // Numbers
+        if (/[0-9.]/.test(char)) {
+            let num = char;
+            while (i + 1 < formula.length && /[0-9.]/.test(formula[i + 1])) {
+                num += formula[++i];
+            }
+            tokens.push({ type: 'NUMBER', value: num });
+        } 
+        // Operators
+        else if (['+', '-', '*', '/'].includes(char)) {
+            tokens.push({ type: 'OPERATOR', value: char });
+        } 
+        // Parentheses
+        else if (char === '(') {
+            tokens.push({ type: 'LPAREN', value: '(' });
+        } else if (char === ')') {
+            tokens.push({ type: 'RPAREN', value: ')' });
+        } 
+        // Variables [Column Name]
+        else if (char === '[') {
+            let varName = '';
+            i++; // skip [
+            while (i < formula.length && formula[i] !== ']') {
+                varName += formula[i];
+                i++;
+            }
+            // i is now at ]
+            tokens.push({ type: 'VARIABLE', value: varName });
         } else {
-            return `Error: Column not found`;
+            // Skip unknown characters silently or throw error. 
+            // For robustness, we'll skip but logging would be ideal in a dev env.
+        }
+        i++;
+    }
+    return tokens;
+};
+
+// Shunting-yard algorithm to convert Infix to Reverse Polish Notation (RPN)
+const toRPN = (tokens: Token[]): Token[] => {
+    const outputQueue: Token[] = [];
+    const operatorStack: Token[] = [];
+    const precedence: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 };
+
+    for (const token of tokens) {
+        if (token.type === 'NUMBER' || token.type === 'VARIABLE') {
+            outputQueue.push(token);
+        } else if (token.type === 'OPERATOR') {
+            while (
+                operatorStack.length > 0 &&
+                operatorStack[operatorStack.length - 1].type === 'OPERATOR' &&
+                precedence[operatorStack[operatorStack.length - 1].value] >= precedence[token.value]
+            ) {
+                outputQueue.push(operatorStack.pop()!);
+            }
+            operatorStack.push(token);
+        } else if (token.type === 'LPAREN') {
+            operatorStack.push(token);
+        } else if (token.type === 'RPAREN') {
+            while (
+                operatorStack.length > 0 &&
+                operatorStack[operatorStack.length - 1].type !== 'LPAREN'
+            ) {
+                outputQueue.push(operatorStack.pop()!);
+            }
+            if (operatorStack.length === 0) throw new Error("Mismatched parentheses");
+            operatorStack.pop(); // Pop LPAREN
         }
     }
-    
-    try {
-        const func = new Function(...argNames, `return ${expression}`);
-        return func(...argValues);
-    } catch (e) {
-        return 'Error: Invalid formula';
+    while (operatorStack.length > 0) {
+        const op = operatorStack.pop()!;
+        if (op.type === 'LPAREN') throw new Error("Mismatched parentheses");
+        outputQueue.push(op);
     }
+    return outputQueue;
 };
+
+const evaluateRPN = (rpn: Token[], row: CalcDataRow): number => {
+    const stack: number[] = [];
+    for (const token of rpn) {
+        if (token.type === 'NUMBER') {
+            stack.push(parseFloat(token.value));
+        } else if (token.type === 'VARIABLE') {
+            if (!(token.value in row)) throw new Error(`Column '${token.value}' not found`);
+            const val = Number(row[token.value]);
+            if (isNaN(val)) throw new Error(`Value in '${token.value}' is not a number`);
+            stack.push(val);
+        } else if (token.type === 'OPERATOR') {
+            if (stack.length < 2) throw new Error("Invalid expression");
+            const b = stack.pop()!;
+            const a = stack.pop()!;
+            switch (token.value) {
+                case '+': stack.push(a + b); break;
+                case '-': stack.push(a - b); break;
+                case '*': stack.push(a * b); break;
+                case '/': 
+                    if(b === 0) throw new Error("Division by zero");
+                    stack.push(a / b); 
+                    break;
+            }
+        }
+    }
+    if (stack.length !== 1) throw new Error("Invalid formula result");
+    return stack[0];
+};
+
+const parseFormulaToRPN = (formula: string): Token[] => {
+    const tokens = tokenize(formula);
+    return toRPN(tokens);
+};
+
+// --- Transformation Logic ---
 
 const applyTransformations = (data: CalcDataRow[], transformations: Transformation[]): CalcDataRow[] => {
     if (!transformations || transformations.length === 0) {
@@ -85,7 +181,22 @@ const applyTransformations = (data: CalcDataRow[], transformations: Transformati
             });
         }
         else if (transform.type === 'add_column') {
-            processedData = processedData.map(row => ({ ...row, [transform.payload.newColumnName]: evaluateFormula(transform.payload.formula, row) }));
+            try {
+                // Parse formula ONCE for the entire column (Performance optimization)
+                const rpn = parseFormulaToRPN(transform.payload.formula);
+                
+                processedData = processedData.map(row => {
+                    try {
+                        const result = evaluateRPN(rpn, row);
+                        return { ...row, [transform.payload.newColumnName]: result };
+                    } catch (e) {
+                        return { ...row, [transform.payload.newColumnName]: null }; // Or error string
+                    }
+                });
+            } catch (e) {
+                // If parsing fails (syntax error), set error for all rows
+                processedData = processedData.map(row => ({ ...row, [transform.payload.newColumnName]: 'Error: Invalid Formula' }));
+            }
         }
         else if (transform.type === 'rename_column') {
             const { oldName, newName } = transform.payload;
@@ -151,9 +262,7 @@ const applyTransformations = (data: CalcDataRow[], transformations: Transformati
              processedData = aggregatedData;
         }
         else if (transform.type === 'hide_columns') {
-            // Hide columns logic if needed, mostly handled by UI filtering, 
-            // but can be done here to reduce payload size if desired.
-            // For now, we'll keep data intact and filter in UI unless extremely large.
+            // Logic handled mostly by UI to preserve data integrity, but can be stripped here if payload size is a concern.
         }
     }
     return processedData;

@@ -1,3 +1,4 @@
+
 # Coding Conventions & Rules
 
 ## UI & Styling Rules
@@ -18,6 +19,10 @@
 1.  **Prompt Building**: Use `PromptBuilder` for all LLM calls to ensure context limits are respected.
 2.  **Caching**: AI calls should be wrapped in `useQuery` with `staleTime: Infinity` where appropriate (data analysis results don't change unless the data changes).
 3.  **Error Boundaries**: Wrap feature widgets in `<ErrorBoundary>` so a single failure doesn't crash the app.
+
+## Security & Safety
+1.  **No Arbitrary Code Execution**: Do **NOT** use `eval()` or `new Function()` to process user input or formulas. Use a safe parser (e.g., RPN) or an Abstract Syntax Tree (AST) evaluator.
+2.  **Data Sanitization**: Always validate incoming data structure (especially from files) using **Zod** schemas before processing.
 
 ## Type Safety
 1.  **Zod Validation**: Use Zod schemas in `dataParser.ts` to validate incoming user data structure at runtime.
