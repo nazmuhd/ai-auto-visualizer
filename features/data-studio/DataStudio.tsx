@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Project, DataRow, Transformation, SortTransformation } from '../../types.ts';
@@ -52,12 +53,13 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     const [isFsRightPanelOpen, setIsFsRightPanelOpen] = useState(false);
     
     // Worker State
-    const [transformedData, setTransformedData] = useState<DataRow[]>(project.dataSource.data);
+    // Safe initialization: fallback to [] if data is missing to prevent crashes before worker update
+    const [transformedData, setTransformedData] = useState<DataRow[]>(project.dataSource.data || []);
     const [isCalculating, setIsCalculating] = useState(false);
     const workerRef = useRef<Worker | null>(null);
 
     const transformations = project.transformations || [];
-    const originalData = project.dataSource.data;
+    const originalData = project.dataSource.data || [];
     const isGrouped = useMemo(() => transformations.some(t => t.type === 'group_by'), [transformations]);
 
     useEffect(() => {

@@ -29,7 +29,10 @@ export const DashboardSettingsModal: React.FC<Props> = ({
     
     const [newKpi, setNewKpi] = useState<Omit<KpiConfig, 'id'>>(DEFAULT_KPI);
     const analysis = project.analysis;
-    const columns = useMemo(() => project.dataSource.data.length > 0 ? Object.keys(project.dataSource.data[0]) : [], [project.dataSource.data]);
+    const columns = useMemo(() => {
+        const data = project.dataSource.data || [];
+        return data.length > 0 ? Object.keys(data[0]) : [];
+    }, [project.dataSource.data]);
 
     if (!isOpen || !analysis) return null;
 

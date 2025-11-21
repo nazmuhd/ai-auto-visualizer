@@ -64,12 +64,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const activeProject = useMemo(() => {
         if (!activeProjectMeta) return null;
         
+        const storeData = activeProjectMeta.dataSource?.data || [];
         return {
             ...activeProjectMeta,
             dataSource: {
                 ...activeProjectMeta.dataSource,
                 // Use rawData from React Query if available, otherwise fallback to what's in store (likely empty for persisted projects)
-                data: rawData.length > 0 ? rawData : activeProjectMeta.dataSource.data
+                // Add safety check for rawData being defined
+                data: (rawData && rawData.length > 0) ? rawData : storeData
             }
         };
     }, [activeProjectMeta, rawData]);
@@ -114,15 +116,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     // --- Computed ---
     const dateColumn = useMemo(() => {
         if (!activeProject || !activeProject.dataSource) return null;
-        const data = activeProject.dataSource.data;
-        if (!data || data.length < 5) return null;
+        const data = activeProject.dataSource.data || [];
+        if (data.length < 5) return null;
         const columns = Object.keys(data[0]);
         return columns.find(col => !isNaN(Date.parse(String(data[4]?.[col])))) || null;
     }, [activeProject]);
 
     const filteredData = useMemo(() => {
         if (!activeProject || !activeProject.dataSource) return [];
-        let result = activeProject.dataSource.data;
+        let result = activeProject.dataSource.data || [];
 
         if (dateColumn && timeFilter.type !== 'all') {
             const now = new Date();
@@ -180,17 +182,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleFileSelect = useCallback(async (file: File) => {
         const result = await processFile(file);
         if (result) {
-             if (activeProject && activeProject.dataSource && activeProject.dataSource.data.length === 0) {
+             if (activeProject && activeProject.dataSource && (activeProject.dataSource.data || []).length === 0) {
                  // Updating existing empty project
                  setProjectData(result.data); // Update Data Cache directly
                  updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: [] } })); // Keep store light
              } else {
                  // New temporary project
+                 const newId = `unsaved_${Date.now()}`;
                  const newProject = {
-                    id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
+                    id: newId, name: file.name, description: '', createdAt: new Date(),
                     dataSource: { name: file.name, data: [] }, analysis: null, 
                  };
-                 setProjectData(result.data); // Update Data Cache directly
+                 // Provide the ID explicitly because state update hasn't happened yet
+                 setProjectData(result.data, newId); 
                  setActiveProject(newProject as any);
              }
              setHasConfirmedPreview(false); 
@@ -199,7 +203,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
 
     const handleConfirmPreview = useCallback(async () => {
         if (!activeProject) return;
-        const sample = activeProject.dataSource.data.slice(0, 50);
+        const data = activeProject.dataSource.data || [];
+        const sample = data.slice(0, 50);
         const result = await analyzeData(sample);
         
         if (result) {
@@ -487,16 +492,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
              return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={null} />;
         }
         
-        if (activeProject.dataSource.data.length === 0 && !activeProject.id.startsWith('unsaved_')) {
+        const hasData = activeProject.dataSource.data && activeProject.dataSource.data.length > 0;
+
+        if (!hasData && !activeProject.id.startsWith('unsaved_')) {
              return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
         }
         
-        if (activeProject.dataSource.data.length === 0 && activeProject.id.startsWith('unsaved_')) {
+        if (!hasData && activeProject.id.startsWith('unsaved_')) {
              return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
         }
 
         if (validationReport && !hasConfirmedPreview) {
-             return <EmbeddedDataPreview data={activeProject.dataSource.data} report={validationReport} onConfirm={handleConfirmPreview} onCancel={handleReset} />;
+             return <EmbeddedDataPreview data={activeProject.dataSource.data || []} report={validationReport} onConfirm={handleConfirmPreview} onCancel={handleReset} />;
         }
         
         if (activeProject.analysis) {
@@ -595,7 +602,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             {maximizedChart && activeProject && <ChartMaximizeModal 
                 config={maximizedChart} 
                 data={filteredData} 
-                allData={activeProject.dataSource.data}
+                allData={activeProject.dataSource.data || []}
                 dateColumn={dateColumn} 
                 onUpdate={handleChartUpdate} 
                 onClose={() => setMaximizedChart(null)}
