@@ -1,7 +1,7 @@
 # Architecture Overview
 
 ## Core Philosophy
-This application follows a **Feature-Based Architecture** (inspired by Feature-Sliced Design). We decouple complex business logic from UI rendering and enforce a strict unidirectional data flow.
+This application follows a **Feature-Based Architecture** (inspired by Feature-Sliced Design). We decouple complex business logic from UI rendering and enforce a strict unidirectional data flow via a Global Store.
 
 ## Key Concepts
 
@@ -9,29 +9,35 @@ This application follows a **Feature-Based Architecture** (inspired by Feature-S
 Logic is grouped by **domain** rather than by file type.
 *   **`features/dashboard/`**: Analytics, KPI grids, Filtering.
 *   **`features/report-studio/`**: Presentation builder, Drag-and-drop canvas.
-*   **`features/data-studio/`**: Data transformation, Table views.
+*   **`features/data-studio/`**: Data transformation, Virtualized tables.
 
-### 2. Container/View Pattern
-*   **Containers (Pages/Workspaces)**: Responsible for fetching data, managing state, and orchestrating sub-components.
-    *   *Example:* `DashboardWorkspace.tsx`, `ReportStudio.tsx`.
-*   **Views (Components)**: Pure UI components that receive data via props and emit events via callbacks. They contain little to no side-effect logic.
-    *   *Example:* `KpiGrid.tsx`, `FilterBar.tsx`.
+### 2. Global State Management (Zustand)
+Instead of prop-drilling or scattered Context providers, we use **Zustand** for global state.
+*   **`store/projectStore.ts`**: Manages the core application data (Projects, Data Sources, Analysis results). Uses **Immer** for immutable updates and handles **Undo/Redo** history stacks.
+*   **`store/uiStore.ts`**: Manages transient UI state like active modals, sidebars, and global filters.
 
-### 3. Logic Extraction (Custom Hooks)
-We avoid writing complex `useEffect` or state logic inside UI components.
-*   **`hooks/useGemini.ts`**: Manages AI API calls, loading states, and progress simulation.
-*   **`hooks/useProjects.ts`**: Manages CRUD operations and LocalStorage persistence.
-*   **`hooks/useDataProcessing.ts`**: Handles file uploads and Web Worker communication.
+### 3. Global Modal Manager
+We avoid cluttering component trees with dozens of Modal instances.
+*   **Pattern**: A central `<ModalManager />` component sits at the root (`App.tsx`).
+*   **Trigger**: Components trigger modals via `useUIStore.getState().openModal('modalName', props)`.
+*   **Benefit**: Decouples UI logic from complex modal implementations and reduces initial bundle load.
 
-### 4. Shared UI Library (`components/ui`)
-Low-level "dumb" components (Atoms) that ensure visual consistency.
-*   **Rule**: Never use raw HTML `<button>`, `<input>`, or `<select>`. Always import `Button`, `Input`, `Select`, `Modal` from `@/components/ui`.
+### 4. AI Service Layer & Prompt Abstraction
+*   **`services/ai/`**: Specialized services for Analysis, Querying, and Presentation generation.
+*   **`lib/prompts.ts`**: **Single Source of Truth** for all LLM prompts. We do not hardcode prompt strings inside service logic. This allows for easier versioning and A/B testing of prompts.
+*   **Validation**: All AI outputs are parsed and validated using **Zod** schemas (`utils/validation.ts`) before reaching the UI to prevent crashes from malformed JSON.
+
+## Performance Optimizations
+
+1.  **Data Downsampling (LTTB)**: Large datasets (>500 points) are downsampled using the Largest-Triangle-Three-Buckets algorithm (`utils/sampling.ts`) before being passed to charts. This keeps the DOM light.
+2.  **Virtualization**: The Data Studio table uses `react-window` to render only the visible rows, allowing the app to handle 100k+ rows smoothly.
+3.  **Web Workers**: Heavy file parsing (Excel/CSV) is offloaded to a background worker (`services/parser.worker.ts`) to keep the main thread responsive.
 
 ## Data Flow
 
 1.  **Input**: User uploads a CSV/Excel file.
 2.  **Processing**: `services/dataParser.ts` (via Web Worker) parses, validates, and samples the data.
-3.  **Storage**: `hooks/useProjects` creates a Project object and persists it to `localStorage`.
-4.  **Analysis**: `services/geminiService.ts` sends the data sample to Google Gemini to generate a JSON configuration for Charts and KPIs.
-5.  **Rendering**: The `DashboardWorkspace` container reads the Project state and passes data down to `ChartGrid`, `KpiGrid`, etc.
-6.  **Reporting**: The `ReportStudio` feature allows users to remix these insights into slides, stored within the Project object.
+3.  **Action**: `projectStore.createProject` is called.
+4.  **Analysis**: `services/ai/analysisService.ts` sends the data sample to Google Gemini. The response is validated via Zod.
+5.  **Update**: The store is updated with the AI results via Immer.
+6.  **Rendering**: Feature components (`DashboardWorkspace`) subscribe to the store and render the UI.

@@ -17,7 +17,7 @@ Upload your data (CSV, Excel) and let our AI analyze it to automatically generat
 -   **AI Report Studio**:
     -   **Narrative Generation**: Generate a professional, multi-page business report in Markdown with an executive summary, key findings, and actionable recommendations using Gemini 2.5 Pro.
     -   **Drag & Drop Editor**: Customize the report layout by dragging and dropping KPIs, charts, and text blocks.
-    -   **PDF Export**: Export the final report as a high-quality, multi-page PDF.
+    -   **PDF Export**: Export the final report as a high-quality, multi-page PDF or PowerPoint.
 -   **Project Management**: Save your analyses as projects, which are persisted in your browser's local storage. Rename, delete, and switch between projects easily.
 -   **Data Quality Validation**: Get an instant report on your data's quality, including missing values and duplicate rows, before analysis.
 -   **Secure & Private**: File processing and data validation happen entirely in your browser. Only a small, anonymized sample is sent to the AI for analysis.
@@ -31,10 +31,11 @@ Upload your data (CSV, Excel) and let our AI analyze it to automatically generat
 -   **AI**: Google Gemini API (`@google/genai`)
     -   **Data Analysis**: `gemini-2.5-flash`
     -   **Report Generation**: `gemini-2.5-pro`
+-   **State Management**: Zustand + Immer
+-   **Validation**: Zod
 -   **Charting**: Recharts
 -   **Layout**: React Grid Layout
 -   **File Parsing**: SheetJS (xlsx)
--   **PDF Generation**: jsPDF, html2canvas
 -   **Persistence**: Browser Local Storage
 
 ---
@@ -58,7 +59,7 @@ This application is designed to run directly in a browser environment that suppo
     ```
 
 2.  **Set up the API Key:**
-    The application expects the Google Gemini API key to be available as an environment variable named `API_KEY`. The execution environment (like Google's internal development platform) is responsible for injecting this variable. For local testing, you would need to simulate this environment or modify the code in `services/geminiService.ts` to temporarily hardcode your key (not recommended for production).
+    The application expects the Google Gemini API key to be available as an environment variable named `API_KEY`. The execution environment (like Google's internal development platform) is responsible for injecting this variable. For local testing, you would need to simulate this environment or modify the code in `services/ai/client.ts` to temporarily hardcode your key (not recommended for production).
 
 3.  **Run the application:**
     Serve the project's root directory using a local web server. For example, using the "Live Server" extension in VS Code, you can right-click `index.html` and select "Open with Live Server".
@@ -80,25 +81,31 @@ This project is a static web application and can be deployed to any static hosti
 
 ```
 /
-├── index.html            # Main HTML file, includes Tailwind CSS setup and import maps
-├── index.tsx             # React application entry point
-├── App.tsx               # Main component, handles routing and user state
-├── types.ts              # Core TypeScript type definitions for the app
-├── metadata.json         # Application metadata
+├── index.html            # Main HTML file
+├── index.tsx             # Entry point
+├── App.tsx               # Main component
+├── types.ts              # Core Types
 │
-├── components/           # Reusable React components
-│   ├── Dashboard.tsx     # Main dashboard workspace logic
-│   ├── Sidebar.tsx       # Project navigation sidebar
-│   ├── ChartRenderer.tsx # Renders individual charts and their controls
-│   ├── GetStartedHub.tsx # Initial landing/upload screen
-│   └── ...               # Other UI components (modals, charts, etc.)
+├── components/           # UI Components
+│   ├── ui/               # Atomic Design System (Button, Input, etc.)
+│   ├── modals/           # Global Modal Manager & Definitions
+│   ├── charts/           # Recharts wrappers
+│   └── ...
 │
-├── features/             # Business logic slices
-│   ├── dashboard/        # Dashboard feature components
-│   ├── report-studio/    # Report generation feature
-│   └── data-studio/      # Data transformation feature
+├── features/             # Feature Slices
+│   ├── dashboard/        # Analytics Workspace
+│   ├── report-studio/    # Presentation Builder
+│   └── data-studio/      # Data Transformation
 │
-└── services/             # Business logic and external API interactions
-    ├── geminiService.ts  # All interactions with the Google Gemini API
-    └── dataParser.ts     # In-browser file parsing and validation logic
+├── store/                # Global State (Zustand)
+│   ├── projectStore.ts   # Data & Persistence
+│   └── uiStore.ts        # UI State
+│
+├── services/             # Business Logic
+│   ├── ai/               # Gemini API Services
+│   └── ...
+│
+├── lib/                  # Static Config & Prompts
+├── utils/                # Helpers (Validation, Sampling)
+└── hooks/                # Custom Hooks
 ```

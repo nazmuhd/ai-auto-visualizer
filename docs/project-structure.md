@@ -6,40 +6,48 @@
 
 ## Source Directory (`src/`)
 
+### `store/`
+Global state management (Zustand).
+*   `projectStore.ts`: Core data, persistence, undo/redo logic.
+*   `uiStore.ts`: Modals, sidebar, and transient UI state.
+
+### `lib/`
+Static configuration and libraries.
+*   `prompts.ts`: Centralized repository for all AI/LLM prompts.
+
+### `utils/`
+Pure utility functions.
+*   `validation.ts`: Zod schemas for runtime data validation.
+*   `sampling.ts`: LTTB algorithm for chart data optimization.
+
 ### `components/`
-*   **`ui/`**: **The Design System.** Contains atomic, reusable components like `Button.tsx`, `Input.tsx`, `Modal.tsx`, `LoadingSkeleton.tsx`. These have no business logic.
-*   **`charts/`**: Reusable charting wrappers (Recharts based) like `ChartRenderer.tsx`, `RechartsLineChart.tsx`.
-*   **`modals/`**: App-wide complex modals (e.g., `CreateProjectModal.tsx`).
+*   **`ui/`**: **The Design System.** Contains atomic, reusable components like `Button.tsx`, `Input.tsx`, `Modal.tsx`.
+*   **`modals/`**:
+    *   `ModalManager.tsx`: Central entry point for rendering active modals.
+    *   `*Modal.tsx`: Individual modal implementations.
+*   **`charts/`**: Reusable charting wrappers (Recharts based).
 
 ### `features/`
-The core business domains. Each folder contains the main container and a `components/` subfolder for feature-specific UI.
+The core business domains.
 *   **`dashboard/`**: Main analytics view.
-    *   `DashboardWorkspace.tsx`: Main entry point.
-    *   `components/`: `FilterBar`, `KpiGrid`, `ChartGrid`.
 *   **`report-studio/`**: Presentation builder.
-    *   `ReportStudio.tsx`: Main entry point.
-    *   `components/`: `SlidePreview`, `ContentBlockRenderer`, `FlyoutPanel`.
-*   **`data-studio/`**: Excel-like data transformation tool.
-    *   `DataStudio.tsx`: Main entry point.
-    *   `components/`: `DataTable`, `AppliedStepsPanel`.
+*   **`data-studio/`**: Data transformation tool.
 
 ### `hooks/`
-Shared custom hooks for cross-cutting concerns.
-*   `useGemini.ts`: AI integration.
-*   `useProjects.ts`: State management & persistence.
-*   `useDataProcessing.ts`: File parsing logic.
-*   `useUI.ts`: UI state (sidebar toggles).
+Shared custom hooks.
+*   `useGemini.ts`: Manages AI loading states and progress simulation.
+*   `useDataProcessing.ts`: Handles file uploads and Web Worker communication.
 
 ### `services/`
-Pure functions and API integrations.
-*   `geminiService.ts`: Direct calls to Google GenAI SDK.
-*   `dataParser.ts`: SheetJS logic (runs in main thread if small).
+API integrations and business logic.
+*   **`ai/`**: Specialized AI services (`analysisService`, `presentationService`, `queryService`).
+*   `dataParser.ts`: SheetJS logic.
 *   `parser.worker.ts`: Web Worker for large file parsing.
-*   `pptxEngine.ts`: PowerPoint generation logic using `pptxgenjs`.
+*   `pptxEngine.ts`: PowerPoint generation logic.
 
 ### `types/`
 TypeScript definitions.
 *   `models.ts`: Core entities (Project, User).
-*   `analysis.ts`: AI analysis shapes (KPIs, Charts).
-*   `report.ts`: Presentation shapes (Slides, Blocks).
-*   `transformations.ts`: Data Studio transformation types.
+*   `analysis.ts`: AI analysis shapes.
+*   `report.ts`: Presentation shapes.
+*   `transformations.ts`: Data transformation types.
