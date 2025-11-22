@@ -1,6 +1,6 @@
 
 import { ai } from "./client.ts";
-import { Type } from "@google/genai";
+import { Type, GenerateContentResponse } from "@google/genai";
 import { AnalysisResult, ReportTemplate, Presentation, Slide, ContentBlock, ReportLayoutItem } from '../../types.ts';
 import { v4 as uuidv4 } from 'uuid';
 import { PRESENTATION_GENERATION_PROMPT } from '../../lib/prompts.ts';
@@ -90,6 +90,14 @@ const slideLayoutSchema = {
     required: ['layout', 'newBlocks']
 };
 
+// Helper to enforce timeout
+const withTimeout = <T>(promise: Promise<T>, ms: number, errorMessage = "Operation timed out"): Promise<T> => {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMessage)), ms))
+    ]);
+};
+
 export const generateInitialPresentation = async (analysis: AnalysisResult, template: ReportTemplate, projectName: string): Promise<Presentation> => {
     const analysisContext = JSON.stringify({
         summary: analysis.summary,
@@ -116,15 +124,20 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
         .replace('{{slideInstructions}}', slideInstructions);
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: presentationSchema,
-                temperature: 0.3,
-            }
-        });
+        // Use Flash model for speed and reliability, and enforce a 60s timeout
+        const response = await withTimeout<GenerateContentResponse>(
+            ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: presentationSchema,
+                    temperature: 0.3,
+                }
+            }),
+            60000,
+            "Presentation generation timed out. Please try again."
+        );
 
         if (!response.text) throw new Error("Gemini returned an empty presentation structure.");
         const rawResult = JSON.parse(response.text) as any;
@@ -153,7 +166,7 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
 
     } catch (error) {
         console.error("Gemini Presentation Generation Error:", error);
-        throw new Error("Failed to generate the AI presentation. The model may be having trouble with the request. Please try again.");
+        throw new Error("Failed to generate presentation. Please try again or check your internet connection.");
     }
 };
 
@@ -222,15 +235,19 @@ export const addSlideWithAI = async (
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: aiPrompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: slideLayoutSchema,
-                temperature: 0.3,
-            }
-        });
+        const response = await withTimeout<GenerateContentResponse>(
+            ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: aiPrompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: slideLayoutSchema,
+                    temperature: 0.3,
+                }
+            }),
+            45000,
+            "Slide generation timed out"
+        );
 
         if (!response.text) throw new Error("AI returned an empty slide structure.");
         const rawResult = JSON.parse(response.text) as any;

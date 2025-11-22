@@ -131,7 +131,7 @@ export const SlidePreview: React.FC<Props> = ({
         // Priority 3: Chart Title
         const chartId = slide.layout.find(item => item.i.startsWith('chart_'))?.i;
         if (chartId) {
-            const chart = project.analysis?.charts.find(c => c.id === chartId);
+            const chart = project.analysis?.charts?.find(c => c.id === chartId);
             if (chart) return chart.title.substring(0, 25);
         }
 
@@ -150,7 +150,7 @@ export const SlidePreview: React.FC<Props> = ({
                 let type: 'chart' | 'kpi' | undefined;
                 
                 if (item.i.startsWith('chart_')) type = 'chart';
-                else if (project.analysis?.kpis.some(k => k.id === item.i)) type = 'kpi';
+                else if (project.analysis?.kpis?.some(k => k.id === item.i)) type = 'kpi';
 
                 return (
                     <div 

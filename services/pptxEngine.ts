@@ -95,8 +95,8 @@ export const exportPresentationToPptx = async (project: Project, presentation: P
         slide.layout.forEach(item => {
             const pos = getPos(item.x, item.y, item.w, item.h);
             
-            const kpi = project.analysis?.kpis.find(k => k.id === item.i);
-            const chart = project.analysis?.charts.find(c => c.id === item.i);
+            const kpi = project.analysis?.kpis?.find(k => k.id === item.i);
+            const chart = project.analysis?.charts?.find(c => c.id === item.i);
             const block = (presentation.blocks || []).find(t => t.id === item.i);
 
             if (block) {

@@ -1,12 +1,12 @@
 
-import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react';
 import { ChartConfig, DataRow, ChartType, TimeGrain } from '../../types.ts';
 import { RechartsBarChart } from './RechartsBarChart.tsx';
 import { RechartsLineChart } from './RechartsLineChart.tsx';
 import { RechartsPieChart } from './RechartsPieChart.tsx';
 import { RechartsScatterChart } from './RechartsScatterChart.tsx';
 import { RechartsComboChart } from './RechartsComboChart.tsx';
-import { MoreVertical, Edit3, PieChart, BarChart, LineChart, ScatterChart, AreaChart, Download, Grid, List, Tag, Calendar, ChevronRight, Image as ImageIcon, Palette, Maximize, Filter, Check } from 'lucide-react';
+import { MoreVertical, Edit3, PieChart, BarChart, LineChart, ScatterChart, AreaChart, Download, Grid, List, Tag, Calendar, ChevronRight, Image as ImageIcon, Palette, Maximize, Filter, Check, X } from 'lucide-react';
 import { lttb } from '../../utils/sampling.ts';
 
 // Types and constants...
@@ -31,15 +31,18 @@ interface Props {
 const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateColumn, onUpdate, onMaximize, enableScrollZoom = false, onFilterChange, onTimeFilterChange, activeFilters, activeTimeFilter }) => {
     // ... (UI State: isMenuOpen, viewOptions, etc.)
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [viewOptions, setViewOptions] = useState<ViewOptions>({ showGrid: config.type !== 'pie', showLegend: true, showLabels: true });
     const [timeGrain, setTimeGrain] = useState<TimeGrain>('daily');
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const filterRef = useRef<HTMLDivElement>(null);
 
     // ... (Event Handlers: click outside, etc.)
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) { setIsMenuOpen(false); }
+            if (filterRef.current && !filterRef.current.contains(event.target as Node)) { setIsFilterOpen(false); }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -57,8 +60,56 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
 
     const formatColumnName = (name: string) => name.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
 
+    // --- INTERACTIVITY: Filtering ---
+    const handleCategoryClick = useCallback((value: string | number) => {
+        if (value === undefined || value === null) return;
+        const strVal = String(value);
+        // Determine which column to filter by. Usually X-axis for bar/pie, or Color series for others.
+        const col = config.mapping.x; // Default to X axis category
+        
+        if (col) {
+            const currentFilters = activeFilters[col] || new Set();
+            const newFilters = new Set(currentFilters);
+            if (newFilters.has(strVal)) {
+                newFilters.delete(strVal);
+            } else {
+                newFilters.add(strVal);
+            }
+            onFilterChange(col, newFilters);
+        }
+    }, [config.mapping.x, activeFilters, onFilterChange]);
+
+    const uniqueCategories = useMemo(() => {
+        if (!allData || !config.mapping.x) return [];
+        // Get all unique values for the x-axis column from the full dataset
+        const values = new Set(allData.map(row => String(row[config.mapping.x])));
+        return Array.from(values).sort();
+    }, [allData, config.mapping.x]);
+
+    const isFiltered = activeFilters[config.mapping.x]?.size > 0;
+
+    const handleFilterItemClick = (val: string) => {
+        const col = config.mapping.x;
+        const currentFilters = activeFilters[col] || new Set();
+        const newFilters = new Set(currentFilters);
+        if (newFilters.has(val)) {
+            newFilters.delete(val);
+        } else {
+            newFilters.add(val);
+        }
+        onFilterChange(col, newFilters);
+    };
+
     const renderChart = () => {
-        const commonProps = { data: optimizedData, mapping: config.mapping, viewOptions, colors: config.colors || PALETTES['Default'], formatLabel: formatColumnName };
+        const commonProps = { 
+            data: optimizedData, 
+            mapping: config.mapping, 
+            viewOptions, 
+            colors: config.colors || PALETTES['Default'], 
+            formatLabel: formatColumnName,
+            onCategoryClick: handleCategoryClick
+        };
+        
         switch (config.type) {
             case 'bar': return <RechartsBarChart {...commonProps} />;
             case 'stacked-bar': return <RechartsBarChart {...commonProps} isStacked={true} />;
@@ -72,7 +123,6 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
         }
     };
 
-    // Minimal render structure for brevity, integrating new Optimization logic
     return (
         <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all duration-300 relative group">
             <div className="px-6 pt-5 pb-0 flex justify-between items-start relative z-10 flex-shrink-0">
@@ -81,6 +131,41 @@ const ChartRendererComponent: React.FC<Props> = ({ config, data, allData, dateCo
                     <p className="text-sm text-slate-500 mt-1 line-clamp-2" title={config.description}>{config.description}</p>
                 </div>
                 <div className="flex items-center space-x-1">
+                    {/* Filter Dropdown */}
+                    <div className="relative" ref={filterRef}>
+                        <button 
+                            onClick={() => setIsFilterOpen(!isFilterOpen)} 
+                            className={`p-1.5 rounded-full transition-all ${isFiltered ? 'bg-primary-100 text-primary-600' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 opacity-0 group-hover:opacity-100'}`}
+                            title="Filter"
+                        >
+                            <Filter size={16} />
+                        </button>
+                        {isFilterOpen && (
+                            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 max-h-80 flex flex-col">
+                                <div className="px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Filter {formatColumnName(config.mapping.x)}</span>
+                                    {isFiltered && <button onClick={() => { onFilterChange(config.mapping.x, new Set()); setIsFilterOpen(false); }} className="text-xs text-primary-600 hover:underline">Clear</button>}
+                                </div>
+                                <div className="overflow-y-auto flex-1 p-1 custom-scrollbar">
+                                    {uniqueCategories.map(val => {
+                                        const isActive = activeFilters[config.mapping.x]?.has(val);
+                                        return (
+                                            <button 
+                                                key={val} 
+                                                onClick={() => handleFilterItemClick(val)}
+                                                className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center justify-between hover:bg-slate-50 ${isActive ? 'text-primary-700 font-medium bg-primary-50' : 'text-slate-700'}`}
+                                            >
+                                                <span className="truncate flex-1" title={val}>{val}</span>
+                                                {isActive && <Check size={14} className="text-primary-600 ml-2 flex-shrink-0"/>}
+                                            </button>
+                                        );
+                                    })}
+                                    {uniqueCategories.length === 0 && <p className="text-center text-slate-400 text-xs py-4">No categories found</p>}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {onMaximize && (
                         <button onClick={() => onMaximize(config)} className='p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-all'>
                             <Maximize size={16} />

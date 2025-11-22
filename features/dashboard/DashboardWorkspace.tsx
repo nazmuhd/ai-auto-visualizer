@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, ChartConfig, KpiConfig, Presentation, SaveStatus } from '../../types.ts';
 import { TimeFilterPreset } from '../../components/charts/ChartRenderer.tsx';
-import { BarChart3, Bot, Database, Edit, LayoutGrid, Save, Undo, Redo } from 'lucide-react';
+import { BarChart3, Bot, Database, Edit, LayoutGrid, Save } from 'lucide-react';
 import { SaveStatusIndicator } from './components/SaveStatusIndicator.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { KpiGrid } from './components/KpiGrid.tsx';
@@ -10,7 +10,6 @@ import { ChartGrid } from './components/ChartGrid.tsx';
 import { ReportList, ReportStudio } from '../report-studio/index.ts';
 import { DataStudio } from '../data-studio/index.ts';
 import { Button } from '../../components/ui/index.ts';
-import { useProjectStore } from '../../store/projectStore.ts';
 
 interface Props {
     project: Project;
@@ -50,7 +49,6 @@ export const DashboardWorkspace: React.FC<Props> = ({
     
     const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
     const { analysis } = project;
-    const { undo, redo, past, future } = useProjectStore();
     
     useEffect(() => {
         if (editingPresentationId) {
@@ -117,19 +115,15 @@ export const DashboardWorkspace: React.FC<Props> = ({
     const showProjectHeader = !editingPresentationId;
 
     return (
-        <div className={`w-full duration-300 ${editingPresentationId ? 'h-full flex flex-col' : ''}`}>
+        <div className="flex flex-col h-full w-full overflow-hidden">
             {showProjectHeader && (
-                <div className="px-4 sm:px-6 lg:px-8 py-8">
+                <div className="flex-shrink-0 px-4 sm:px-6 lg:px-8 py-6 bg-slate-50 border-b border-slate-200 z-10">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                         <div className="flex-1 min-w-0">
                             <h2 className="text-2xl font-bold text-slate-900 truncate">{project.name}</h2>
                             <p className="text-sm text-slate-500 mt-1 truncate">{project.description || "No description provided."}</p>
                         </div>
                         <div className="flex-shrink-0 flex items-center space-x-3">
-                            <div className="flex items-center space-x-1 mr-4">
-                                <button onClick={undo} disabled={past.length === 0} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30" title="Undo"><Undo size={18} /></button>
-                                <button onClick={redo} disabled={future.length === 0} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30" title="Redo"><Redo size={18} /></button>
-                            </div>
                             <div className="text-right hidden sm:block">
                                 <SaveStatusIndicator status={saveStatus} />
                                 {saveStatus !== 'unsaved' && saveStatus !== 'saving' && project.lastSaved && (
@@ -148,8 +142,8 @@ export const DashboardWorkspace: React.FC<Props> = ({
                             </Button>
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-0">
-                        <div className="p-1 bg-slate-100 rounded-lg inline-flex items-center space-x-1 border border-slate-200">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div className="p-1 bg-slate-200/60 rounded-lg inline-flex items-center space-x-1 border border-slate-200">
                             <TabButton view="dashboard" label="Dashboard" icon={BarChart3} />
                             <TabButton view="report-studio" label="Report Studio" icon={Bot}/>
                             <TabButton view="data" label="Data Studio" icon={Database} />
@@ -166,48 +160,55 @@ export const DashboardWorkspace: React.FC<Props> = ({
                 </div>
             )}
 
-            <div className={`${editingPresentationId ? 'flex-1 min-h-0' : 'px-4 sm:px-6 lg:px-8 pb-8'}`}>
+            <div className="flex-1 min-h-0 relative">
                 {currentView === 'dashboard' && (
-                <>
-                    <FilterBar filters={globalFilters} onRemove={onRemoveFilter} />
-                    <KpiGrid kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
-                    <ChartGrid 
-                        chartRows={chartRows} 
-                        getGridColsClass={getGridColsClass} 
-                        dataSource={{data: filteredData}} 
-                        allData={project.dataSource.data} 
-                        dateColumn={props.dateColumn} 
-                        onChartUpdate={props.onChartUpdate} 
-                        onSetMaximizedChart={props.onSetMaximizedChart} 
-                        onGlobalFilterChange={onGlobalFilterChange} 
-                        onTimeFilterChange={onTimeFilterChange} 
-                        globalFilters={globalFilters} 
-                        timeFilter={timeFilter} 
-                    />
-                </>
+                    <div className="absolute inset-0 overflow-y-auto custom-scrollbar px-4 sm:px-6 lg:px-8 py-8">
+                        <FilterBar filters={globalFilters} onRemove={onRemoveFilter} />
+                        <KpiGrid kpis={visibleKpis} data={project.dataSource.data} dateColumn={props.dateColumn} onKpiClick={onKpiClick} />
+                        <ChartGrid 
+                            chartRows={chartRows} 
+                            getGridColsClass={getGridColsClass} 
+                            dataSource={{data: filteredData}} 
+                            allData={project.dataSource.data} 
+                            dateColumn={props.dateColumn} 
+                            onChartUpdate={props.onChartUpdate} 
+                            onSetMaximizedChart={props.onSetMaximizedChart} 
+                            onGlobalFilterChange={onGlobalFilterChange} 
+                            onTimeFilterChange={onTimeFilterChange} 
+                            globalFilters={globalFilters} 
+                            timeFilter={timeFilter} 
+                        />
+                    </div>
                 )}
+                
                 {currentView === 'report-studio' && !editingPresentationId && (
-                    <ReportList 
-                        project={project} 
-                        onCreateReport={onCreateReport} 
-                        onSelectPresentation={onSelectPresentation} 
-                        onRenamePresentation={onRenamePresentation} 
-                        onDuplicatePresentation={onDuplicatePresentation} 
-                        onDeletePresentation={onDeletePresentation} 
-                    />
+                    <div className="absolute inset-0 overflow-y-auto custom-scrollbar px-4 sm:px-6 lg:px-8 py-8">
+                        <ReportList 
+                            project={project} 
+                            onCreateReport={onCreateReport} 
+                            onSelectPresentation={onSelectPresentation} 
+                            onRenamePresentation={onRenamePresentation} 
+                            onDuplicatePresentation={onDuplicatePresentation} 
+                            onDeletePresentation={onDeletePresentation} 
+                        />
+                    </div>
                 )}
+                
                 {currentView === 'report-studio' && editingPresentationId && presentationToEdit && (
-                    <ReportStudio 
-                        project={project}
-                        presentation={presentationToEdit}
-                        onPresentationUpdate={onPresentationUpdate}
-                        onChartUpdate={props.onChartUpdate} // Pass this down
-                        onBackToHub={onBackToHub}
-                        onPresent={onPresent}
-                    />
+                    <div className="absolute inset-0">
+                        <ReportStudio 
+                            project={project}
+                            presentation={presentationToEdit}
+                            onPresentationUpdate={onPresentationUpdate}
+                            onChartUpdate={props.onChartUpdate} 
+                            onBackToHub={onBackToHub}
+                            onPresent={onPresent}
+                        />
+                    </div>
                 )}
+                
                 {currentView === 'data' && (
-                    <div className="h-[calc(100vh-14rem)] min-h-[500px]">
+                    <div className="absolute inset-0">
                         <DataStudio project={project} onProjectUpdate={onProjectUpdate} />
                     </div>
                 )}

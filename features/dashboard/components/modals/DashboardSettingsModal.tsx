@@ -61,7 +61,8 @@ export const DashboardSettingsModal: React.FC<Props> = ({
     };
 
     const visibleCharts = analysis.charts.filter(c => c.visible);
-    const layout = layouts.find(l => l.id === dashboardLayout) || layouts[0];
+    // Safe access to layouts to prevent "undefined (reading 'find')"
+    const layout = (layouts && layouts.find(l => l.id === dashboardLayout)) || (layouts && layouts[0]) || { totalCharts: 6 };
 
     return (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={onClose}>

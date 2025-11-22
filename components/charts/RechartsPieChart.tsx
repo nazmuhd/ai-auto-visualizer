@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { DataRow, ChartMapping } from '../../types.ts';
@@ -9,9 +10,10 @@ interface Props {
     viewOptions: ViewOptions;
     colors: string[];
     formatLabel: (label: string) => string;
+    onCategoryClick?: (value: string | number) => void;
 }
 
-export const RechartsPieChart: React.FC<Props> = ({ data, mapping, viewOptions, colors, formatLabel }) => {
+export const RechartsPieChart: React.FC<Props> = ({ data, mapping, viewOptions, colors, formatLabel, onCategoryClick }) => {
     const processedData = useMemo(() => {
         const map = new Map<string, number>();
         data.forEach(row => {
@@ -55,9 +57,16 @@ export const RechartsPieChart: React.FC<Props> = ({ data, mapping, viewOptions, 
                     label={viewOptions.showLabels ? ({ name, percent }) => formatSmartLabel(name, percent) : false}
                     labelLine={viewOptions.showLabels ? { stroke: '#cbd5e1', strokeWidth: 1 } : false}
                     className="text-xs font-medium fill-slate-600"
+                    cursor={onCategoryClick ? "pointer" : "default"}
                 >
                     {processedData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="#ffffff" strokeWidth={2} />
+                        <Cell 
+                            key={`cell-${index}`} 
+                            fill={colors[index % colors.length]} 
+                            stroke="#ffffff" 
+                            strokeWidth={2}
+                            onClick={() => onCategoryClick && onCategoryClick(entry.name)}
+                        />
                     ))}
                 </Pie>
                 <Tooltip 

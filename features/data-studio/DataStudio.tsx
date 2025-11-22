@@ -183,7 +183,7 @@ const detectColumnType = (data: DataRow[], columnName: string): 'text' | 'number
 
 
 export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
-    const [page, setPage] = useState(0); // Page is now mostly for the footer count display, as list is virtual
+    const [page, setPage] = useState(0); 
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isChooseColumnsModalOpen, setIsChooseColumnsModalOpen] = useState(false);
@@ -236,7 +236,6 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         return filtered;
     }, [transformations]);
 
-    // Updated for Immer: mutation is now allowed inside the updater
     const addTransformation = useCallback((t: Transformation) => {
         onProjectUpdate(p => {
             if (!p.transformations) p.transformations = [];
@@ -303,10 +302,6 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     
     const visibleHeaders = useMemo(() => columnsAfterTransform.filter(h => !hiddenColumnsSet.has(h)), [columnsAfterTransform, hiddenColumnsSet]);
     
-    // NOTE: We pass full data to DataTable now, as it handles virtualization internally.
-    // Pagination controls in header are purely informational or could be removed if we trust scroll fully.
-    // For now, we keep simple count info.
-
     const commonModals = (
         <>
             {isChooseColumnsModalOpen && <ChooseColumnsModal allColumns={columnsAfterTransform} hiddenColumns={hiddenColumnsSet} onClose={() => setIsChooseColumnsModalOpen(false)} onApply={(colsToHide) => addTransformation({ type: 'hide_columns', payload: { columns: colsToHide } })} />}
@@ -334,12 +329,10 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
 
     if (isFullscreen) {
         return (
-            // This top-level wrapper creates the stacking context for the entire fullscreen experience.
             <div className="fixed inset-0 z-[100000]">
                 {commonModals}
                 <ColumnContextMenu menuState={contextMenu} onClose={() => setContextMenu(null)} onSort={handleSort} onHide={handleHideColumn} onRename={handleRenameColumn} onTextTransform={handleTextTransform} onQuickCalc={handleQuickCalc} onFilter={() => setFilterModalOpen(true)} />
 
-                {/* This div is the actual fullscreen UI, with a lower z-index to sit behind modals */}
                 <div className="absolute inset-0 z-[-1] bg-slate-100 flex flex-col">
                     <FullscreenHeader />
                     <div className="flex-1 flex p-2 gap-2 min-h-0">
@@ -368,30 +361,44 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                 document.body
             )}
             
-            <div className="flex h-full w-full bg-slate-100/50">
-                <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
-                    <AppliedStepsPanel transformations={transformations} isGrouped={isGrouped} onAddColumn={() => setAddColumnModalOpen(true)} onChooseColumns={() => setIsChooseColumnsModalOpen(true)} onFilterRows={() => setFilterModalOpen(true)} onGroupBy={() => setGroupByModalOpen(true)} onRemoveTransformation={removeTransformation} />
-                </aside>
+            {/* Added containing wrapper for non-fullscreen mode */}
+            <div className="flex flex-col h-full w-full bg-slate-50 overflow-hidden p-4">
+                <div className="flex-1 flex gap-4 min-h-0">
+                    <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out flex flex-col ${isLeftPanelOpen ? 'w-64' : 'w-0 opacity-0'}`}>
+                        <div className="h-full overflow-hidden">
+                            <AppliedStepsPanel transformations={transformations} isGrouped={isGrouped} onAddColumn={() => setAddColumnModalOpen(true)} onChooseColumns={() => setIsChooseColumnsModalOpen(true)} onFilterRows={() => setFilterModalOpen(true)} onGroupBy={() => setGroupByModalOpen(true)} onRemoveTransformation={removeTransformation} />
+                        </div>
+                    </aside>
 
-                <main className="flex-1 flex flex-col min-w-0 relative px-2">
-                    <button onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)} title={isLeftPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -left-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsLeft size={16} className={`transition-transform duration-300 ${!isLeftPanelOpen && 'rotate-180'}`} /></button>
-                    
-                    <div className="w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-                        <header className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
-                            <h3 className="font-semibold text-slate-900">Data Canvas</h3>
-                            <div className="flex items-center space-x-4">
-                                <div className="text-sm text-slate-500">Showing {transformedData.length} rows</div>
-                                <button onClick={() => setIsFullscreen(true)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500"><Maximize size={16} /></button>
+                    <main className="flex-1 flex flex-col min-w-0 relative">
+                        <div className="absolute top-1/2 -translate-y-1/2 -left-4 z-20">
+                             <button onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)} title={isLeftPanelOpen ? "Collapse" : "Expand"} className="p-1 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 shadow-sm"><ChevronsLeft size={16} className={`transition-transform duration-300 ${!isLeftPanelOpen && 'rotate-180'}`} /></button>
+                        </div>
+                        
+                        <div className="w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
+                            <header className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0 bg-white">
+                                <h3 className="font-semibold text-slate-900">Data Canvas</h3>
+                                <div className="flex items-center space-x-4">
+                                    <div className="text-sm text-slate-500">Showing {transformedData.length} rows</div>
+                                    <button onClick={() => setIsFullscreen(true)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500"><Maximize size={16} /></button>
+                                </div>
+                            </header>
+                            <div className="flex-1 min-h-0">
+                                <DataTable headers={visibleHeaders} data={transformedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
                             </div>
-                        </header>
-                        <DataTable headers={visibleHeaders} data={transformedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
-                    </div>
-                    <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} title={isRightPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -right-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsRight size={16} className={`transition-transform duration-300 ${isRightPanelOpen && 'rotate-180'}`} /></button>
-                </main>
-                
-                <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}>
-                    <AskAI data={transformedData} />
-                </aside>
+                        </div>
+                        
+                        <div className="absolute top-1/2 -translate-y-1/2 -right-4 z-20">
+                            <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} title={isRightPanelOpen ? "Collapse" : "Expand"} className="p-1 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 shadow-sm"><ChevronsRight size={16} className={`transition-transform duration-300 ${isRightPanelOpen && 'rotate-180'}`} /></button>
+                        </div>
+                    </main>
+                    
+                    <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out flex flex-col ${isRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}>
+                        <div className="h-full overflow-hidden">
+                            <AskAI data={transformedData} />
+                        </div>
+                    </aside>
+                </div>
             </div>
         </>
     );

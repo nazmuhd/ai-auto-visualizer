@@ -5,8 +5,9 @@ import { Responsive, WidthProvider } from 'react-grid-layout';
 import { ChartRenderer, TimeFilterPreset } from '../../components/charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
 import { exportPresentationToPptx } from '../../services/pptxEngine.ts';
+import { addSlideWithAI } from '../../services/ai/presentationService.ts';
 import { 
-    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText, MoreHorizontal, Trash2, Filter, Edit3, GripHorizontal
+    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText, MoreHorizontal, Trash2, Filter, Edit3, GripHorizontal, Sparkles
 } from 'lucide-react';
 import { ContentBlockRenderer } from './components/ContentBlockRenderer.tsx';
 import { SlidePreview } from './components/SlidePreview.tsx';
@@ -67,6 +68,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [editingChart, setEditingChart] = useState<ChartConfig | null>(null);
     const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
+    const [isGeneratingSlide, setIsGeneratingSlide] = useState(false);
 
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollTimeout = useRef<number | null>(null);
@@ -96,25 +98,18 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             const target = e.target as HTMLElement;
             
             // Smart Scroll Detection:
-            // Check if we are scrolling inside an element that actually has scrollable content
             let el: HTMLElement | null = target;
             let isScrollable = false;
             
             while (el && el !== document.body && !el.classList.contains('slide-canvas')) {
-                // Check for vertical overflow
                 const style = window.getComputedStyle(el);
                 const overflowY = style.overflowY;
                 const isOverflow = overflowY === 'auto' || overflowY === 'scroll';
-                // Add buffer for subpixel differences
                 const hasScrollRoom = el.scrollHeight > el.clientHeight + 1;
                 
                 if (isOverflow && hasScrollRoom) {
-                    // We found a scrollable parent. 
-                    // Now check if we are at the boundary (top or bottom) to see if we should pass scroll to page
                     const atTop = el.scrollTop <= 0;
                     const atBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
-                    
-                    // If scrolling UP and not at top, OR scrolling DOWN and not at bottom, capture scroll
                     if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
                         isScrollable = true;
                         break; 
@@ -123,20 +118,11 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 el = el.parentElement;
             }
 
-            if (isScrollable) return; // Let the element scroll normally
+            if (isScrollable) return;
 
-            // Block the default page scroll if we are changing slides
-            // but allow if we are just scrolling the canvas (which is handled by overflow-y-auto on main)
-            // The main canvas IS the scroll container for the page in this layout.
-            
-            // However, the user requested "scroll up scroll down move from one slide to another"
-            // Since we are rendering slides vertically in a scrollable container, native scroll handles it partially,
-            // but the "smooth snap" to next slide is what is requested.
-            
             if (scrollTimeout.current) return;
             
             if (Math.abs(e.deltaY) > 30) {
-               // If we aren't inside a scrollable element, navigate slides
                if (e.deltaY > 0) {
                    setCurrentPage(p => Math.min(p + 1, presentation.slides.length - 1));
                } else {
@@ -154,7 +140,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         };
     }, [presentation.slides.length]);
 
-    // Scroll the active slide into view when currentPage changes
     useEffect(() => {
         if (slideRefs.current[currentPage]) {
             slideRefs.current[currentPage]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -193,6 +178,27 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         handlePresentationUpdate(p => ({ ...p, slides: newSlides }));
         setDraggedSlideIndex(null);
         setCurrentPage(targetIndex);
+    };
+
+    const handleGenerateSlide = async () => {
+        const prompt = window.prompt("Describe the slide you want to generate (e.g., 'A slide comparing revenue by region with a chart'):");
+        if (!prompt || !project.analysis) return;
+
+        setIsGeneratingSlide(true);
+        try {
+            const { newSlide, newBlocks } = await addSlideWithAI(prompt, project.analysis, project.name, isSlides);
+            handlePresentationUpdate(p => ({
+                ...p,
+                slides: [...p.slides, newSlide],
+                blocks: [...(p.blocks || []), ...newBlocks]
+            }));
+            setTimeout(() => handleSelectPage(presentation.slides.length), 100);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to generate slide. Please try again.");
+        } finally {
+            setIsGeneratingSlide(false);
+        }
     };
 
     const handleAddPage = () => {
@@ -363,7 +369,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 return s;
             });
             let updatedBlocks = p.blocks || [];
-            if (!itemId.startsWith('chart_') && !project.analysis?.kpis.some(k => k.id === itemId)) {
+            if (!itemId.startsWith('chart_') && !project.analysis?.kpis?.some(k => k.id === itemId)) {
                 updatedBlocks = updatedBlocks.filter(b => b.id !== itemId);
             }
             return { ...p, slides: updatedSlides, blocks: updatedBlocks };
@@ -380,13 +386,13 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     };
     
     const renderGridItemContent = (item: ReportLayoutItem) => {
-        const chart = project.analysis?.charts.find(c => c.id === item.i);
+        const chart = project.analysis?.charts?.find(c => c.id === item.i);
         if (chart) return (
             <div className="w-full h-full p-2 bg-white rounded-lg shadow-sm border border-slate-100 flex flex-col overflow-hidden">
                 <ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} />
             </div>
         );
-        const kpi = project.analysis?.kpis.find(k => k.id === item.i);
+        const kpi = project.analysis?.kpis?.find(k => k.id === item.i);
         if (kpi) return <div className="w-full h-full"><ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} /></div>;
         const block = (presentation.blocks || []).find(b => b.id === item.i);
         if(block) return <div className="w-full h-full"><ContentBlockRenderer block={block} theme={theme} onUpdate={b => handlePresentationUpdate(p => ({ ...p, blocks: (p.blocks || []).map(tb => tb.id === b.id ? b : tb)}))} /></div>;
@@ -401,7 +407,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-[100] bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-36 flex flex-col animate-in fade-in zoom-in-95 duration-100">
                 {isChart && (
                     <button 
-                        onMouseDown={(e) => { e.stopPropagation(); setEditingChart(project.analysis?.charts.find(c => c.id === item.i) || null); setActiveMenuId(null); }} 
+                        onMouseDown={(e) => { e.stopPropagation(); setEditingChart(project.analysis?.charts?.find(c => c.id === item.i) || null); setActiveMenuId(null); }} 
                         className="text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center text-slate-700"
                     >
                         <Filter size={14} className="mr-2"/> Edit Data
@@ -467,6 +473,10 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                 ? { zIndex: 10, opacity: 1, position: 'relative', transform: 'scale(1)' } as React.CSSProperties
                                 : { zIndex: 0, opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none', height: 0, overflow: 'hidden', transform: 'scale(0.95)' } as React.CSSProperties;
                              
+                             // FIX: Use JSON parse/stringify to create a deep, mutable copy of the layout
+                             // This is the most robust way to detach from Immer frozen state and prevent RGL errors.
+                             const mutableLayouts = { lg: JSON.parse(JSON.stringify(slide.layout || [])) };
+
                              return (
                                 <div
                                     key={slide.id}
@@ -484,7 +494,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                         
                                         <ResponsiveGridLayout
                                             className="layout"
-                                            layouts={{ lg: slide.layout || [] }}
+                                            layouts={mutableLayouts}
                                             breakpoints={{ lg: 1000 }}
                                             cols={{ lg: 12 }}
                                             rowHeight={rowHeight}
@@ -588,9 +598,15 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                     isDragging={draggedSlideIndex === index}
                                 />
                             ))}
+                            
+                            <button onClick={handleGenerateSlide} disabled={isGeneratingSlide} className="w-full py-3 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl text-white shadow-md hover:shadow-lg transition-all flex flex-col items-center justify-center gap-1 mt-2 border border-primary-500">
+                                {isGeneratingSlide ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                                <span className="text-xs font-semibold">Generate Slide with AI</span>
+                            </button>
+
                             <button onClick={handleAddPage} className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex flex-col items-center justify-center gap-1 mt-2">
                                 <Plus size={20} />
-                                <span className="text-xs font-semibold">Add Slide</span>
+                                <span className="text-xs font-semibold">Add Blank Slide</span>
                             </button>
                          </div>
                     </div>

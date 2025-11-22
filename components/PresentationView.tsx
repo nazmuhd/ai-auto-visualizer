@@ -131,7 +131,13 @@ export const PresentationView: React.FC<PresentationViewProps> = ({ project, pre
         return <div className="bg-slate-100 rounded-lg p-4">Unknown item: {item.i}</div>;
     };
     
-    const currentLayout = slides[currentPage]?.layout || [];
+    // Create a mutable copy of the layout to prevent "Cannot assign to read only property" errors
+    const currentLayout = useMemo(() => {
+        const layout = slides[currentPage]?.layout || [];
+        // Deep clone via map destructuring is safest for layout items to ensure x,y,w,h are mutable
+        return layout.map(item => ({ ...item }));
+    }, [slides, currentPage]);
+
     const isSlides = presentation.format === 'slides';
     
     // Use max-h-[90vh] to ensure it fits on screen. Use auto margin for safe centering.

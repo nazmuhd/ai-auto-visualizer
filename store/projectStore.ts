@@ -21,6 +21,7 @@ interface ProjectState {
     updateActiveProject: (updater: (p: Project) => void) => void;
     deleteProject: (id: string) => void;
     renameProject: (id: string, name: string, description: string) => void;
+    saveProject: (name: string, description: string) => void;
     setSaveStatus: (status: 'idle' | 'unsaved' | 'saving' | 'saved') => void;
     undo: () => void;
     redo: () => void;
@@ -101,6 +102,16 @@ export const useProjectStore = create<ProjectState>()(
                     project.name = name;
                     project.description = description;
                     project.lastSaved = new Date();
+                }
+            }),
+
+            saveProject: (name, description) => set(state => {
+                const project = state.projects.find(p => p.id === state.activeProjectId);
+                if (project) {
+                    project.name = name;
+                    project.description = description;
+                    project.lastSaved = new Date();
+                    state.saveStatus = 'saved';
                 }
             }),
 

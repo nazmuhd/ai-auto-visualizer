@@ -11,9 +11,10 @@ interface Props {
     isStacked?: boolean;
     colors: string[];
     formatLabel: (label: string) => string;
+    onCategoryClick?: (value: string | number) => void;
 }
 
-export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, isStacked = false, colors, formatLabel }) => {
+export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, isStacked = false, colors, formatLabel, onCategoryClick }) => {
     const { processedData, dataKeys, yAxisWidth, leftMargin } = useMemo(() => {
         if (!data || data.length === 0) return { processedData: [], dataKeys: [], yAxisWidth: 80, leftMargin: 20 };
 
@@ -109,9 +110,14 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, 
                         dataKey={dataKeys[0]} 
                         radius={[0, 4, 4, 0]} 
                         maxBarSize={60}
+                        cursor={onCategoryClick ? "pointer" : "default"}
                     >
                         {processedData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                            <Cell 
+                                key={`cell-${index}`} 
+                                fill={colors[index % colors.length]} 
+                                onClick={() => onCategoryClick && onCategoryClick(entry[mapping.x])}
+                            />
                         ))}
                         {viewOptions.showLabels && (
                             <LabelList 
@@ -132,6 +138,8 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, 
                             maxBarSize={60}
                             stackId={isStacked ? "a" : undefined}
                             name={formatLabel(key)}
+                            cursor={onCategoryClick ? "pointer" : "default"}
+                            onClick={(data) => onCategoryClick && onCategoryClick(data[mapping.x])}
                         />
                     ))
                 )}

@@ -36,7 +36,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-    isSidebarOpen: window.innerWidth >= 1024,
+    isSidebarOpen: false,
     setSidebarOpen: (open) => set({ isSidebarOpen: open }),
 
     activeModal: null,
