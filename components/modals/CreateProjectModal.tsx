@@ -24,6 +24,7 @@ export const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onSave })
     e.preventDefault();
     if (name) {
       onSave(name, description);
+      onClose();
     }
   };
 

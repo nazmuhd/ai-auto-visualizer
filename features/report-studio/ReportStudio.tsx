@@ -6,7 +6,7 @@ import { ChartRenderer, TimeFilterPreset } from '../../components/charts/ChartRe
 import { v4 as uuidv4 } from 'uuid';
 import { exportPresentationToPptx } from '../../services/pptxEngine.ts';
 import { 
-    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText, MoreHorizontal, Trash2, Filter, Edit3
+    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText, MoreHorizontal, Trash2, Filter, Edit3, GripHorizontal
 } from 'lucide-react';
 import { ContentBlockRenderer } from './components/ContentBlockRenderer.tsx';
 import { SlidePreview } from './components/SlidePreview.tsx';
@@ -66,6 +66,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     const [showCenterGuide, setShowCenterGuide] = useState(false);
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [editingChart, setEditingChart] = useState<ChartConfig | null>(null);
+    const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
 
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollTimeout = useRef<number | null>(null);
@@ -92,27 +93,73 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         };
 
         const handleWheel = (e: WheelEvent) => {
-            if ((e.target as HTMLElement).closest('.custom-scrollbar')) return;
-            if ((e.target as HTMLElement).closest('.react-grid-item')) return; 
+            const target = e.target as HTMLElement;
+            
+            // Smart Scroll Detection:
+            // Check if we are scrolling inside an element that actually has scrollable content
+            let el: HTMLElement | null = target;
+            let isScrollable = false;
+            
+            while (el && el !== document.body && !el.classList.contains('slide-canvas')) {
+                // Check for vertical overflow
+                const style = window.getComputedStyle(el);
+                const overflowY = style.overflowY;
+                const isOverflow = overflowY === 'auto' || overflowY === 'scroll';
+                // Add buffer for subpixel differences
+                const hasScrollRoom = el.scrollHeight > el.clientHeight + 1;
+                
+                if (isOverflow && hasScrollRoom) {
+                    // We found a scrollable parent. 
+                    // Now check if we are at the boundary (top or bottom) to see if we should pass scroll to page
+                    const atTop = el.scrollTop <= 0;
+                    const atBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
+                    
+                    // If scrolling UP and not at top, OR scrolling DOWN and not at bottom, capture scroll
+                    if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
+                        isScrollable = true;
+                        break; 
+                    }
+                }
+                el = el.parentElement;
+            }
 
+            if (isScrollable) return; // Let the element scroll normally
+
+            // Block the default page scroll if we are changing slides
+            // but allow if we are just scrolling the canvas (which is handled by overflow-y-auto on main)
+            // The main canvas IS the scroll container for the page in this layout.
+            
+            // However, the user requested "scroll up scroll down move from one slide to another"
+            // Since we are rendering slides vertically in a scrollable container, native scroll handles it partially,
+            // but the "smooth snap" to next slide is what is requested.
+            
             if (scrollTimeout.current) return;
-            // Threshold to prevent accidental swipes
-            if (e.deltaY > 40) {
-                setCurrentPage(p => Math.min(p + 1, presentation.slides.length - 1));
-                scrollTimeout.current = window.setTimeout(() => scrollTimeout.current = null, 400);
-            } else if (e.deltaY < -40) {
-                setCurrentPage(p => Math.max(0, p - 1));
-                scrollTimeout.current = window.setTimeout(() => scrollTimeout.current = null, 400);
+            
+            if (Math.abs(e.deltaY) > 30) {
+               // If we aren't inside a scrollable element, navigate slides
+               if (e.deltaY > 0) {
+                   setCurrentPage(p => Math.min(p + 1, presentation.slides.length - 1));
+               } else {
+                   setCurrentPage(p => Math.max(0, p - 1));
+               }
+               scrollTimeout.current = window.setTimeout(() => scrollTimeout.current = null, 500);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('wheel', handleWheel);
+        window.addEventListener('wheel', handleWheel, { passive: false });
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('wheel', handleWheel);
         };
     }, [presentation.slides.length]);
+
+    // Scroll the active slide into view when currentPage changes
+    useEffect(() => {
+        if (slideRefs.current[currentPage]) {
+            slideRefs.current[currentPage]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [currentPage]);
 
     const kpiValues = useMemo(() => {
         const values: Record<string, number | null> = {};
@@ -129,6 +176,23 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             ...p,
             theme: { ...theme, colors: { ...theme.colors, ...newColors } }
         }));
+    };
+
+    // --- Slide Drag & Drop ---
+    const handleSlideDragStart = (index: number) => {
+        setDraggedSlideIndex(index);
+    };
+
+    const handleSlideDrop = (targetIndex: number) => {
+        if (draggedSlideIndex === null || draggedSlideIndex === targetIndex) return;
+
+        const newSlides = [...presentation.slides];
+        const [movedSlide] = newSlides.splice(draggedSlideIndex, 1);
+        newSlides.splice(targetIndex, 0, movedSlide);
+
+        handlePresentationUpdate(p => ({ ...p, slides: newSlides }));
+        setDraggedSlideIndex(null);
+        setCurrentPage(targetIndex);
     };
 
     const handleAddPage = () => {
@@ -209,7 +273,6 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
     };
 
     const handleDrag = (layout: ReportLayoutItem[], oldItem: ReportLayoutItem, newItem: ReportLayoutItem) => {
-        // Ruler logic: Check if the center of the item is near the center of the grid (width 12)
         const center = newItem.x + (newItem.w / 2);
         if (Math.abs(center - 6) < 0.1) {
             setShowCenterGuide(true);
@@ -335,7 +398,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         
         const isChart = item.i.startsWith('chart_');
         return (
-            <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-[100] bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-36 flex flex-col">
+            <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-[100] bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-36 flex flex-col animate-in fade-in zoom-in-95 duration-100">
                 {isChart && (
                     <button 
                         onMouseDown={(e) => { e.stopPropagation(); setEditingChart(project.analysis?.charts.find(c => c.id === item.i) || null); setActiveMenuId(null); }} 
@@ -344,7 +407,10 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                         <Filter size={14} className="mr-2"/> Edit Data
                     </button>
                 )}
-                <button className="text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center text-slate-700">
+                <button 
+                    onMouseDown={(e) => { e.stopPropagation(); setActivePanel('theme'); setActiveMenuId(null); }} 
+                    className="text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center text-slate-700"
+                >
                     <Edit3 size={14} className="mr-2"/> Format
                 </button>
                 <div className="border-t border-slate-100 my-1"></div>
@@ -377,7 +443,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     />
                 </div>
                 <div className="flex-shrink-0 flex justify-end items-center space-x-3 w-auto">
-                    <button onClick={() => setShowNotes(!showNotes)} className={`p-2 rounded-full hover:bg-slate-100 transition-colors ${showNotes ? 'text-primary-600 bg-primary-50' : 'text-slate-500'}`} title="Speaker Notes">
+                    <button onClick={() => setShowNotes(!showNotes)} className={`p-2 rounded-full hover:bg-slate-100 transition-colors ${showNotes ? 'text-yellow-600 bg-yellow-100' : 'text-slate-500'}`} title="Speaker Notes">
                         <MessageSquareText size={20} />
                     </button>
                     <button onClick={handleExport} disabled={isExporting} className="px-4 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-full shadow-sm flex items-center transition-transform transform active:scale-95 disabled:opacity-50">
@@ -391,23 +457,21 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             
             <div className="flex-1 relative overflow-hidden">
                 {/* Center Canvas */}
-                <main className="absolute inset-0 overflow-y-auto custom-scrollbar flex flex-col items-center pt-12 pb-32" onClick={() => setActiveMenuId(null)}>
+                <main className="absolute inset-0 overflow-y-auto custom-scrollbar flex flex-col items-center pt-12 pb-32 transition-all duration-300 slide-canvas" onClick={() => setActiveMenuId(null)}>
                     <div className="w-full max-w-5xl space-y-20 pb-32">
                         {presentation.slides.map((slide, index) => {
                              const rowHeight = isSlides ? 50 : 40; 
                              const isActive = index === currentPage;
                              
-                             // CRITICAL FIX: Do not unmount slides. Hide them using opacity and pointer-events.
-                             // This keeps charts loaded and sized correctly.
                              const containerStyle = isActive 
-                                ? { zIndex: 10, opacity: 1, position: 'relative' } as React.CSSProperties
-                                : { zIndex: 0, opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none', height: 0, overflow: 'hidden' } as React.CSSProperties;
+                                ? { zIndex: 10, opacity: 1, position: 'relative', transform: 'scale(1)' } as React.CSSProperties
+                                : { zIndex: 0, opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none', height: 0, overflow: 'hidden', transform: 'scale(0.95)' } as React.CSSProperties;
                              
                              return (
                                 <div
                                     key={slide.id}
                                     ref={el => { slideRefs.current[index] = el; }}
-                                    className={`relative transition-opacity duration-300 ease-in-out`}
+                                    className={`relative transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] origin-center`}
                                     style={containerStyle}
                                 >
                                     <div 
@@ -439,8 +503,11 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                             draggableCancel=".nodrag"
                                         >
                                             {(slide.layout || []).map(item => (
-                                                <div key={item.i} className="group/item relative bg-transparent hover:ring-1 hover:ring-slate-300 rounded transition-all">
-                                                    <div className="w-full h-full overflow-hidden">
+                                                // FIX: Force visible overflow to ensure context menu isn't clipped.
+                                                // We put overflow-hidden on the inner content div instead.
+                                                <div key={item.i} className="group/item relative bg-transparent hover:ring-1 hover:ring-slate-300 rounded transition-all hover:z-[60] !overflow-visible">
+                                                    {/* Inner content with hidden overflow to contain chart/text */}
+                                                    <div className="w-full h-full overflow-hidden rounded-sm">
                                                         {renderGridItemContent(item)}
                                                     </div>
                                                     
@@ -448,7 +515,7 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                                     <button 
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === item.i ? null : item.i); }}
-                                                        className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white shadow-md border border-slate-200 text-slate-500 hover:text-primary-600 opacity-0 group-hover/item:opacity-100 transition-all z-20 cursor-pointer nodrag flex items-center justify-center hover:scale-110"
+                                                        className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white shadow-md border border-slate-200 text-slate-500 hover:text-primary-600 opacity-0 group-hover/item:opacity-100 transition-all z-[70] cursor-pointer nodrag flex items-center justify-center hover:scale-110"
                                                         title="Options"
                                                     >
                                                         <MoreHorizontal size={16} />
@@ -468,22 +535,26 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     </div>
                 </main>
 
-                {/* Speaker Notes Panel - Raised Z-Index (100) to be definitely above menus */}
-                <div className={`absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-all duration-300 z-[100] flex flex-col ${showNotes ? 'h-48' : 'h-0 overflow-hidden'}`}>
-                    <div className="bg-slate-50 px-4 py-1 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 flex justify-between">
+                {/* Speaker Notes Panel - Improved UI with yellow post-it style */}
+                <div className={`absolute bottom-0 left-0 right-0 bg-yellow-50 border-t-4 border-yellow-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-all duration-300 z-[100] flex flex-col ${showNotes ? 'h-48' : 'h-0 overflow-hidden'}`}>
+                    {/* Grab handle visual */}
+                    <div className="flex justify-center py-1.5 cursor-ns-resize bg-yellow-100 border-b border-yellow-200 hover:bg-yellow-200 transition-colors" onClick={() => setShowNotes(!showNotes)}>
+                        <div className="w-16 h-1.5 bg-yellow-300/80 rounded-full"></div>
+                    </div>
+                    <div className="px-4 py-2 text-xs font-bold text-yellow-800 uppercase tracking-wider flex justify-between items-center bg-yellow-50">
                         <span>Speaker Notes</span>
-                        <button onClick={() => setShowNotes(false)}><X size={14}/></button>
+                        <button onClick={() => setShowNotes(false)} className="text-yellow-600 hover:text-yellow-900"><X size={14}/></button>
                     </div>
                     <textarea 
-                        className="flex-1 w-full p-4 resize-none outline-none text-sm text-slate-700 font-mono"
-                        placeholder="Add speaker notes for this slide..."
+                        className="flex-1 w-full px-6 py-2 resize-none outline-none text-base text-slate-800 font-sans bg-transparent leading-relaxed placeholder:text-yellow-800/40"
+                        placeholder="Click here to add notes for your presentation..."
                         value={presentation.slides[currentPage]?.notes || ''}
                         onChange={handleNotesChange}
                     />
                 </div>
 
                 {/* Left Floating Menu: Slide Navigation */}
-                <div className={`absolute left-6 top-6 bottom-6 z-30 flex flex-col pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] ${isLeftMenuOpen ? 'w-64' : 'w-14 justify-center'}`}>
+                <div className={`absolute left-6 top-6 bottom-6 z-30 flex flex-col pointer-events-none transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] ${isLeftMenuOpen ? 'w-64' : 'w-14 justify-center'}`}>
                     
                     {/* Expanded Panel */}
                     <div className={`absolute left-0 top-0 w-64 h-full pointer-events-auto flex flex-col bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden transition-all duration-300 ease-in-out origin-left ${isLeftMenuOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 -translate-x-4 scale-95 pointer-events-none'}`}>
@@ -510,6 +581,11 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                                     onClick={() => handleSelectPage(index)}
                                     onDelete={(e) => { e.stopPropagation(); handleDeletePage(index); }}
                                     onAddSection={(e) => { e.stopPropagation(); handleAddSection(index); }}
+                                    draggable={true}
+                                    onDragStart={(e) => { e.stopPropagation(); handleSlideDragStart(index); }}
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleSlideDrop(index); }}
+                                    isDragging={draggedSlideIndex === index}
                                 />
                             ))}
                             <button onClick={handleAddPage} className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex flex-col items-center justify-center gap-1 mt-2">
