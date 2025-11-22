@@ -1,7 +1,4 @@
-
 import React, { useState } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from './lib/query-client.ts';
 import { LandingPage } from './components/LandingPage.tsx';
 import { LoginPage } from './components/pages/LoginPage.tsx';
 import { SignupPage } from './components/pages/SignupPage.tsx';
@@ -61,9 +58,9 @@ function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       {renderPage()}
-    </QueryClientProvider>
+    </>
   );
 }
 

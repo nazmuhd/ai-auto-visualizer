@@ -1,6 +1,6 @@
 
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { ChartConfig, KpiConfig, LayoutInfo, Presentation, ReportTemplate, Project } from '../types.ts';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
+import { ChartConfig, KpiConfig, LayoutInfo, Presentation, ReportTemplate } from '../types.ts';
 import { TimeFilterPreset } from './charts/ChartRenderer.tsx';
 import { Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,9 +10,9 @@ import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { EmbeddedDataPreview } from './EmbeddedDataPreview.tsx';
 import { PresentationView } from './PresentationView.tsx';
-import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx';
+import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx'; // Import new skeleton
 
-// Feature Components
+// Feature Components (using new barrel files)
 import { DashboardWorkspace, ProjectEmptyState } from '../features/dashboard/index.ts';
 
 // Modals
@@ -34,7 +34,6 @@ import { AccountPage } from './pages/AccountPage.tsx';
 
 // Hooks
 import { useResponsiveSidebar, useProjects, useDataProcessing, useGemini } from '../hooks/index.ts';
-import { useProjectData } from '../hooks/useProjectData.ts';
 
 interface DashboardProps {
     userEmail: string;
@@ -53,29 +52,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     // --- Hooks Integration ---
     const [isSidebarOpen, setIsSidebarOpen] = useResponsiveSidebar();
     const { 
-        savedProjects, activeProject: activeProjectMeta, saveStatus, createProject, saveProject, manualSave, 
+        savedProjects, activeProject, saveStatus, createProject, saveProject, manualSave, 
         selectProject, deleteProject, renameProject, resetActiveProject, updateActiveProject, setActiveProject 
     } = useProjects();
-    
-    // DECOUPLING: Fetch raw data separately using React Query to keep main store light
-    const { data: rawData, isLoading: isDataLoading, setProjectData } = useProjectData(activeProjectMeta?.id || null);
-
-    // Reconstitute the full project object for child components by merging metadata and raw data
-    const activeProject = useMemo(() => {
-        if (!activeProjectMeta) return null;
-        
-        const storeData = activeProjectMeta.dataSource?.data || [];
-        return {
-            ...activeProjectMeta,
-            dataSource: {
-                ...activeProjectMeta.dataSource,
-                // Use rawData from React Query if available, otherwise fallback to what's in store (likely empty for persisted projects)
-                // Add safety check for rawData being defined
-                data: (rawData && rawData.length > 0) ? rawData : storeData
-            }
-        };
-    }, [activeProjectMeta, rawData]);
-
     
     const { 
         processFile, isProcessing, progress, report: validationReport, error: processError, 
@@ -115,16 +94,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     
     // --- Computed ---
     const dateColumn = useMemo(() => {
-        if (!activeProject || !activeProject.dataSource) return null;
-        const data = activeProject.dataSource.data || [];
-        if (data.length < 5) return null;
+        const data = activeProject?.dataSource.data;
+        if (!data || data.length < 5) return null;
         const columns = Object.keys(data[0]);
         return columns.find(col => !isNaN(Date.parse(String(data[4]?.[col])))) || null;
     }, [activeProject]);
 
     const filteredData = useMemo(() => {
-        if (!activeProject || !activeProject.dataSource) return [];
-        let result = activeProject.dataSource.data || [];
+        if (!activeProject) return [];
+        let result = activeProject.dataSource.data;
 
         if (dateColumn && timeFilter.type !== 'all') {
             const now = new Date();
@@ -162,49 +140,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         return result;
     }, [activeProject, globalFilters, timeFilter, dateColumn]);
 
-    // Update Project Data Callback
-    const handleProjectUpdate = useCallback((updater: (prev: Project) => Project) => {
-        if (!activeProject) return;
-        const updated = updater(activeProject);
-        
-        // Sync data change to React Query cache
-        if (updated.dataSource.data !== activeProject.dataSource.data) {
-            setProjectData(updated.dataSource.data);
-        }
-        
-        // Update Store (Metadata)
-        updateActiveProject(updater);
-    }, [activeProject, updateActiveProject, setProjectData]);
-
-
     // --- Handlers ---
     
     const handleFileSelect = useCallback(async (file: File) => {
         const result = await processFile(file);
         if (result) {
-             if (activeProject && activeProject.dataSource && (activeProject.dataSource.data || []).length === 0) {
-                 // Updating existing empty project
-                 setProjectData(result.data); // Update Data Cache directly
-                 updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: [] } })); // Keep store light
+             let projectToUpdate = activeProject;
+             if (projectToUpdate && projectToUpdate.dataSource.data.length === 0) {
+                 updateActiveProject((p: any) => ({ ...p, dataSource: { name: file.name, data: result.data } }));
              } else {
-                 // New temporary project
-                 const newId = `unsaved_${Date.now()}`;
+                 // Temporary project
                  const newProject = {
-                    id: newId, name: file.name, description: '', createdAt: new Date(),
-                    dataSource: { name: file.name, data: [] }, analysis: null, 
+                    id: `unsaved_${Date.now()}`, name: file.name, description: '', createdAt: new Date(),
+                    dataSource: { name: file.name, data: result.data }, analysis: null,
                  };
-                 // Provide the ID explicitly because state update hasn't happened yet
-                 setProjectData(result.data, newId); 
                  setActiveProject(newProject as any);
              }
              setHasConfirmedPreview(false); 
         }
-    }, [activeProject, processFile, updateActiveProject, setActiveProject, setProjectData]);
+    }, [activeProject, processFile, updateActiveProject, setActiveProject]);
 
     const handleConfirmPreview = useCallback(async () => {
         if (!activeProject) return;
-        const data = activeProject.dataSource.data || [];
-        const sample = data.slice(0, 50);
+        const sample = activeProject.dataSource.data.slice(0, 50);
         const result = await analyzeData(sample);
         
         if (result) {
@@ -254,15 +212,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     }, [createProject, resetProcessing]);
 
     const handleSaveProject = useCallback((name: string, description: string) => {
-        // Manually inject data into the store's activeProject before saving
-        // because the store keeps it empty.
-        if (activeProject) {
-             updateActiveProject(p => ({ ...p, dataSource: { ...p.dataSource, data: activeProject.dataSource.data } }));
-             // Small timeout to allow state propagation before save triggers
-             setTimeout(() => saveProject(name, description), 0);
-        }
+        saveProject(name, description);
         setIsSaveModalOpen(false);
-    }, [saveProject, activeProject, updateActiveProject]);
+    }, [saveProject]);
 
     const handleSelectProject = useCallback((projectId: string) => {
         selectProject(projectId);
@@ -273,7 +225,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setIsSettingsModalOpen(false);
         setMainView('dashboard');
         setIsGeneratingReport(false);
-        setHasConfirmedPreview(true);
+        setHasConfirmedPreview(true); // Loaded projects are already confirmed
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
         mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }, [selectProject, setIsSidebarOpen]);
@@ -387,9 +339,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleTemplateSelected = async (template: ReportTemplate) => {
         if (!activeProject || !activeProject.analysis) return;
         setIsReportTemplateModalOpen(false);
-        setIsGeneratingReport(true);
+        setIsGeneratingReport(true); // START LOADING
         
         try {
+             // Use the enhanced generatePresentation from useGemini hook which handles progress
              const pres = await generatePresentation(activeProject.analysis!, template, activeProject.name);
              if (pres) {
                  updateActiveProject((p: any) => ({ ...p, presentations: [...(p.presentations || []), pres] }));
@@ -399,7 +352,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             console.error(e);
             alert("Failed to generate presentation. Please try again.");
         } finally {
-            setIsGeneratingReport(false);
+            setIsGeneratingReport(false); // STOP LOADING
         }
     };
     
@@ -471,39 +424,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         if (mainView === 'settings') return <SettingsPage />;
         if (mainView === 'account') return <AccountPage userEmail={userEmail} onLogout={onLogout} />;
 
+        // 1. CSV Parsing Loading State
         if (isProcessing) {
             return <LoadingSkeleton mode="parsing" status={progress?.status} progress={progress?.percentage} />;
         }
 
+        // 2. Dashboard Analysis Loading State
         if (isAnalyzing && !isGeneratingReport) {
              return <LoadingSkeleton mode="dashboard" status={analysisProgress?.status || "Analyzing data..."} progress={analysisProgress?.percentage} />;
         }
 
+        // 3. Report Generation Loading State
         if (isGeneratingReport) {
             return <LoadingSkeleton mode="report" status={analysisProgress?.status || "Drafting presentation..."} progress={analysisProgress?.percentage} />;
-        }
-
-        // Loading state for Project Data Retrieval (React Query)
-        if (isDataLoading && activeProjectMeta?.id && !activeProjectMeta.id.startsWith('unsaved_')) {
-             return <LoadingSkeleton mode="dashboard" status="Loading project data..." progress={undefined} />;
         }
 
         if (!activeProject) {
              return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={null} />;
         }
         
-        const hasData = activeProject.dataSource.data && activeProject.dataSource.data.length > 0;
-
-        if (!hasData && !activeProject.id.startsWith('unsaved_')) {
-             return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
-        }
-        
-        if (!hasData && activeProject.id.startsWith('unsaved_')) {
+        if (activeProject.dataSource.data.length === 0) {
              return <ProjectEmptyState project={activeProject} onFileSelect={handleFileSelect} onRename={() => handleOpenRenameModal(activeProject)} />;
         }
 
         if (validationReport && !hasConfirmedPreview) {
-             return <EmbeddedDataPreview data={activeProject.dataSource.data || []} report={validationReport} onConfirm={handleConfirmPreview} onCancel={handleReset} />;
+             return <EmbeddedDataPreview data={activeProject.dataSource.data} report={validationReport} onConfirm={handleConfirmPreview} onCancel={handleReset} />;
         }
         
         if (activeProject.analysis) {
@@ -522,14 +467,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                 onChartUpdate={handleChartUpdate}
                 onSetMaximizedChart={setMaximizedChart}
                 saveStatus={saveStatus}
-                onManualSave={() => handleSaveProject(activeProject.name, activeProject.description)}
+                onManualSave={manualSave}
                 globalFilters={globalFilters}
                 timeFilter={timeFilter}
                 onGlobalFilterChange={handleGlobalFilterChange}
                 onTimeFilterChange={(filter) => setTimeFilter(filter)}
                 onRemoveFilter={handleRemoveFilter}
                 onKpiClick={handleKpiClick}
-                onProjectUpdate={handleProjectUpdate}
+                onProjectUpdate={updateActiveProject}
                 editingPresentationId={editingPresentationId}
                 onBackToHub={() => setEditingPresentationId(null)}
                 onPresentationUpdate={handlePresentationUpdate}
@@ -541,6 +486,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
              return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={analysisError || processError || 'An error occurred.'} />;
         }
 
+        // Default fallback
         return <GetStartedHub onAnalyzeFile={handleFileSelect} onCreateProject={() => setIsCreateModalOpen(true)} isLoading={false} progress={null} error={null} />;
     };
 
@@ -602,7 +548,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
             {maximizedChart && activeProject && <ChartMaximizeModal 
                 config={maximizedChart} 
                 data={filteredData} 
-                allData={activeProject.dataSource.data || []}
+                allData={activeProject.dataSource.data}
                 dateColumn={dateColumn} 
                 onUpdate={handleChartUpdate} 
                 onClose={() => setMaximizedChart(null)}

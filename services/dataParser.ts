@@ -1,6 +1,5 @@
 import { DataRow, DataQualityReport } from '../types.ts';
 import * as XLSX from 'xlsx';
-import { z } from 'zod';
 
 // --- Core Logic ---
 
@@ -23,38 +22,9 @@ const parseFileContents = (data: ArrayBuffer): Promise<DataRow[]> => {
     });
 };
 
-const inferSchema = (data: DataRow[]) => {
-    if (data.length === 0) return z.any();
-    
-    const shape: Record<string, z.ZodTypeAny> = {};
-    const sample = data.slice(0, 50); // Sample first 50 rows
-    const keys = Object.keys(sample[0]);
-
-    keys.forEach(key => {
-        // Check types across sample
-        const types = new Set(sample.map(row => {
-            const val = row[key];
-            if (val === null || val === undefined) return 'null';
-            if (val instanceof Date) return 'date';
-            return typeof val;
-        }));
-
-        if (types.has('string')) {
-            shape[key] = z.string().nullable().optional();
-        } else if (types.has('number') && !types.has('string')) {
-             shape[key] = z.number().nullable().optional();
-        } else if (types.has('date')) {
-             shape[key] = z.date().nullable().optional();
-        } else {
-             shape[key] = z.any().nullable().optional();
-        }
-    });
-
-    return z.object(shape);
-};
 
 const validateData = (data: DataRow[]): DataQualityReport => {
-    const issues: any[] = [];
+    const issues = [];
     let score = 100;
     const rowCount = data.length;
     const columnCount = rowCount > 0 ? Object.keys(data[0]).length : 0;
@@ -63,31 +33,10 @@ const validateData = (data: DataRow[]): DataQualityReport => {
         return { score: 0, issues: [{ type: 'empty_file', severity: 'high', title: 'Empty Dataset', description: 'The file contains no data rows.' }], rowCount, columnCount, isClean: false };
     }
 
-    // Zod Runtime Validation
-    try {
-        const schema = inferSchema(data);
-        const arraySchema = z.array(schema);
-        const result = arraySchema.safeParse(data);
-        
-        if (!result.success) {
-             // Only penalize score slightly for type mismatches if parsing largely succeeded
-             // SheetJS usually handles types well, but Mixed types in columns can trigger this
-             score -= 5;
-             issues.push({
-                 type: 'data_type_mismatch',
-                 severity: 'low',
-                 title: 'Mixed Data Types',
-                 description: 'Some columns contain mixed data types (e.g., numbers and strings), which were coerced.'
-             });
-        }
-    } catch (e) {
-        console.warn("Schema validation warning", e);
-    }
-
     let missingCount = 0;
     const totalCells = rowCount * columnCount;
-    const sampleLimit = Math.min(rowCount, 1000);
     
+    const sampleLimit = Math.min(rowCount, 1000);
     for (let i = 0; i < sampleLimit; i++) {
         const row = data[i];
         for (const key in row) {
@@ -118,7 +67,6 @@ const validateData = (data: DataRow[]): DataQualityReport => {
         });
     }
 
-    // Duplicate check
     const seen = new Set();
     let duplicates = 0;
     for (let i = 0; i < sampleLimit; i++) {
@@ -165,11 +113,7 @@ export const processFile = async (
     onProgress: (status: string, percentage: number) => void
 ): Promise<{ data: DataRow[], report: DataQualityReport, sample: DataRow[] }> => {
     try {
-        // For smaller files, run in main thread to avoid worker serialization overhead if needed,
-        // but here we keep it simple and use logic directly. 
-        // Note: Real heavy lifting is done in parser.worker.ts if using the worker hook,
-        // but this export allows direct use.
-        
+        console.log("Using main thread for file processing.");
         onProgress('Parsing file...', 25);
         const data = await file.arrayBuffer();
         const parsedData = await parseFileContents(data);

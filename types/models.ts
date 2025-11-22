@@ -5,14 +5,6 @@ import { Presentation } from './report';
 
 export type DataRow = Record<string, any>;
 
-export interface ProjectMetadata {
-    id: string;
-    name: string;
-    description: string;
-    createdAt: Date;
-    lastSaved?: Date;
-}
-
 export interface Project {
     id: string;
     name: string;

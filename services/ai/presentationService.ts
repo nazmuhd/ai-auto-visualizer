@@ -2,27 +2,25 @@
 import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, ReportTemplate, Presentation, Slide, ContentBlock, ReportLayoutItem } from '../../types.ts';
-import { PromptBuilder } from '../../lib/prompt-builder.ts';
-import { generateStructuredContent } from './resilience.ts';
-import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
-// --- GEMINI SCHEMAS (for API) ---
-const presentationGeminiSchema = {
+const presentationSchema = {
     type: Type.OBJECT,
     properties: {
-        name: { type: Type.STRING },
+        name: { type: Type.STRING, description: "A concise, professional name for the presentation." },
         slides: {
             type: Type.ARRAY,
+            description: "An array of slides. The first slide should be a title slide. Subsequent slides should present KPIs and charts logically.",
             items: {
                 type: Type.OBJECT,
                 properties: {
                     layout: {
                         type: Type.ARRAY,
+                        description: "Array of grid layout items for this slide.",
                         items: {
                             type: Type.OBJECT,
                             properties: {
-                                i: { type: Type.STRING },
+                                i: { type: Type.STRING, description: "The ID of the item (chart, kpi, or text block ID)." },
                                 x: { type: Type.INTEGER },
                                 y: { type: Type.INTEGER },
                                 w: { type: Type.INTEGER },
@@ -37,14 +35,15 @@ const presentationGeminiSchema = {
         },
         blocks: {
             type: Type.ARRAY,
+            description: "Any text blocks needed for the presentation, like titles or summaries.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING },
+                    id: { type: Type.STRING, description: "A unique ID for the text block, prefixed with 'text_'." },
                     type: { type: Type.STRING, enum: ['text'] },
                     title: { type: Type.STRING },
                     content: { type: Type.STRING },
-                    style: { type: Type.STRING, enum: ['title', 'subtitle', 'body', 'h1', 'h2'] },
+                    style: { type: Type.STRING, enum: ['title', 'subtitle', 'body'] },
                 },
                 required: ['id', 'type', 'title', 'content', 'style'],
             }
@@ -53,15 +52,16 @@ const presentationGeminiSchema = {
     required: ['name', 'slides', 'blocks']
 };
 
-const slideLayoutGeminiSchema = {
+const slideLayoutSchema = {
     type: Type.OBJECT,
     properties: {
         layout: {
             type: Type.ARRAY,
+            description: "Array of grid layout items for this slide.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    i: { type: Type.STRING },
+                    i: { type: Type.STRING, description: "The ID of the item (chart, kpi, or text block ID)." },
                     x: { type: Type.INTEGER },
                     y: { type: Type.INTEGER },
                     w: { type: Type.INTEGER },
@@ -72,10 +72,11 @@ const slideLayoutGeminiSchema = {
         },
         newBlocks: {
             type: Type.ARRAY,
+            description: "Any NEW text blocks created for this slide. Do not include existing ones.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    id: { type: Type.STRING },
+                    id: { type: Type.STRING, description: "A unique ID for the text block, prefixed with 'text_'." },
                     type: { type: Type.STRING, enum: ['text'] },
                     title: { type: Type.STRING },
                     content: { type: Type.STRING },
@@ -87,39 +88,6 @@ const slideLayoutGeminiSchema = {
     },
     required: ['layout', 'newBlocks']
 };
-
-// --- ZOD SCHEMAS (for Validation) ---
-const zLayoutItem = z.object({
-    i: z.string(),
-    x: z.number().int(),
-    y: z.number().int(),
-    w: z.number().int(),
-    h: z.number().int(),
-});
-
-const zBlock = z.object({
-    id: z.string(),
-    type: z.literal('text'), // AI mostly generates text blocks
-    title: z.string().optional(),
-    content: z.string(),
-    style: z.enum(['title', 'subtitle', 'body', 'h1', 'h2', 'quote', 'bullet', 'number', 'todo', 'note', 'warning']).optional().or(z.string()),
-});
-
-const zPresentationResult = z.object({
-    name: z.string(),
-    slides: z.array(z.object({
-        layout: z.array(zLayoutItem)
-    })),
-    blocks: z.array(zBlock)
-});
-
-const zSlideResult = z.object({
-    layout: z.array(zLayoutItem),
-    newBlocks: z.array(zBlock)
-});
-
-type PresentationAIResponse = z.infer<typeof zPresentationResult>;
-type SlideAIResponse = z.infer<typeof zSlideResult>;
 
 export const generateInitialPresentation = async (analysis: AnalysisResult, template: ReportTemplate, projectName: string): Promise<Presentation> => {
     const analysisContext = JSON.stringify({
@@ -139,28 +107,38 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
         - SUBSEQUENT PAGES: Add up to 4 charts, placing 1 or 2 charts per page. For each chart, add a small text block with an insight.
         `;
     
-    const prompt = new PromptBuilder('Expert Presentation Designer')
-        .setTask('Create a professional, multi-page presentation structure in JSON format based on the provided analysis.')
-        .addContext('ANALYSIS CONTEXT', analysisContext)
-        .addContext('PRESENTATION REQUIREMENTS', `
-            - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-            - Grid System: The layout is a 12-column grid.
-            - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
-            - Content Placement: ${slideInstructions}
-        `)
-        .addContext('OUTPUT', `
-            - Generate a JSON object that strictly adheres to the provided schema.
-            - Ensure all 'i' values in layouts correspond to an ID from the available context or a newly created text block ID.
-        `)
-        .build();
+    const prompt = `
+    ROLE: Expert Presentation Designer.
+    TASK: Create a professional, multi-page presentation structure in JSON format based on the provided analysis.
+
+    ANALYSIS CONTEXT (Available items and their IDs):
+    ${analysisContext}
+
+    PRESENTATION REQUIREMENTS:
+    - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+    - Grid System: The layout is a 12-column grid.
+    - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+    - Content Placement:
+        ${slideInstructions}
+    
+    OUTPUT:
+    - Generate a JSON object that strictly adheres to the provided schema.
+    - Ensure all 'i' values in layouts correspond to an ID from the available context or a newly created text block ID.
+    `;
 
     try {
-        const rawResult = await generateStructuredContent<PresentationAIResponse>(
-            'gemini-2.5-pro',
-            prompt,
-            presentationGeminiSchema,
-            zPresentationResult
-        );
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: presentationSchema,
+                temperature: 0.3,
+            }
+        });
+
+        if (!response.text) throw new Error("Gemini returned an empty presentation structure.");
+        const rawResult = JSON.parse(response.text) as any;
 
         const presentation: Presentation = {
             id: `pres_${uuidv4()}`,
@@ -170,11 +148,7 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
                 id: `slide_${uuidv4()}`,
                 layout: slide.layout || [],
             })),
-            blocks: (rawResult.blocks || []).map((b: any) => ({
-                ...b,
-                type: 'text', // Ensure type is set
-                style: b.style as any 
-            })),
+            blocks: rawResult.blocks || [],
         };
         
         if (template.format === 'document') {
@@ -188,9 +162,9 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
 
         return presentation;
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Gemini Presentation Generation Error:", error);
-        throw new Error(error.message || "Failed to generate the AI presentation.");
+        throw new Error("Failed to generate the AI presentation. The model may be having trouble with the request. Please try again.");
     }
 };
 
@@ -201,10 +175,15 @@ export const improveText = async (text: string, promptType: 'improve' | 'summari
         ? "Summarize the following text into a concise paragraph, capturing the main point."
         : "Proofread the following text. Correct any grammar or spelling mistakes and return only the corrected text. Do not change the meaning or tone unless it's grammatically necessary.";
 
-    const prompt = new PromptBuilder('Expert Editor & Business Writer')
-        .setTask(goal)
-        .addContext('ORIGINAL TEXT', text)
-        .build();
+    const prompt = `
+    ROLE: Expert Editor & Business Writer.
+    TASK: ${goal}
+
+    ORIGINAL TEXT:
+    "${text}"
+
+    REVISED TEXT:
+    `;
 
     try {
         const response = await ai.models.generateContent({
@@ -221,7 +200,7 @@ export const improveText = async (text: string, promptType: 'improve' | 'summari
 };
 
 export const addSlideWithAI = async (
-    promptUser: string,
+    prompt: string,
     analysis: AnalysisResult,
     projectName: string,
     isSlides: boolean
@@ -231,45 +210,52 @@ export const addSlideWithAI = async (
         availableCharts: analysis.charts.map(c => ({ id: c.id, title: c.title })),
     });
 
-    const aiPrompt = new PromptBuilder('Expert Presentation Designer')
-        .setTask('Create a SINGLE new slide structure in JSON format based on a user\'s request.')
-        .addContext('CONTEXT', `
-            - Project Name: "${projectName}"
-            - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-            - Grid System: The layout is a 12-column grid.
-            - Available Items: ${analysisContext}
-        `)
-        .addContext('USER REQUEST', promptUser)
-        .addContext('REQUIREMENTS', `
-            - Blocks: Any text you generate (titles, insights) must be created as a NEW Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
-            - Content Placement: Intelligently arrange the requested items on the slide. Use appropriate text blocks to fulfill the request.
-        `)
-        .build();
+    const aiPrompt = `
+    ROLE: Expert Presentation Designer.
+    TASK: Create a SINGLE new slide structure in JSON format based on a user's request.
+
+    CONTEXT:
+    - Project Name: "${projectName}"
+    - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+    - Grid System: The layout is a 12-column grid.
+    - Available Items: ${analysisContext}
+
+    USER'S REQUEST for the new slide:
+    "${prompt}"
+
+    REQUIREMENTS:
+    - Blocks: Any text you generate (titles, insights) must be created as a NEW Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
+    - Content Placement: Intelligently arrange the requested items on the slide. Use appropriate text blocks to fulfill the request.
+    
+    OUTPUT:
+    - Generate a JSON object that strictly adheres to the provided schema, containing the 'layout' for the new slide and a list of any 'newBlocks' you created.
+    - Ensure all 'i' values in the layout correspond to an ID from the available context or a newly created block ID.
+    `;
 
     try {
-        const rawResult = await generateStructuredContent<SlideAIResponse>(
-            'gemini-2.5-flash',
-            aiPrompt,
-            slideLayoutGeminiSchema,
-            zSlideResult
-        );
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: aiPrompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: slideLayoutSchema,
+                temperature: 0.3,
+            }
+        });
+
+        if (!response.text) throw new Error("AI returned an empty slide structure.");
+        const rawResult = JSON.parse(response.text) as any;
 
         const newSlide: Slide = {
             id: `slide_${uuidv4()}`,
             layout: rawResult.layout || [],
         };
 
-        const safeBlocks: ContentBlock[] = (rawResult.newBlocks || []).map(b => ({
-            ...b, 
-            type: 'text', 
-            style: b.style as any 
-        }));
+        return { newSlide, newBlocks: rawResult.newBlocks || [] };
 
-        return { newSlide, newBlocks: safeBlocks };
-
-    } catch (error: any) {
+    } catch (error) {
         console.error("Gemini Add Slide Error:", error);
-        throw new Error(error.message || "Failed to generate the AI slide.");
+        throw new Error("Failed to generate the AI slide. The model may be having trouble with the request.");
     }
 };
 
@@ -277,7 +263,7 @@ export const editSlideWithAI = async (
     currentSlide: Slide,
     allBlocks: ContentBlock[],
     analysis: AnalysisResult,
-    promptUser: string,
+    prompt: string,
     isSlides: boolean
 ): Promise<{ updatedLayout: ReportLayoutItem[]; newBlocks: ContentBlock[] }> => {
     
@@ -296,43 +282,51 @@ export const editSlideWithAI = async (
         availableCharts: analysis.charts.map(c => ({ id: c.id, title: c.title })),
     });
 
-    const aiPrompt = new PromptBuilder('Expert Presentation Designer')
-        .setTask('Revise the layout of a SINGLE slide based on a user\'s request. You can add, remove, or rearrange items.')
-        .addContext('CONTEXT', `
-            - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-            - Grid System: A 12-column grid.
-            - Items currently on the slide: ${itemsOnSlide || 'This slide is currently empty.'}
-            - Full list of available items for this project: ${analysisContext}
-        `)
-        .addContext('USER REQUEST', promptUser)
-        .addContext('REQUIREMENTS', `
-            - You MUST return a complete new layout for the slide.
-            - If you add new text content, create it as a NEW Block object in the 'newBlocks' array. Use unique IDs (e.g., 'text_uuid').
-            - You can use any available items from the project context, not just the ones already on the slide.
-            - You can remove existing items by simply omitting them from the new layout.
-        `)
-        .build();
+    const aiPrompt = `
+    ROLE: Expert Presentation Designer.
+    TASK: Revise the layout of a SINGLE slide based on a user's request. You can add, remove, or rearrange items.
+
+    CONTEXT:
+    - Presentation Format: ${isSlides ? '16:9 slide deck' : 'A4 document'}.
+    - Grid System: A 12-column grid.
+    - Items currently on the slide:
+    ${itemsOnSlide || 'This slide is currently empty.'}
+    - Full list of available items for this project:
+    ${analysisContext}
+
+    USER'S EDIT REQUEST:
+    "${prompt}"
+
+    REQUIREMENTS:
+    - You MUST return a complete new layout for the slide.
+    - If you add new text content, create it as a NEW Block object in the 'newBlocks' array. Use unique IDs (e.g., 'text_uuid').
+    - You can use any available items from the project context, not just the ones already on the slide.
+    - You can remove existing items by simply omitting them from the new layout.
+    
+    OUTPUT:
+    - Generate a JSON object that strictly adheres to the provided schema, containing the new 'layout' and any 'newBlocks' you created.
+    `;
 
     try {
-        const rawResult = await generateStructuredContent<SlideAIResponse>(
-            'gemini-2.5-flash',
-            aiPrompt,
-            slideLayoutGeminiSchema,
-            zSlideResult
-        );
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: aiPrompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: slideLayoutSchema,
+                temperature: 0.4,
+            }
+        });
 
-        const safeBlocks: ContentBlock[] = (rawResult.newBlocks || []).map(b => ({
-            ...b, 
-            type: 'text', 
-            style: b.style as any 
-        }));
+        if (!response.text) throw new Error("AI returned an empty response for the slide edit.");
+        const rawResult = JSON.parse(response.text) as any;
 
         return {
             updatedLayout: rawResult.layout || [],
-            newBlocks: safeBlocks,
+            newBlocks: rawResult.newBlocks || [],
         };
-    } catch (error: any) {
+    } catch (error) {
         console.error("Gemini Edit Slide Error:", error);
-        throw new Error(error.message || "Failed to edit the slide with AI.");
+        throw new Error("Failed to edit the slide with AI. Please try rephrasing your request.");
     }
 };

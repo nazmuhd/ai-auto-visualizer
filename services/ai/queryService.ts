@@ -1,35 +1,33 @@
 
 import { ai } from "./client.ts";
 import { DataRow } from '../../types.ts';
-import { PromptBuilder } from '../../lib/prompt-builder.ts';
 
-export const streamDataQuery = async (
-    sample: DataRow[], 
-    question: string, 
-    onChunk: (text: string) => void
-): Promise<void> => {
+export const queryDataWithAI = async (sample: DataRow[], question: string): Promise<string> => {
+    const dataStr = JSON.stringify(sample);
     let columnsInfo = "Unknown";
     if (sample.length > 0) {
         const firstRow = sample[0];
         columnsInfo = Object.keys(firstRow).join(', ');
     }
 
-    const prompt = new PromptBuilder('Expert Data Analyst')
-        .setTask('Answer the user question based ONLY on the provided data sample.')
-        .addContext('DETECTED COLUMNS', columnsInfo)
-        .addData('DATA SAMPLE', sample)
-        .addContext('USER QUESTION', question)
-        .addContext('GUIDELINES', `
-            - Analyze the data to find the answer.
-            - Provide a concise, clear, and direct answer.
-            - The answer can be a single value, a short sentence, or a small bulleted list if necessary.
-            - Do not provide code or explain how you got the answer. Just give the answer.
-            - If the question cannot be answered from the data, state that clearly.
-        `)
-        .build();
+    const prompt = `
+    You are an expert data analyst. A user has provided a data sample and a question. Your task is to answer the question based ONLY on the data provided.
+    - Analyze the data to find the answer.
+    - Provide a concise, clear, and direct answer.
+    - The answer can be a single value, a short sentence, or a small bulleted list if necessary.
+    - Do not provide code or explain how you got the answer. Just give the answer.
+    - If the question cannot be answered from the data, state that clearly.
+
+    DETECTED COLUMNS: ${columnsInfo}
+    DATA SAMPLE (JSON):
+    ${dataStr}
+
+    USER QUESTION:
+    "${question}"
+    `;
 
     try {
-        const result = await ai.models.generateContentStream({
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -37,12 +35,11 @@ export const streamDataQuery = async (
             }
         });
         
-        for await (const chunk of result) {
-            const text = chunk.text;
-            if (text) {
-                onChunk(text);
-            }
+        if (!response.text) {
+            return "Sorry, I couldn't process that request.";
         }
+        
+        return response.text;
 
     } catch (error) {
         console.error("Gemini Data Query Error:", error);
@@ -51,16 +48,20 @@ export const streamDataQuery = async (
 };
 
 export const generateFormulaFromNaturalLanguage = async (naturalLanguageQuery: string, columns: string[]): Promise<string> => {
-    const prompt = new PromptBuilder('Formula Generator')
-        .setTask('Convert a natural language description into a mathematical formula string.')
-        .addContext('AVAILABLE COLUMNS', columns.join(', '))
-        .addContext('USER REQUEST', naturalLanguageQuery)
-        .addContext('RULES', `
-            - The formula must use column names enclosed in square brackets, like [Column Name].
-            - Use standard mathematical operators: +, -, *, /.
-            - The output must be ONLY the formula string. Do not add any explanation, code fences, or other text.
-        `)
-        .build();
+    const prompt = `
+    You are a formula generator. Your task is to convert a natural language description into a mathematical formula string.
+    - The formula must use column names enclosed in square brackets, like [Column Name].
+    - Use standard mathematical operators: +, -, *, /.
+    - The output must be ONLY the formula string. Do not add any explanation, code fences, or other text.
+
+    AVAILABLE COLUMNS:
+    ${columns.join(', ')}
+
+    USER'S REQUEST:
+    "${naturalLanguageQuery}"
+
+    FORMULA:
+    `;
 
     try {
         const response = await ai.models.generateContent({

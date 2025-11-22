@@ -1,9 +1,7 @@
 
 import { useState, useCallback, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { analyzeData as analyzeDataService } from '../services/ai/analysisService.ts';
 import { generateInitialPresentation } from '../services/ai/presentationService.ts';
-import { streamDataQuery, generateFormulaFromNaturalLanguage } from '../services/ai/queryService.ts';
 import { DataRow, AnalysisResult, ReportTemplate, Presentation } from '../types.ts';
 
 const ANALYSIS_STEPS = [
@@ -25,10 +23,10 @@ const REPORT_STEPS = [
 ];
 
 export const useGemini = () => {
-    // We still keep local progress state because useMutation's 'pending' is just a boolean,
-    // and we want to show granular progress updates which are simulated.
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [analysisProgress, setAnalysisProgress] = useState<{ status: string, percentage: number } | null>(null);
-    const [isStreaming, setIsStreaming] = useState(false);
+    
     const progressInterval = useRef<number | null>(null);
 
     const startProgressSimulation = (steps: typeof ANALYSIS_STEPS) => {
@@ -42,9 +40,10 @@ export const useGemini = () => {
             if (stepIndex < steps.length) {
                 setAnalysisProgress({ status: steps[stepIndex].status, percentage: steps[stepIndex].pct });
             } else {
+                // Just hold at the last step
                 if (progressInterval.current) clearInterval(progressInterval.current);
             }
-        }, 1500);
+        }, 1500); // Change step every 1.5 seconds
     };
 
     const stopProgressSimulation = () => {
@@ -52,101 +51,56 @@ export const useGemini = () => {
             clearInterval(progressInterval.current);
             progressInterval.current = null;
         }
-        setAnalysisProgress(null);
     };
 
-    // -- Mutation: Analyze Data --
-    const analysisMutation = useMutation({
-        mutationFn: async (sample: DataRow[]) => {
-            return await analyzeDataService(sample);
-        },
-        onMutate: () => {
-            startProgressSimulation(ANALYSIS_STEPS);
-        },
-        onSettled: () => {
-            stopProgressSimulation();
-        }
-    });
-
-    // -- Mutation: Generate Presentation --
-    const presentationMutation = useMutation({
-        mutationFn: async (params: { analysis: AnalysisResult, template: ReportTemplate, projectName: string }) => {
-            return await generateInitialPresentation(params.analysis, params.template, params.projectName);
-        },
-        onMutate: () => {
-            startProgressSimulation(REPORT_STEPS);
-        },
-        onSettled: () => {
-            stopProgressSimulation();
-        }
-    });
-
-    // -- Streaming Query Data (Manual implementation for streams) --
-    const queryData = useCallback(async (data: DataRow[], question: string, onChunk: (text: string) => void) => {
-        setIsStreaming(true);
+    const analyzeData = useCallback(async (sample: DataRow[]): Promise<AnalysisResult | undefined> => {
+        setIsAnalyzing(true);
+        setAnalysisError(null);
+        startProgressSimulation(ANALYSIS_STEPS);
+        
         try {
-            await streamDataQuery(data, question, onChunk);
-        } catch (error) {
-            console.error("Data query failed", error);
-            throw error;
+            const result = await analyzeDataService(sample);
+            return result;
+        } catch (err: any) {
+            setAnalysisError(err.message || "Failed to analyze data.");
+            return undefined;
         } finally {
-            setIsStreaming(false);
+            stopProgressSimulation();
+            setIsAnalyzing(false);
+            setAnalysisProgress(null);
         }
     }, []);
 
-    // -- Mutation: Generate Formula (Data Studio) --
-    const formulaMutation = useMutation({
-        mutationFn: async (params: { query: string, columns: string[] }) => {
-            return await generateFormulaFromNaturalLanguage(params.query, params.columns);
-        }
-    });
-
-    const analyzeData = useCallback(async (sample: DataRow[]): Promise<AnalysisResult | undefined> => {
-        try {
-            return await analysisMutation.mutateAsync(sample);
-        } catch (error) {
-            console.error("Analysis failed", error);
-            return undefined;
-        }
-    }, [analysisMutation]);
-
     const generatePresentation = useCallback(async (analysis: AnalysisResult, template: ReportTemplate, projectName: string): Promise<Presentation | undefined> => {
-        try {
-            return await presentationMutation.mutateAsync({ analysis, template, projectName });
-        } catch (error) {
-            console.error("Presentation generation failed", error);
-            return undefined;
-        }
-    }, [presentationMutation]);
+        setIsAnalyzing(true);
+        setAnalysisError(null);
+        startProgressSimulation(REPORT_STEPS);
 
-    const generateFormula = useCallback(async (query: string, columns: string[]): Promise<string | undefined> => {
         try {
-            return await formulaMutation.mutateAsync({ query, columns });
-        } catch (error) {
-            console.error("Formula generation failed", error);
-            throw error;
+            const presentation = await generateInitialPresentation(analysis, template, projectName);
+            return presentation;
+        } catch (err: any) {
+            setAnalysisError(err.message || "Failed to generate presentation.");
+            return undefined;
+        } finally {
+            stopProgressSimulation();
+            setIsAnalyzing(false);
+            setAnalysisProgress(null);
         }
-    }, [formulaMutation]);
+    }, []);
     
     const resetGemini = useCallback(() => {
         stopProgressSimulation();
-        analysisMutation.reset();
-        presentationMutation.reset();
-        formulaMutation.reset();
-        setIsStreaming(false);
-    }, [analysisMutation, presentationMutation, formulaMutation]);
+        setIsAnalyzing(false);
+        setAnalysisError(null);
+        setAnalysisProgress(null);
+    }, []);
 
     return {
         analyzeData,
         generatePresentation,
-        queryData, // Now supports streaming callback
-        generateFormula,
-        // Unified loading state
-        isAnalyzing: analysisMutation.isPending || presentationMutation.isPending,
-        isStreaming,
-        isGeneratingFormula: formulaMutation.isPending,
-        // Unified error state message
-        analysisError: analysisMutation.error?.message || presentationMutation.error?.message || null,
+        isAnalyzing,
+        analysisError,
         analysisProgress,
         resetGemini
     };

@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { X, PlusCircle, Sparkles, Loader2 } from 'lucide-react';
 import { AddColumnTransformation } from '../../../../types.ts';
-import { useGemini } from '../../../../hooks/useGemini.ts';
+import { generateFormulaFromNaturalLanguage } from '../../../../services/ai/queryService.ts';
 
 interface Props {
   columns: string[];
@@ -14,22 +14,22 @@ export const AddColumnModal: React.FC<Props> = ({ columns, onClose, onApply }) =
   const [newColumnName, setNewColumnName] = useState('');
   const [formula, setFormula] = useState('');
   const [aiQuery, setAiQuery] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const { generateFormula, isGeneratingFormula } = useGemini();
 
   const handleGenerateFormula = useCallback(async () => {
     if (!aiQuery.trim()) return;
+    setIsGenerating(true);
     setError(null);
     try {
-      const generatedFormula = await generateFormula(aiQuery, columns);
-      if (generatedFormula) {
-          setFormula(generatedFormula);
-      }
+      const generatedFormula = await generateFormulaFromNaturalLanguage(aiQuery, columns);
+      setFormula(generatedFormula);
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setIsGenerating(false);
     }
-  }, [aiQuery, columns, generateFormula]);
+  }, [aiQuery, columns]);
 
   const handleApply = () => {
     if (newColumnName.trim() && formula.trim()) {
@@ -63,8 +63,8 @@ export const AddColumnModal: React.FC<Props> = ({ columns, onClose, onApply }) =
                 <label className="block text-sm font-medium text-primary-800 mb-1">Or, ask AI to create a formula</label>
                 <div className="flex items-center space-x-2">
                     <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGenerateFormula()} placeholder="e.g., revenue minus cost to calculate profit" className="flex-1 w-full px-3 py-2 border bg-white text-slate-900 border-slate-300 rounded-lg"/>
-                    <button onClick={handleGenerateFormula} disabled={isGeneratingFormula} className="px-4 py-2 bg-primary-600 text-white rounded-lg font-medium shadow-sm hover:bg-primary-700 disabled:bg-primary-300 flex items-center">
-                        {isGeneratingFormula ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    <button onClick={handleGenerateFormula} disabled={isGenerating} className="px-4 py-2 bg-primary-600 text-white rounded-lg font-medium shadow-sm hover:bg-primary-700 disabled:bg-primary-300 flex items-center">
+                        {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                         <span className="ml-2">Generate</span>
                     </button>
                 </div>
