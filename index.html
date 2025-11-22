@@ -33,150 +33,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        /* Custom scrollbar for dashboard */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        /* Active project indicator in sidebar */
-        .project-link.is-active::before {
-            content: '';
-            position: absolute;
-            left: -16px; /* Position outside the padding */
-            top: 50%;
-            transform: translateY(-50%);
-            width: 4px;
-            height: 24px;
-            background-color: #0c4a6e; /* primary-900 */
-            border-radius: 2px;
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Hide the bar indicator when sidebar is collapsed, as the border serves as the indicator */
-        aside.w-20 .project-link.is-active::before {
-            display: none;
-        }
-        
-        @media (max-width: 767px) {
-            .project-link.is-active::before {
-                left: 0;
-            }
-        }
-
-        /* react-grid-layout styles */
-        .react-grid-layout {
-          position: relative;
-          transition: height 200ms ease;
-        }
-        .react-grid-item {
-          transition: all 200ms ease;
-          transition-property: left, top;
-          box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-          border-radius: 0.75rem;
-          overflow: hidden;
-        }
-        .react-grid-item.cssTransforms {
-          transition-property: transform;
-        }
-        .react-grid-item.resizing {
-          z-index: 1;
-          will-change: width, height;
-        }
-
-        .react-grid-item.react-draggable-dragging {
-          transition: none;
-          z-index: 3;
-          will-change: transform;
-          box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-        }
-
-        .react-grid-item.react-grid-placeholder {
-          background: #38bdf8;
-          opacity: 0.2;
-          transition-duration: 100ms;
-          z-index: 2;
-          border-radius: 0.75rem;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          -o-user-select: none;
-          user-select: none;
-        }
-
-        .react-grid-item > .react-resizable-handle {
-          position: absolute;
-          width: 20px;
-          height: 20px;
-          bottom: 0;
-          right: 0;
-          cursor: se-resize;
-          padding: 0 3px 3px 0;
-        }
-
-        .react-grid-item > .react-resizable-handle::after {
-          content: "";
-          position: absolute;
-          right: 4px;
-          bottom: 4px;
-          width: 8px;
-          height: 8px;
-          border-right: 2px solid rgba(0, 0, 0, 0.4);
-          border-bottom: 2px solid rgba(0, 0, 0, 0.4);
-          border-bottom-right-radius: 4px;
-        }
-
-        .droppable-element {
-            cursor: grab;
-        }
+        .react-grid-layout { position: relative; transition: height 200ms ease; }
+        .react-grid-item { transition: all 200ms ease; transition-property: left, top; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); border-radius: 0.75rem; overflow: hidden; }
+        .react-grid-item.cssTransforms { transition-property: transform; }
+        .react-grid-item.resizing { z-index: 1; will-change: width, height; }
+        .react-grid-item.react-draggable-dragging { transition: none; z-index: 3; will-change: transform; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .react-grid-item.react-grid-placeholder { background: #38bdf8; opacity: 0.2; transition-duration: 100ms; z-index: 2; border-radius: 0.75rem; user-select: none; }
+        .react-grid-item > .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; padding: 0 3px 3px 0; }
+        .react-grid-item > .react-resizable-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px; border-right: 2px solid rgba(0, 0, 0, 0.4); border-bottom: 2px solid rgba(0, 0, 0, 0.4); border-bottom-right-radius: 4px; }
 
         @media print {
-            .no-print {
-                display: none !important;
-            }
-            .print-only {
-                display: block !important;
-            }
-            body, #root, .h-full {
-                height: auto !important;
-                overflow: visible !important;
-                background-color: white !important;
-            }
-            .dashboard-container {
-                display: block !important;
-            }
-            @page {
-              size: A4;
-              margin: 0;
-            }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body, #root, .h-full { height: auto !important; overflow: visible !important; background-color: white !important; }
+            @page { size: A4; margin: 0; }
         }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.553.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.553.0",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
     "recharts": "https://aistudiocdn.com/recharts@^2.15.1",
     "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
-    "luc": "https://aistudiocdn.com/luc@^0.3.1",
     "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
     "react-grid-layout": "https://aistudiocdn.com/react-grid-layout@^1.4.4",
     "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
     "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
     "pptxgenjs": "https://aistudiocdn.com/pptxgenjs@^3.12.0",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0"
+    "zustand": "https://aistudiocdn.com/zustand@^5.0.0",
+    "zustand/middleware": "https://aistudiocdn.com/zustand@^5.0.0/middleware",
+    "zod": "https://aistudiocdn.com/zod@^3.24.0",
+    "clsx": "https://aistudiocdn.com/clsx@^2.1.0",
+    "tailwind-merge": "https://aistudiocdn.com/tailwind-merge@^2.6.0",
+    "zustand/": "https://aistudiocdn.com/zustand@^5.0.8/"
   }
 }
 </script>

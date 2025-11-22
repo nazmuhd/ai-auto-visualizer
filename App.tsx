@@ -1,13 +1,17 @@
 
 import React from 'react';
 import { Dashboard } from './components/Dashboard.tsx';
+import { ModalManager } from './components/modals/ModalManager.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 function App() {
-  // Default user since auth is removed
   const userEmail = 'demo@example.com';
 
   return (
-    <Dashboard userEmail={userEmail} />
+    <ErrorBoundary>
+        <Dashboard userEmail={userEmail} />
+        <ModalManager />
+    </ErrorBoundary>
   );
 }
 
