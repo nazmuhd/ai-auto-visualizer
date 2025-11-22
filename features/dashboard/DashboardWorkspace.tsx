@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, ChartConfig, KpiConfig, Presentation, SaveStatus } from '../../types.ts';
 import { TimeFilterPreset } from '../../components/charts/ChartRenderer.tsx';
-import { BarChart3, Bot, Database, Edit, LayoutGrid, Save } from 'lucide-react';
+import { BarChart3, Bot, Database, Edit, LayoutGrid, Save, Undo, Redo } from 'lucide-react';
 import { SaveStatusIndicator } from './components/SaveStatusIndicator.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { KpiGrid } from './components/KpiGrid.tsx';
@@ -10,6 +10,7 @@ import { ChartGrid } from './components/ChartGrid.tsx';
 import { ReportList, ReportStudio } from '../report-studio/index.ts';
 import { DataStudio } from '../data-studio/index.ts';
 import { Button } from '../../components/ui/index.ts';
+import { useProjectStore } from '../../store/projectStore.ts';
 
 interface Props {
     project: Project;
@@ -33,7 +34,7 @@ interface Props {
     onTimeFilterChange: (filter: { type: TimeFilterPreset; start?: string; end?: string }) => void;
     onRemoveFilter: (column: string, value?: string) => void;
     onKpiClick: (kpi: KpiConfig) => void;
-    onProjectUpdate: (updater: (prev: Project) => Project) => void;
+    onProjectUpdate: (updater: (prev: Project) => void) => void;
     editingPresentationId: string | null;
     onBackToHub: () => void;
     onPresentationUpdate: (updatedPresentation: Presentation) => void;
@@ -49,6 +50,7 @@ export const DashboardWorkspace: React.FC<Props> = ({
     
     const [currentView, setCurrentView] = useState<'dashboard' | 'report-studio' | 'data'>('dashboard');
     const { analysis } = project;
+    const { undo, redo, past, future } = useProjectStore();
     
     useEffect(() => {
         if (editingPresentationId) {
@@ -124,6 +126,10 @@ export const DashboardWorkspace: React.FC<Props> = ({
                             <p className="text-sm text-slate-500 mt-1 truncate">{project.description || "No description provided."}</p>
                         </div>
                         <div className="flex-shrink-0 flex items-center space-x-3">
+                            <div className="flex items-center space-x-1 mr-4">
+                                <button onClick={undo} disabled={past.length === 0} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30" title="Undo"><Undo size={18} /></button>
+                                <button onClick={redo} disabled={future.length === 0} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30" title="Redo"><Redo size={18} /></button>
+                            </div>
                             <div className="text-right hidden sm:block">
                                 <SaveStatusIndicator status={saveStatus} />
                                 {saveStatus !== 'unsaved' && saveStatus !== 'saving' && project.lastSaved && (

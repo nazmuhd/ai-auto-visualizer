@@ -3,6 +3,7 @@ import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, DataRow, ChartConfig, KpiConfig } from '../../types.ts';
 import { v4 as uuidv4 } from 'uuid';
+import { ANALYSIS_PROMPT, CHART_INSIGHT_PROMPT } from '../../lib/prompts.ts';
 
 // --- 1. Premade Chart Templates Library ---
 export const CHART_TEMPLATES: Record<string, any> = {
@@ -87,37 +88,9 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
             .join(', ');
     }
 
-    const prompt = `
-    ROLE: Expert Business Analyst.
-    TASK: Analyze the provided data sample to generate a dashboard configuration.
-
-    INPUT DATA SAMPLE (JSON):
-    ${dataStr}
-
-    DETECTED COLUMNS:
-    ${columnsInfo}
-
-    REQUIREMENTS:
-    1. SUMMARY: Provide 3-4 clear, actionable bullet points summarizing key trends or outliers.
-    2. KPIs: Identify between 5 and 10 KPIs. For each KPI:
-        - Define HOW to calculate it (e.g., SUM of 'Revenue').
-        - Determine trend direction: Is a higher value better or worse? (e.g., higher revenue is good, higher costs are bad).
-        - If a KPI represents a specific segment (e.g., "Sales - North America"), identify its category column (e.g., 'Region') and its value (e.g., 'North America').
-    3. CHARTS: Map the data to a diverse set of between 5 and 8 chart templates that reveal different aspects of the data. Choose the most insightful charts.
-
-    AVAILABLE CHART TEMPLATES:
-    - tmpl_bar_comparison (Good for: Ranking)
-    - tmpl_horizontal_bar (Good for: Ranking with long names)
-    - tmpl_line_trend (Good for: Time series)
-    - tmpl_area_volume (Good for: Cumulative totals over time)
-    - tmpl_area_stacked (Good for: Stacked trends)
-    - tmpl_pie_distribution (Good for: Part-to-whole, <10 categories)
-    - tmpl_donut (Good for: Part-to-whole modern look)
-    - tmpl_scatter_correlation (Good for: Numeric relationships)
-    - tmpl_stacked_bar (Good for: Composition across categories. Requires 'color' mapping.)
-    - tmpl_combo_line_bar (Good for: Comparing two different Y metrics. The line and bar must share the same X-axis.)
-    - tmpl_bubble_plot (Good for: 3 numeric variables. Requires 'z' mapping for bubble size.)
-    `;
+    const prompt = ANALYSIS_PROMPT
+        .replace('{{dataStr}}', dataStr)
+        .replace('{{columnsInfo}}', columnsInfo);
 
     try {
         const response = await ai.models.generateContent({
@@ -201,22 +174,10 @@ export const generateChartInsight = async (chart: ChartConfig, data: DataRow[], 
         ? "Write a concise, one-paragraph summary of the key takeaway from this chart."
         : "List 2-3 bullet points of the most important insights revealed by this chart. Be specific and reference data points if possible.";
 
-    const prompt = `
-    ROLE: Expert Data Analyst.
-    TASK: Analyze the provided chart configuration and data sample to generate an insight.
-
-    CHART CONTEXT:
-    ${chartContext}
-
-    DATA SAMPLE (first 30 rows):
-    ${dataSample}
-    
-    YOUR GOAL:
-    ${goal}
-
-    OUTPUT:
-    Provide only the text for the summary or bullet points. Do not include any headers or introductory phrases like "Here is a summary...". For bullet points, use markdown like "* Insight one".
-    `;
+    const prompt = CHART_INSIGHT_PROMPT
+        .replace('{{chartContext}}', chartContext)
+        .replace('{{dataSample}}', dataSample)
+        .replace('{{goal}}', goal);
 
     try {
         const response = await ai.models.generateContent({

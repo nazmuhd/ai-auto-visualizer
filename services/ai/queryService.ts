@@ -1,6 +1,7 @@
 
 import { ai } from "./client.ts";
 import { DataRow } from '../../types.ts';
+import { QUERY_DATA_PROMPT, FORMULA_GENERATION_PROMPT } from '../../lib/prompts.ts';
 
 export const queryDataWithAI = async (sample: DataRow[], question: string): Promise<string> => {
     const dataStr = JSON.stringify(sample);
@@ -10,21 +11,10 @@ export const queryDataWithAI = async (sample: DataRow[], question: string): Prom
         columnsInfo = Object.keys(firstRow).join(', ');
     }
 
-    const prompt = `
-    You are an expert data analyst. A user has provided a data sample and a question. Your task is to answer the question based ONLY on the data provided.
-    - Analyze the data to find the answer.
-    - Provide a concise, clear, and direct answer.
-    - The answer can be a single value, a short sentence, or a small bulleted list if necessary.
-    - Do not provide code or explain how you got the answer. Just give the answer.
-    - If the question cannot be answered from the data, state that clearly.
-
-    DETECTED COLUMNS: ${columnsInfo}
-    DATA SAMPLE (JSON):
-    ${dataStr}
-
-    USER QUESTION:
-    "${question}"
-    `;
+    const prompt = QUERY_DATA_PROMPT
+        .replace('{{columnsInfo}}', columnsInfo)
+        .replace('{{dataStr}}', dataStr)
+        .replace('{{question}}', question);
 
     try {
         const response = await ai.models.generateContent({
@@ -48,20 +38,9 @@ export const queryDataWithAI = async (sample: DataRow[], question: string): Prom
 };
 
 export const generateFormulaFromNaturalLanguage = async (naturalLanguageQuery: string, columns: string[]): Promise<string> => {
-    const prompt = `
-    You are a formula generator. Your task is to convert a natural language description into a mathematical formula string.
-    - The formula must use column names enclosed in square brackets, like [Column Name].
-    - Use standard mathematical operators: +, -, *, /.
-    - The output must be ONLY the formula string. Do not add any explanation, code fences, or other text.
-
-    AVAILABLE COLUMNS:
-    ${columns.join(', ')}
-
-    USER'S REQUEST:
-    "${naturalLanguageQuery}"
-
-    FORMULA:
-    `;
+    const prompt = FORMULA_GENERATION_PROMPT
+        .replace('{{columns}}', columns.join(', '))
+        .replace('{{query}}', naturalLanguageQuery);
 
     try {
         const response = await ai.models.generateContent({

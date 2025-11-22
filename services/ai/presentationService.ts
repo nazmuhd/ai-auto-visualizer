@@ -3,6 +3,7 @@ import { ai } from "./client.ts";
 import { Type } from "@google/genai";
 import { AnalysisResult, ReportTemplate, Presentation, Slide, ContentBlock, ReportLayoutItem } from '../../types.ts';
 import { v4 as uuidv4 } from 'uuid';
+import { PRESENTATION_GENERATION_PROMPT } from '../../lib/prompts.ts';
 
 const presentationSchema = {
     type: Type.OBJECT,
@@ -107,24 +108,12 @@ export const generateInitialPresentation = async (analysis: AnalysisResult, temp
         - SUBSEQUENT PAGES: Add up to 4 charts, placing 1 or 2 charts per page. For each chart, add a small text block with an insight.
         `;
     
-    const prompt = `
-    ROLE: Expert Presentation Designer.
-    TASK: Create a professional, multi-page presentation structure in JSON format based on the provided analysis.
-
-    ANALYSIS CONTEXT (Available items and their IDs):
-    ${analysisContext}
-
-    PRESENTATION REQUIREMENTS:
-    - Format: ${template.name} (${template.format}). This is a ${isSlides ? '16:9 slide deck' : 'A4 document'}.
-    - Grid System: The layout is a 12-column grid.
-    - Blocks: Any text you generate (titles, insights) must be created as a Block object with a unique ID (e.g., 'text_uuid'). The slide layout must then reference this ID.
-    - Content Placement:
-        ${slideInstructions}
-    
-    OUTPUT:
-    - Generate a JSON object that strictly adheres to the provided schema.
-    - Ensure all 'i' values in layouts correspond to an ID from the available context or a newly created text block ID.
-    `;
+    const prompt = PRESENTATION_GENERATION_PROMPT
+        .replace('{{analysisContext}}', analysisContext)
+        .replace('{{templateName}}', template.name)
+        .replace('{{templateFormat}}', template.format)
+        .replace('{{formatType}}', isSlides ? '16:9 slide deck' : 'A4 document')
+        .replace('{{slideInstructions}}', slideInstructions);
 
     try {
         const response = await ai.models.generateContent({

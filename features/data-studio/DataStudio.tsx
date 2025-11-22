@@ -17,7 +17,7 @@ import { DataTable } from './components/DataTable.tsx';
 
 interface Props {
   project: Project;
-  onProjectUpdate: (updater: (prev: Project) => Project) => void;
+  onProjectUpdate: (updater: (prev: Project) => void) => void;
 }
 
 const ROWS_PER_PAGE = 50;
@@ -183,7 +183,7 @@ const detectColumnType = (data: DataRow[], columnName: string): 'text' | 'number
 
 
 export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
-    const [page, setPage] = useState(0);
+    const [page, setPage] = useState(0); // Page is now mostly for the footer count display, as list is virtual
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isChooseColumnsModalOpen, setIsChooseColumnsModalOpen] = useState(false);
@@ -236,12 +236,20 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
         return filtered;
     }, [transformations]);
 
+    // Updated for Immer: mutation is now allowed inside the updater
     const addTransformation = useCallback((t: Transformation) => {
-        onProjectUpdate(p => ({ ...p, transformations: [...(p.transformations || []), t] }));
+        onProjectUpdate(p => {
+            if (!p.transformations) p.transformations = [];
+            p.transformations.push(t);
+        });
     }, [onProjectUpdate]);
 
     const removeTransformation = useCallback((index: number) => {
-        onProjectUpdate(p => ({ ...p, transformations: (p.transformations || []).filter((_, i) => i !== index) }));
+        onProjectUpdate(p => {
+            if (p.transformations) {
+                p.transformations.splice(index, 1);
+            }
+        });
     }, [onProjectUpdate]);
 
     const handleSort = (key: string, direction?: 'asc' | 'desc') => {
@@ -294,8 +302,10 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
     };
     
     const visibleHeaders = useMemo(() => columnsAfterTransform.filter(h => !hiddenColumnsSet.has(h)), [columnsAfterTransform, hiddenColumnsSet]);
-    const totalPages = Math.ceil(transformedData.length / ROWS_PER_PAGE);
-    const paginatedData = transformedData.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
+    
+    // NOTE: We pass full data to DataTable now, as it handles virtualization internally.
+    // Pagination controls in header are purely informational or could be removed if we trust scroll fully.
+    // For now, we keep simple count info.
 
     const commonModals = (
         <>
@@ -313,11 +323,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                 <h3 className="font-semibold text-slate-900">Data Canvas (Fullscreen)</h3>
             </div>
             <div className="flex items-center space-x-4">
-                <div className="text-sm text-slate-500">{page * ROWS_PER_PAGE + 1}-{Math.min((page + 1) * ROWS_PER_PAGE, transformedData.length)} of {transformedData.length}</div>
-                <div className="flex items-center space-x-1">
-                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronLeft size={16} /></button>
-                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronRight size={16} /></button>
-                </div>
+                <div className="text-sm text-slate-500">Showing {transformedData.length} rows</div>
             </div>
              <div className="flex items-center gap-2">
                  <button onClick={() => setIsFsRightPanelOpen(p => !p)} title="Toggle Ask AI" className={`p-2 rounded-md hover:bg-slate-100 ${isFsRightPanelOpen ? 'bg-primary-50 text-primary-600' : 'text-slate-500'}`}><PanelRight size={16}/></button>
@@ -341,7 +347,7 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                            {isFsLeftPanelOpen && <AppliedStepsPanel transformations={transformations} isGrouped={isGrouped} onAddColumn={() => setAddColumnModalOpen(true)} onChooseColumns={() => setIsChooseColumnsModalOpen(true)} onFilterRows={() => setFilterModalOpen(true)} onGroupBy={() => setGroupByModalOpen(true)} onRemoveTransformation={removeTransformation} />}
                         </aside>
                         <main className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <DataTable headers={visibleHeaders} data={paginatedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
+                            <DataTable headers={visibleHeaders} data={transformedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
                         </main>
                         <aside className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isFsRightPanelOpen ? 'w-80' : 'w-0 opacity-0'}`}>
                             {isFsRightPanelOpen && <AskAI data={transformedData} />}
@@ -374,15 +380,11 @@ export const DataStudio: React.FC<Props> = ({ project, onProjectUpdate }) => {
                         <header className="px-5 py-3 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
                             <h3 className="font-semibold text-slate-900">Data Canvas</h3>
                             <div className="flex items-center space-x-4">
-                                <div className="text-sm text-slate-500">{page * ROWS_PER_PAGE + 1}-{Math.min((page + 1) * ROWS_PER_PAGE, transformedData.length)} of {transformedData.length}</div>
-                                <div className="flex items-center space-x-1">
-                                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronLeft size={16} /></button>
-                                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-50 text-slate-500"><ChevronRight size={16} /></button>
-                                </div>
+                                <div className="text-sm text-slate-500">Showing {transformedData.length} rows</div>
                                 <button onClick={() => setIsFullscreen(true)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500"><Maximize size={16} /></button>
                             </div>
                         </header>
-                        <DataTable headers={visibleHeaders} data={paginatedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
+                        <DataTable headers={visibleHeaders} data={transformedData} sortConfig={sortConfig} filteredColumns={filteredColumnsSet} onSort={handleSort} onMenuOpen={handleMenuOpen} />
                     </div>
                     <button onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} title={isRightPanelOpen ? "Collapse" : "Expand"} className="absolute top-1/2 -translate-y-1/2 -right-1 z-20 p-1.5 rounded-full bg-white border border-slate-300 text-slate-500 hover:bg-slate-100"><ChevronsRight size={16} className={`transition-transform duration-300 ${isRightPanelOpen && 'rotate-180'}`} /></button>
                 </main>
