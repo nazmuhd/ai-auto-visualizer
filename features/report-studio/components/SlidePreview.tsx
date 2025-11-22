@@ -1,7 +1,7 @@
 
-import React from 'react';
-import { Slide, Project, Presentation } from '../../../types.ts';
-import { Section, Trash2 } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Slide, Project, Presentation, ContentBlock } from '../../../types.ts';
+import { Section, Trash2, BarChart, Image as ImageIcon, Type, TrendingUp, Grid, Shapes, PlayCircle, Table as TableIcon } from 'lucide-react';
 
 interface Props {
     slide: Slide;
@@ -16,43 +16,153 @@ interface Props {
     onAddSection: (e: React.MouseEvent) => void;
 }
 
+// Mini block renderer for the preview
+const MiniBlock: React.FC<{ block?: ContentBlock; type?: 'chart' | 'kpi'; item: any }> = ({ block, type, item }) => {
+    if (type === 'chart') {
+        return (
+            <div className="w-full h-full bg-sky-50 border border-sky-200 rounded-[2px] flex flex-col items-center justify-center overflow-hidden">
+                <BarChart size={10} className="text-sky-400 mb-0.5"/>
+                <div className="h-[2px] w-2/3 bg-sky-200 rounded-full"></div>
+            </div>
+        );
+    }
+    if (type === 'kpi') {
+        return (
+            <div className="w-full h-full bg-emerald-50 border border-emerald-200 rounded-[2px] flex flex-col items-center justify-center overflow-hidden">
+                <TrendingUp size={10} className="text-emerald-400 mb-0.5"/>
+                <div className="h-[2px] w-1/2 bg-emerald-200 rounded-full"></div>
+            </div>
+        );
+    }
+
+    if (!block) return <div className="w-full h-full bg-slate-100 rounded-[1px]"></div>;
+
+    switch (block.type) {
+        case 'text':
+            const isTitle = block.style === 'title';
+            const isHeader = block.style === 'h1' || block.style === 'h2';
+            return (
+                <div className="w-full h-full overflow-hidden p-[2px]">
+                    <div style={{ fontSize: isTitle ? '6px' : isHeader ? '4px' : '2px', lineHeight: '1.2' }} className={`text-slate-800 ${isTitle || isHeader ? 'font-bold' : ''} break-words`}>
+                        {block.content || 'Text'}
+                    </div>
+                </div>
+            );
+        case 'image':
+            return (
+                <div className="w-full h-full bg-slate-100 overflow-hidden flex items-center justify-center rounded-[1px]">
+                    {block.content ? <img src={block.content} className="w-full h-full object-cover" alt="" /> : <ImageIcon size={10} className="text-slate-300"/>}
+                </div>
+            );
+        case 'video':
+            return (
+                <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-[1px]">
+                    <PlayCircle size={10} className="text-white/50"/>
+                </div>
+            );
+        case 'shape':
+            return (
+                <div className="w-full h-full flex items-center justify-center p-[1px]">
+                     <div className="w-full h-full bg-orange-200 opacity-50 rounded-sm flex items-center justify-center">
+                        <Shapes size={8} className="text-orange-400"/>
+                     </div>
+                </div>
+            );
+        case 'table':
+            return (
+                <div className="w-full h-full bg-white border border-slate-200 flex flex-col">
+                    <div className="h-[20%] bg-slate-100 border-b border-slate-200"></div>
+                    <div className="flex-1 grid grid-cols-3 gap-[1px] bg-slate-100">
+                        {[...Array(6)].map((_, i) => <div key={i} className="bg-white"></div>)}
+                    </div>
+                </div>
+            );
+        default:
+            return <div className="w-full h-full bg-slate-100 border border-slate-200"></div>;
+    }
+};
+
 export const SlidePreview: React.FC<Props> = ({ slide, index, isActive, project, presentation, isSlides, viewMode, onClick, onDelete, onAddSection }) => {
     
-    const getItemType = (itemId: string) => {
-        if (itemId.startsWith('chart_')) return 'chart';
-        if (project.analysis?.kpis.some(k => k.id === itemId)) return 'kpi';
-        const block = (presentation.blocks || []).find(b => b.id === itemId);
-        if (block) return block.type;
-        return 'unknown';
-    };
+    // Smart Title Inference
+    const titleText = useMemo(() => {
+        if (slide.sectionTitle) return slide.sectionTitle;
+        
+        // Priority 1: Title Block
+        const titleBlockId = slide.layout.find(item => {
+            const b = (presentation.blocks || []).find(blk => blk.id === item.i);
+            return b && b.type === 'text' && b.style === 'title';
+        })?.i;
+        if (titleBlockId) {
+            const content = presentation.blocks?.find(b => b.id === titleBlockId)?.content;
+            if (content && !content.includes('Click to add')) return content.substring(0, 25);
+        }
 
-    const maxRows = isSlides ? 8 : 12;
+        // Priority 2: Heading 1 Block
+        const h1BlockId = slide.layout.find(item => {
+            const b = (presentation.blocks || []).find(blk => blk.id === item.i);
+            return b && b.type === 'text' && b.style === 'h1';
+        })?.i;
+        if (h1BlockId) {
+            const content = presentation.blocks?.find(b => b.id === h1BlockId)?.content;
+            if (content && !content.includes('Click to add')) return content.substring(0, 25);
+        }
 
-    // Try to find a title block for the list view
-    const slideTitle = slide.layout.find(item => {
-        const block = (presentation.blocks || []).find(b => b.id === item.i);
-        return block && block.type === 'text' && (block.style === 'title' || block.style === 'h1');
-    });
-    const titleText = slideTitle 
-        ? (presentation.blocks || []).find(b => b.id === slideTitle.i)?.content 
-        : `Slide ${index + 1}`;
+        // Priority 3: Chart Title
+        const chartId = slide.layout.find(item => item.i.startsWith('chart_'))?.i;
+        if (chartId) {
+            const chart = project.analysis?.charts.find(c => c.id === chartId);
+            if (chart) return chart.title.substring(0, 25);
+        }
+
+        return `Slide ${index + 1}`;
+    }, [slide, presentation.blocks, project.analysis]);
+
+    const GridContent = () => (
+        <div className="relative w-full h-full bg-white overflow-hidden select-none pointer-events-none">
+            {slide.layout.map(item => {
+                const left = (item.x / 12) * 100 + '%';
+                const top = (item.y / 12) * 100 + '%';
+                const width = (item.w / 12) * 100 + '%';
+                const height = (item.h / 12) * 100 + '%';
+                
+                let block = (presentation.blocks || []).find(b => b.id === item.i);
+                let type: 'chart' | 'kpi' | undefined;
+                
+                if (item.i.startsWith('chart_')) type = 'chart';
+                else if (project.analysis?.kpis.some(k => k.id === item.i)) type = 'kpi';
+
+                return (
+                    <div 
+                        key={item.i} 
+                        style={{ position: 'absolute', left, top, width, height, padding: '2px' }}
+                    >
+                        <MiniBlock block={block} type={type} item={item} />
+                    </div>
+                );
+            })}
+        </div>
+    );
 
     return (
         <>
-            {slide.sectionTitle && (
-                <div className="px-1 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center">
+            {slide.sectionTitle && viewMode === 'list' && (
+                <div className="px-1 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center border-t border-slate-100 mt-2">
                     <Section size={12} className="mr-1"/> {slide.sectionTitle}
                 </div>
             )}
             {viewMode === 'list' ? (
                  <div 
                     onClick={onClick}
-                    className={`group cursor-pointer flex items-center p-2 rounded-lg mb-1 transition-colors ${isActive ? 'bg-primary-50 text-primary-900' : 'hover:bg-slate-100 text-slate-700'}`}
+                    className={`group cursor-pointer flex items-center p-2 rounded-lg mb-1 transition-colors ${isActive ? 'bg-primary-50 text-primary-900 border border-primary-200' : 'hover:bg-slate-100 text-slate-700 border border-transparent'}`}
                 >
-                    <span className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs font-bold mr-2 ${isActive ? 'bg-primary-200 text-primary-800' : 'bg-slate-200 text-slate-600'}`}>
+                    <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold mr-2 ${isActive ? 'bg-primary-200 text-primary-800' : 'bg-slate-200 text-slate-600'}`}>
                         {index + 1}
                     </span>
-                    <span className="text-sm font-medium truncate flex-1">{titleText || 'Untitled Slide'}</span>
+                    <div className="h-8 w-12 bg-white border border-slate-200 rounded-sm mr-3 flex-shrink-0 overflow-hidden">
+                        <GridContent />
+                    </div>
+                    <span className="text-sm font-medium truncate flex-1 select-none">{titleText}</span>
                     <div className="opacity-0 group-hover:opacity-100 flex">
                          <button onClick={onAddSection} title="Start Section Here" className="text-slate-400 hover:text-primary-500 p-1 rounded hover:bg-slate-200"><Section size={12}/></button>
                          {presentation.slides.length > 1 && <button onClick={onDelete} className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={12} /></button>}
@@ -61,38 +171,19 @@ export const SlidePreview: React.FC<Props> = ({ slide, index, isActive, project,
             ) : (
                 <div 
                     onClick={onClick}
-                    className={`relative group cursor-pointer transition-all duration-200 rounded-lg p-2 ${isActive ? 'bg-primary-50 ring-1 ring-primary-200' : 'hover:bg-slate-100'}`}
+                    className={`relative group cursor-pointer transition-all duration-200 rounded-lg p-2 ${isActive ? 'bg-primary-50 ring-2 ring-primary-200' : 'hover:bg-slate-100'}`}
                 >
                      <div className="flex items-center justify-between mb-1.5 px-1">
-                         <span className={`text-xs font-bold w-5 ${isActive ? 'text-primary-700' : 'text-slate-400'}`}>{index + 1}</span>
+                         <span className={`text-xs font-bold w-5 truncate ${isActive ? 'text-primary-700' : 'text-slate-400'}`}>{index + 1}</span>
                          <div className="opacity-0 group-hover:opacity-100 flex gap-1">
                              <button onClick={onAddSection} title="Start Section Here" className="text-slate-400 hover:text-primary-500 p-1 rounded hover:bg-slate-200 transition-opacity"><Section size={12}/></button>
                              {presentation.slides.length > 1 && <button onClick={onDelete} className="text-slate-400 hover:text-red-500 transition-opacity p-1 rounded hover:bg-red-50"><Trash2 size={12} /></button>}
                          </div>
                      </div>
-                     <div className={`relative w-full rounded bg-white border ${isActive ? 'border-primary-300 shadow-md' : 'border-slate-200 shadow-sm'} overflow-hidden aspect-video pointer-events-none`}>
-                        <div className="absolute inset-0 transform scale-[0.2] origin-top-left w-[500%] h-[500%]">
-                            <div className={`grid grid-cols-12 gap-2 p-2 h-full bg-white`} style={{gridTemplateRows: `repeat(${maxRows}, 1fr)`}}>
-                                {slide.layout.map(item => {
-                                    const type = getItemType(item.i);
-                                    const style: React.CSSProperties = {
-                                        gridColumn: `${item.x + 1} / span ${item.w}`,
-                                        gridRow: `${item.y + 1} / span ${item.h}`,
-                                    };
-                                    let bgColor = 'bg-slate-100';
-                                    let borderColor = 'border-slate-200';
-                                    
-                                    if (type === 'chart') { bgColor = 'bg-sky-100'; borderColor = 'border-sky-200'; }
-                                    if (type === 'kpi') { bgColor = 'bg-emerald-50'; borderColor = 'border-emerald-200'; }
-                                    if (type === 'text') { bgColor = 'bg-slate-50'; borderColor = 'border-slate-200'; }
-                                    if (type === 'image' || type === 'video') { bgColor = 'bg-purple-100'; borderColor = 'border-purple-200'; }
-                                    if (type === 'shape') { bgColor = 'bg-orange-100'; borderColor = 'border-orange-200'; }
-
-                                    return <div key={item.i} style={style} className={`${bgColor} border ${borderColor} rounded-sm shadow-sm`}></div>;
-                                })}
-                            </div>
-                        </div>
+                     <div className={`relative w-full rounded bg-white border ${isActive ? 'border-primary-300 shadow-sm' : 'border-slate-200 shadow-sm'} overflow-hidden aspect-video pointer-events-none`}>
+                        <GridContent />
                     </div>
+                    <p className="text-[10px] text-slate-500 mt-1.5 truncate px-1 font-medium">{titleText}</p>
                 </div>
             )}
         </>

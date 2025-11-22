@@ -1,16 +1,17 @@
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
-import { Project, Presentation, Slide, ReportLayoutItem, ContentBlock, KpiConfig, LayoutId, PresentationTheme, DataRow } from '../../types.ts';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Project, Presentation, Slide, ReportLayoutItem, ContentBlock, KpiConfig, LayoutId, PresentationTheme, DataRow, ChartConfig } from '../../types.ts';
 import { Responsive, WidthProvider } from 'react-grid-layout';
-import { ChartRenderer } from '../../components/charts/ChartRenderer.tsx';
+import { ChartRenderer, TimeFilterPreset } from '../../components/charts/ChartRenderer.tsx';
 import { v4 as uuidv4 } from 'uuid';
 import { exportPresentationToPptx } from '../../services/pptxEngine.ts';
 import { 
-    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText
+    ChevronLeft, MonitorPlay, X, Loader2, Download, Plus, Film as FilmIcon, Grid, List, MessageSquareText, MoreHorizontal, Trash2, Filter, Edit3
 } from 'lucide-react';
 import { ContentBlockRenderer } from './components/ContentBlockRenderer.tsx';
 import { SlidePreview } from './components/SlidePreview.tsx';
 import { FlyoutPanel, IconToolbar } from './components/FlyoutPanel.tsx';
+import { ChartMaximizeModal } from '../dashboard/components/modals/ChartMaximizeModal.tsx';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 const DROPPING_ITEM_ID = '__dropping-elem__';
@@ -39,7 +40,7 @@ const calculateKpiValue = (dataset: DataRow[], kpi: KpiConfig): number | null =>
 const ReportKpiCard: React.FC<{ kpi: KpiConfig, value: number | null }> = ({ kpi, value }) => {
     const formattedValue = value !== null ? new Intl.NumberFormat('en', { maximumFractionDigits: 1, notation: 'compact' }).format(value) : '-';
     return (
-        <div className="p-4 bg-white rounded-lg border border-slate-200 h-full flex flex-col justify-center text-center shadow-sm select-none">
+        <div className="p-4 bg-white rounded-lg border border-slate-200 h-full flex flex-col justify-center text-center shadow-sm select-none overflow-hidden">
             <p className="text-sm font-medium text-slate-500 mb-1 truncate">{kpi.title}</p>
             <p className="text-3xl font-bold text-slate-900">{formattedValue}</p>
         </div>
@@ -50,26 +51,68 @@ interface PresentationStudioProps {
     project: Project;
     presentation: Presentation;
     onPresentationUpdate: (updatedPresentation: Presentation) => void;
+    onChartUpdate?: (updatedChart: ChartConfig) => void;
     onBackToHub: () => void;
     onPresent: (presentationId: string) => void;
 }
 
-export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, presentation, onPresentationUpdate, onBackToHub, onPresent }) => {
+export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, presentation, onPresentationUpdate, onChartUpdate, onBackToHub, onPresent }) => {
     const [currentPage, setCurrentPage] = useState(0);
     const [activePanel, setActivePanel] = useState<string | null>(null);
     const [isLeftMenuOpen, setIsLeftMenuOpen] = useState(true);
-    const [leftViewMode, setLeftViewMode] = useState<'grid' | 'list'>('grid');
+    const [leftViewMode, setLeftViewMode] = useState<'grid' | 'list'>('list');
     const [isExporting, setIsExporting] = useState(false);
     const [showNotes, setShowNotes] = useState(false);
+    const [showCenterGuide, setShowCenterGuide] = useState(false);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [editingChart, setEditingChart] = useState<ChartConfig | null>(null);
+
     const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const scrollTimeout = useRef<number | null>(null);
     
     const isSlides = presentation.format === 'slides';
     const theme = presentation.theme || DEFAULT_THEME;
 
+    // --- Navigation Handlers ---
     const handleSelectPage = useCallback((index: number) => {
         setCurrentPage(index);
-        slideRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'INPUT') return;
+            
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                setCurrentPage(p => Math.min(p + 1, presentation.slides.length - 1));
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setCurrentPage(p => Math.max(0, p - 1));
+            }
+        };
+
+        const handleWheel = (e: WheelEvent) => {
+            if ((e.target as HTMLElement).closest('.custom-scrollbar')) return;
+            if ((e.target as HTMLElement).closest('.react-grid-item')) return; 
+
+            if (scrollTimeout.current) return;
+            // Threshold to prevent accidental swipes
+            if (e.deltaY > 40) {
+                setCurrentPage(p => Math.min(p + 1, presentation.slides.length - 1));
+                scrollTimeout.current = window.setTimeout(() => scrollTimeout.current = null, 400);
+            } else if (e.deltaY < -40) {
+                setCurrentPage(p => Math.max(0, p - 1));
+                scrollTimeout.current = window.setTimeout(() => scrollTimeout.current = null, 400);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('wheel', handleWheel);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('wheel', handleWheel);
+        };
+    }, [presentation.slides.length]);
 
     const kpiValues = useMemo(() => {
         const values: Record<string, number | null> = {};
@@ -165,6 +208,16 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
         }));
     };
 
+    const handleDrag = (layout: ReportLayoutItem[], oldItem: ReportLayoutItem, newItem: ReportLayoutItem) => {
+        // Ruler logic: Check if the center of the item is near the center of the grid (width 12)
+        const center = newItem.x + (newItem.w / 2);
+        if (Math.abs(center - 6) < 0.1) {
+            setShowCenterGuide(true);
+        } else {
+            setShowCenterGuide(false);
+        }
+    };
+
     const handleExport = async () => {
         setIsExporting(true);
         try {
@@ -252,16 +305,57 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             }
             return { ...p, slides: updatedSlides, blocks: updatedBlocks };
         });
+        setActiveMenuId(null);
+    };
+
+    const handleChartUpdateInternal = (updatedChart: ChartConfig) => {
+        if (onChartUpdate) {
+            onChartUpdate(updatedChart);
+        } else {
+            console.warn("Chart update not supported in this context (missing onChartUpdate prop)");
+        }
     };
     
     const renderGridItemContent = (item: ReportLayoutItem) => {
         const chart = project.analysis?.charts.find(c => c.id === item.i);
-        if (chart) return <div className="w-full h-full p-2 bg-white rounded-lg shadow-sm border border-slate-100 flex flex-col"><ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} /></div>;
+        if (chart) return (
+            <div className="w-full h-full p-2 bg-white rounded-lg shadow-sm border border-slate-100 flex flex-col overflow-hidden">
+                <ChartRenderer config={chart} data={project.dataSource.data} allData={project.dataSource.data} dateColumn={null} onFilterChange={()=>{}} onTimeFilterChange={()=>{}} activeFilters={{}} activeTimeFilter={{type:'all'}} />
+            </div>
+        );
         const kpi = project.analysis?.kpis.find(k => k.id === item.i);
         if (kpi) return <div className="w-full h-full"><ReportKpiCard kpi={kpi} value={kpiValues[kpi.id] ?? null} /></div>;
         const block = (presentation.blocks || []).find(b => b.id === item.i);
         if(block) return <div className="w-full h-full"><ContentBlockRenderer block={block} theme={theme} onUpdate={b => handlePresentationUpdate(p => ({ ...p, blocks: (p.blocks || []).map(tb => tb.id === b.id ? b : tb)}))} /></div>;
         return <div className="p-2 text-xs text-red-500 bg-red-50 border border-red-200 rounded flex items-center justify-center h-full">Missing Item</div>;
+    }
+
+    const renderItemMenu = (item: ReportLayoutItem) => {
+        if (activeMenuId !== item.i) return null;
+        
+        const isChart = item.i.startsWith('chart_');
+        return (
+            <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-[100] bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-36 flex flex-col">
+                {isChart && (
+                    <button 
+                        onMouseDown={(e) => { e.stopPropagation(); setEditingChart(project.analysis?.charts.find(c => c.id === item.i) || null); setActiveMenuId(null); }} 
+                        className="text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center text-slate-700"
+                    >
+                        <Filter size={14} className="mr-2"/> Edit Data
+                    </button>
+                )}
+                <button className="text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center text-slate-700">
+                    <Edit3 size={14} className="mr-2"/> Format
+                </button>
+                <div className="border-t border-slate-100 my-1"></div>
+                <button 
+                    onMouseDown={(e) => { e.stopPropagation(); handleRemoveItem(currentPage, item.i); }} 
+                    className="text-left px-3 py-2.5 text-sm hover:bg-red-50 flex items-center text-red-600"
+                >
+                    <Trash2 size={14} className="mr-2"/> Delete
+                </button>
+            </div>
+        );
     }
 
     return (
@@ -297,69 +391,73 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
             
             <div className="flex-1 relative overflow-hidden">
                 {/* Center Canvas */}
-                <main className="absolute inset-0 overflow-y-auto custom-scrollbar flex flex-col items-center pt-12 pb-32">
+                <main className="absolute inset-0 overflow-y-auto custom-scrollbar flex flex-col items-center pt-12 pb-32" onClick={() => setActiveMenuId(null)}>
                     <div className="w-full max-w-5xl space-y-20 pb-32">
                         {presentation.slides.map((slide, index) => {
                              const rowHeight = isSlides ? 50 : 40; 
                              const isActive = index === currentPage;
                              
+                             // CRITICAL FIX: Do not unmount slides. Hide them using opacity and pointer-events.
+                             // This keeps charts loaded and sized correctly.
+                             const containerStyle = isActive 
+                                ? { zIndex: 10, opacity: 1, position: 'relative' } as React.CSSProperties
+                                : { zIndex: 0, opacity: 0, position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none', height: 0, overflow: 'hidden' } as React.CSSProperties;
+                             
                              return (
                                 <div
                                     key={slide.id}
                                     ref={el => { slideRefs.current[index] = el; }}
-                                    className={`relative transition-all duration-500 ease-in-out ${isActive ? 'opacity-100 scale-100 z-10' : 'opacity-30 scale-95 hover:opacity-60 cursor-pointer z-0 grayscale'}`}
-                                    onClick={() => !isActive && setCurrentPage(index)}
+                                    className={`relative transition-opacity duration-300 ease-in-out`}
+                                    style={containerStyle}
                                 >
                                     <div 
-                                        className={`bg-white shadow-xl border border-slate-200 rounded-sm overflow-hidden relative ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'} transition-shadow duration-300 ${isActive ? 'shadow-2xl ring-1 ring-slate-900/5' : ''}`}
+                                        className={`bg-white shadow-xl border border-slate-200 rounded-sm relative ${isSlides ? 'aspect-video' : 'aspect-[1/1.414]'} transition-shadow duration-300 ring-1 ring-slate-900/5`}
                                         style={{ backgroundColor: theme.colors.background }}
                                     >
-                                        {isActive ? (
-                                            <ResponsiveGridLayout
-                                                className="layout"
-                                                layouts={{ lg: slide.layout || [] }}
-                                                breakpoints={{ lg: 1000 }}
-                                                cols={{ lg: 12 }}
-                                                rowHeight={rowHeight}
-                                                onDrop={(layout, item, e) => onDrop(index, layout, item, e)}
-                                                onLayoutChange={(newLayout) => handleLayoutChange(index, newLayout)}
-                                                isDroppable={true}
-                                                isDraggable={true}
-                                                isResizable={true}
-                                                margin={[12, 12]}
-                                                containerPadding={[24, 24]}
-                                                droppingItem={{ i: DROPPING_ITEM_ID, w: 4, h: 4 }}
-                                                draggableCancel=".nodrag"
-                                            >
-                                                {(slide.layout || []).map(item => (
-                                                    <div key={item.i} className="group relative bg-transparent hover:ring-1 hover:ring-slate-300 rounded transition-all">
-                                                        <div className="w-full h-full">
-                                                            {renderGridItemContent(item)}
-                                                        </div>
-                                                        <button 
-                                                            onMouseDown={(e) => e.stopPropagation()}
-                                                            onClick={(e) => { e.stopPropagation(); handleRemoveItem(index, item.i); }}
-                                                            className="nodrag absolute -top-2 -right-2 p-1.5 rounded-full bg-white shadow border border-slate-200 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                        <div className="absolute bottom-0 right-0 p-1 cursor-se-resize opacity-0 group-hover:opacity-100">
-                                                            <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </ResponsiveGridLayout>
-                                        ) : (
-                                            <div className="w-full h-full p-6 grid grid-cols-12 gap-3 relative pointer-events-none">
-                                                 {slide.layout.map(item => {
-                                                     const style: React.CSSProperties = {
-                                                         gridColumn: `${item.x + 1} / span ${item.w}`,
-                                                         gridRow: `${item.y + 1} / span ${item.h}`,
-                                                     };
-                                                     return <div key={item.i} style={style} className="bg-slate-100 border border-slate-200 rounded opacity-50"></div>
-                                                 })}
-                                            </div>
+                                        {showCenterGuide && (
+                                            <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-pink-500 z-50 pointer-events-none transform -translate-x-1/2"></div>
                                         )}
+                                        
+                                        <ResponsiveGridLayout
+                                            className="layout"
+                                            layouts={{ lg: slide.layout || [] }}
+                                            breakpoints={{ lg: 1000 }}
+                                            cols={{ lg: 12 }}
+                                            rowHeight={rowHeight}
+                                            onDrop={(layout, item, e) => onDrop(index, layout, item, e)}
+                                            onLayoutChange={(newLayout) => handleLayoutChange(index, newLayout)}
+                                            onDrag={handleDrag}
+                                            onDragStop={() => setShowCenterGuide(false)}
+                                            isDroppable={true}
+                                            isDraggable={true}
+                                            isResizable={true}
+                                            allowOverlap={true}
+                                            resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']}
+                                            margin={[12, 12]}
+                                            containerPadding={[24, 24]}
+                                            droppingItem={{ i: DROPPING_ITEM_ID, w: 4, h: 4 }}
+                                            draggableCancel=".nodrag"
+                                        >
+                                            {(slide.layout || []).map(item => (
+                                                <div key={item.i} className="group/item relative bg-transparent hover:ring-1 hover:ring-slate-300 rounded transition-all">
+                                                    <div className="w-full h-full overflow-hidden">
+                                                        {renderGridItemContent(item)}
+                                                    </div>
+                                                    
+                                                    {/* 3-Dots Menu Button - Absolute outside top right */}
+                                                    <button 
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === item.i ? null : item.i); }}
+                                                        className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white shadow-md border border-slate-200 text-slate-500 hover:text-primary-600 opacity-0 group-hover/item:opacity-100 transition-all z-20 cursor-pointer nodrag flex items-center justify-center hover:scale-110"
+                                                        title="Options"
+                                                    >
+                                                        <MoreHorizontal size={16} />
+                                                    </button>
+                                                    
+                                                    {renderItemMenu(item)}
+                                                </div>
+                                            ))}
+                                        </ResponsiveGridLayout>
                                     </div>
                                     <div className="absolute top-0 -left-10 text-xl font-bold text-slate-300 select-none">
                                         {String(index + 1).padStart(2, '0')}
@@ -370,14 +468,14 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                     </div>
                 </main>
 
-                {/* Speaker Notes Panel */}
-                <div className={`absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg transition-all duration-300 z-20 flex flex-col ${showNotes ? 'h-48' : 'h-0 overflow-hidden'}`}>
+                {/* Speaker Notes Panel - Raised Z-Index (100) to be definitely above menus */}
+                <div className={`absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] transition-all duration-300 z-[100] flex flex-col ${showNotes ? 'h-48' : 'h-0 overflow-hidden'}`}>
                     <div className="bg-slate-50 px-4 py-1 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 flex justify-between">
                         <span>Speaker Notes</span>
                         <button onClick={() => setShowNotes(false)}><X size={14}/></button>
                     </div>
                     <textarea 
-                        className="flex-1 w-full p-4 resize-none outline-none text-sm text-slate-700"
+                        className="flex-1 w-full p-4 resize-none outline-none text-sm text-slate-700 font-mono"
                         placeholder="Add speaker notes for this slide..."
                         value={presentation.slides[currentPage]?.notes || ''}
                         onChange={handleNotesChange}
@@ -449,6 +547,22 @@ export const ReportStudio: React.FC<PresentationStudioProps> = ({ project, prese
                 </div>
 
             </div>
+            
+            {/* Chart Editing Modal */}
+            {editingChart && (
+                <ChartMaximizeModal 
+                    config={editingChart}
+                    data={project.dataSource.data}
+                    allData={project.dataSource.data}
+                    dateColumn={null}
+                    onUpdate={handleChartUpdateInternal} 
+                    onClose={() => setEditingChart(null)}
+                    onFilterChange={() => {}} 
+                    onTimeFilterChange={() => {}}
+                    activeFilters={{}}
+                    activeTimeFilter={{type: 'all'}}
+                />
+            )}
         </div>
     );
 };

@@ -10,7 +10,6 @@ Logic is grouped by **domain** rather than by file type.
 *   **`features/dashboard/`**: Analytics, KPI grids, Filtering.
 *   **`features/report-studio/`**: Presentation builder, Drag-and-drop canvas.
 *   **`features/data-studio/`**: Data transformation, Table views.
-*   **`features/auth/`**: Authentication screens.
 
 ### 2. Container/View Pattern
 *   **Containers (Pages/Workspaces)**: Responsible for fetching data, managing state, and orchestrating sub-components.

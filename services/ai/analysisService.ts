@@ -7,9 +7,12 @@ import { v4 as uuidv4 } from 'uuid';
 // --- 1. Premade Chart Templates Library ---
 export const CHART_TEMPLATES: Record<string, any> = {
     'tmpl_bar_comparison': { type: 'bar', defaultTitle: 'Ranked Comparison', defaultDescription: 'Comparing top items by value to identify leaders.', allowedAggregations: ['sum', 'average', 'count'] },
+    'tmpl_horizontal_bar': { type: 'bar', layout: 'vertical', defaultTitle: 'Category Ranking', defaultDescription: 'Good for long category names.', allowedAggregations: ['sum', 'count'] },
     'tmpl_line_trend': { type: 'line', defaultTitle: 'Trend Over Time', defaultDescription: 'Tracking key metrics over a time period.', allowedAggregations: ['sum', 'average', 'count'] },
     'tmpl_area_volume': { type: 'area', defaultTitle: 'Volume Trend', defaultDescription: 'Visualizing the magnitude of cumulative change.', allowedAggregations: ['sum'] },
+    'tmpl_area_stacked': { type: 'area', stackId: '1', defaultTitle: 'Stacked Area Trend', defaultDescription: 'How parts contribute to the total over time.', allowedAggregations: ['sum'] },
     'tmpl_pie_distribution': { type: 'pie', defaultTitle: 'Proportional Distribution', defaultDescription: 'Showing how the total is divided among categories.', allowedAggregations: ['sum', 'count'] },
+    'tmpl_donut': { type: 'pie', innerRadius: '50%', defaultTitle: 'Donut Breakdown', defaultDescription: 'Similar to pie but with a modern look.', allowedAggregations: ['sum', 'count'] },
     'tmpl_scatter_correlation': { type: 'scatter', defaultTitle: 'Correlation Analysis', defaultDescription: 'Investigating the relationship between two numerical variables.' },
     'tmpl_stacked_bar': { type: 'stacked-bar', defaultTitle: 'Composition Over Category', defaultDescription: 'Showing how a total is divided into parts across categories.', allowedAggregations: ['sum', 'count'] },
     'tmpl_combo_line_bar': { type: 'combo', defaultTitle: 'Dual Metric Analysis', defaultDescription: 'Comparing two different metrics across a shared category.', allowedAggregations: ['sum', 'count', 'average'] },
@@ -104,9 +107,12 @@ export const analyzeData = async (sample: DataRow[]): Promise<AnalysisResult> =>
 
     AVAILABLE CHART TEMPLATES:
     - tmpl_bar_comparison (Good for: Ranking)
+    - tmpl_horizontal_bar (Good for: Ranking with long names)
     - tmpl_line_trend (Good for: Time series)
     - tmpl_area_volume (Good for: Cumulative totals over time)
+    - tmpl_area_stacked (Good for: Stacked trends)
     - tmpl_pie_distribution (Good for: Part-to-whole, <10 categories)
+    - tmpl_donut (Good for: Part-to-whole modern look)
     - tmpl_scatter_correlation (Good for: Numeric relationships)
     - tmpl_stacked_bar (Good for: Composition across categories. Requires 'color' mapping.)
     - tmpl_combo_line_bar (Good for: Comparing two different Y metrics. The line and bar must share the same X-axis.)

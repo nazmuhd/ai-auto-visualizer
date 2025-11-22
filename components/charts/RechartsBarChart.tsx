@@ -1,5 +1,6 @@
+
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell, Label } from 'recharts';
 import { DataRow, ChartMapping } from '../../types.ts';
 import { ViewOptions } from './ChartRenderer.tsx';
 
@@ -63,7 +64,7 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, 
         <ResponsiveContainer width="100%" height="100%">
             <BarChart
                 data={processedData}
-                margin={{ top: 20, right: 30, left: leftMargin, bottom: 20 }}
+                margin={{ top: 20, right: 30, left: leftMargin, bottom: 30 }}
                 layout="vertical"
             >
                 {viewOptions.showGrid && (
@@ -89,7 +90,9 @@ export const RechartsBarChart: React.FC<Props> = ({ data, mapping, viewOptions, 
                     tickLine={false}
                     tickFormatter={(value) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)}
                     domain={[0, 'dataMax']}
-                />
+                >
+                    <Label value={formatLabel(mapping.y)} position="bottom" offset={0} style={{ textAnchor: 'middle', fill: '#94a3b8', fontSize: 12 }} />
+                </XAxis>
                 <Tooltip 
                     cursor={{ fill: '#f1f5f9' }}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}

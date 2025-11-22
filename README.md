@@ -90,9 +90,13 @@ This project is a static web application and can be deployed to any static hosti
 │   ├── Dashboard.tsx     # Main dashboard workspace logic
 │   ├── Sidebar.tsx       # Project navigation sidebar
 │   ├── ChartRenderer.tsx # Renders individual charts and their controls
-│   ├── AIReportView.tsx  # Drag-and-drop report editor
 │   ├── GetStartedHub.tsx # Initial landing/upload screen
 │   └── ...               # Other UI components (modals, charts, etc.)
+│
+├── features/             # Business logic slices
+│   ├── dashboard/        # Dashboard feature components
+│   ├── report-studio/    # Report generation feature
+│   └── data-studio/      # Data transformation feature
 │
 └── services/             # Business logic and external API interactions
     ├── geminiService.ts  # All interactions with the Google Gemini API

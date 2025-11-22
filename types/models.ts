@@ -20,8 +20,6 @@ export interface Project {
     presentations?: Presentation[];
 }
 
-export type Page = 'landing' | 'login' | 'signup' | 'dashboard' | 'about' | 'pricing' | 'contact';
-
 export type LoadingState = 'idle' | 'parsing' | 'validating_tasks' | 'scanning' | 'validated' | 'analyzing' | 'complete' | 'error';
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved';

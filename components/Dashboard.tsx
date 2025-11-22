@@ -10,9 +10,9 @@ import { Sidebar } from './Sidebar.tsx';
 import { GetStartedHub } from './GetStartedHub.tsx';
 import { EmbeddedDataPreview } from './EmbeddedDataPreview.tsx';
 import { PresentationView } from './PresentationView.tsx';
-import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx'; // Import new skeleton
+import { LoadingSkeleton } from './ui/LoadingSkeleton.tsx';
 
-// Feature Components (using new barrel files)
+// Feature Components
 import { DashboardWorkspace, ProjectEmptyState } from '../features/dashboard/index.ts';
 
 // Modals
@@ -28,16 +28,11 @@ import { DashboardSettingsModal } from '../features/dashboard/components/modals/
 import { KpiDetailModal } from '../features/dashboard/components/modals/KpiDetailModal.tsx';
 import { ReportTemplateSelectionModal } from '../features/report-studio/components/modals/ReportTemplateSelectionModal.tsx';
 
-// Pages
-import { SettingsPage } from './pages/SettingsPage.tsx';
-import { AccountPage } from './pages/AccountPage.tsx';
-
 // Hooks
 import { useResponsiveSidebar, useProjects, useDataProcessing, useGemini } from '../hooks/index.ts';
 
 interface DashboardProps {
     userEmail: string;
-    onLogout: () => void;
 }
 
 const layouts: LayoutInfo[] = [
@@ -48,7 +43,7 @@ const layouts: LayoutInfo[] = [
   { id: '3-4', name: 'High-Density', rows: [3, 4], totalCharts: 7, description: 'Maximizes information for complex, data-rich dashboards.', usedBy: 'Accenture, Deloitte' },
 ];
 
-export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ userEmail }) => {
     // --- Hooks Integration ---
     const [isSidebarOpen, setIsSidebarOpen] = useResponsiveSidebar();
     const { 
@@ -87,7 +82,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const [globalFilters, setGlobalFilters] = useState<Record<string, Set<string>>>({});
     const [timeFilter, setTimeFilter] = useState<{ type: TimeFilterPreset; start?: string; end?: string }>({ type: 'all' });
 
-    const [mainView, setMainView] = useState<'dashboard' | 'settings' | 'account'>('dashboard');
     const [hasConfirmedPreview, setHasConfirmedPreview] = useState(false);
 
     const mainContentRef = useRef<HTMLElement>(null);
@@ -198,7 +192,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setGlobalFilters({});
         setTimeFilter({type:'all'});
         setIsSettingsModalOpen(false);
-        setMainView('dashboard');
         setIsGeneratingReport(false);
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
     }, [resetActiveProject, resetProcessing, resetGemini, setIsSidebarOpen]);
@@ -206,7 +199,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     const handleCreateProject = useCallback((name: string, description: string) => {
         createProject(name, description);
         setIsCreateModalOpen(false);
-        setMainView('dashboard');
         resetProcessing();
         setHasConfirmedPreview(false);
     }, [createProject, resetProcessing]);
@@ -223,7 +215,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
         setGlobalFilters({});
         setTimeFilter({ type: 'all' });
         setIsSettingsModalOpen(false);
-        setMainView('dashboard');
         setIsGeneratingReport(false);
         setHasConfirmedPreview(true); // Loaded projects are already confirmed
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
@@ -421,9 +412,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
     // --- Render Logic ---
     
     const renderMainContent = () => {
-        if (mainView === 'settings') return <SettingsPage />;
-        if (mainView === 'account') return <AccountPage userEmail={userEmail} onLogout={onLogout} />;
-
         // 1. CSV Parsing Loading State
         if (isProcessing) {
             return <LoadingSkeleton mode="parsing" status={progress?.status} progress={progress?.percentage} />;
@@ -506,9 +494,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout }) => 
                     onRename={handleOpenRenameModal} 
                     onDelete={handleOpenDeleteModal} 
                     userEmail={userEmail} 
-                    onLogout={onLogout}
-                    mainView={mainView}
-                    setMainView={setMainView}
                 />
             )}
             <div className={`flex-1 flex flex-col transition-all duration-300 ${!isEditingOrPresenting ? (isSidebarOpen ? 'md:ml-64' : 'md:ml-20') : 'md:ml-0'}`}>

@@ -1,5 +1,6 @@
+
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush, LabelList } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush, Label } from 'recharts';
 import { DataRow, ChartMapping, TimeGrain } from '../../types.ts';
 import { ViewOptions } from './ChartRenderer.tsx';
 import { RotateCcw } from 'lucide-react';
@@ -156,7 +157,7 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                 <ChartComponent
                     key={chartKey}
                     data={processedData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                 >
                     {viewOptions.showGrid && (
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -177,7 +178,9 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                         tickLine={false}
                         minTickGap={40}
                         interval="preserveStartEnd"
-                    />
+                    >
+                        <Label value={formatLabel(mapping.x)} position="bottom" offset={0} style={{ textAnchor: 'middle', fill: '#94a3b8', fontSize: 12 }} />
+                    </XAxis>
                     <YAxis 
                         tick={{ fontSize: 11, fill: '#64748b' }}
                         axisLine={false}
@@ -186,7 +189,9 @@ export const RechartsLineChart: React.FC<Props> = ({ data, mapping, isArea = fal
                         width={40}
                         domain={[0, 'dataMax']}
                         allowDataOverflow={true}
-                    />
+                    >
+                        <Label value={formatLabel(mapping.y)} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#94a3b8', fontSize: 12 }} />
+                    </YAxis>
                     <Tooltip 
                         labelFormatter={(val) => isTemporal ? new Date(val).toLocaleDateString() : val}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}

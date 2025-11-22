@@ -1,5 +1,6 @@
+
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Label } from 'recharts';
 import { DataRow, ChartMapping } from '../../types.ts';
 import { ViewOptions } from './ChartRenderer.tsx';
 import { RotateCcw } from 'lucide-react';
@@ -117,7 +118,7 @@ export const RechartsScatterChart: React.FC<Props> = ({ data, mapping, viewOptio
                 </button>
             )}
             <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart key={chartKey} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <ScatterChart key={chartKey} margin={{ top: 20, right: 20, bottom: 30, left: 20 }}>
                     {viewOptions.showGrid && (
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     )}
@@ -128,11 +129,12 @@ export const RechartsScatterChart: React.FC<Props> = ({ data, mapping, viewOptio
                         tick={{ fontSize: 12, fill: '#64748b' }}
                         axisLine={{ stroke: '#cbd5e1' }}
                         tickLine={false}
-                        label={{ value: formatLabel(mapping.x), position: 'bottom', offset: 0, fill: '#94a3b8', fontSize: 12 }}
                         tickFormatter={(value) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)}
                         domain={zoomDomain.x as any}
                         allowDataOverflow
-                    />
+                    >
+                        <Label value={formatLabel(mapping.x)} position="bottom" offset={0} style={{ textAnchor: 'middle', fill: '#94a3b8', fontSize: 12 }} />
+                    </XAxis>
                     <YAxis 
                         type="number" 
                         dataKey={mapping.y} 
@@ -140,11 +142,12 @@ export const RechartsScatterChart: React.FC<Props> = ({ data, mapping, viewOptio
                         tick={{ fontSize: 12, fill: '#64748b' }}
                         axisLine={false}
                         tickLine={false}
-                        label={{ value: formatLabel(mapping.y), angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 12 }}
                         tickFormatter={(value) => new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)}
                         domain={zoomDomain.y as any}
                         allowDataOverflow
-                    />
+                    >
+                        <Label value={formatLabel(mapping.y)} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#94a3b8', fontSize: 12 }} />
+                    </YAxis>
                     {isBubble && <ZAxis type="number" dataKey={mapping.z} name={formatLabel(mapping.z || '')} domain={zDomain} range={[10, 500]} />}
                     <Tooltip 
                         cursor={{ strokeDasharray: '3 3' }}

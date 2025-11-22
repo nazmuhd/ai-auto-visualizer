@@ -195,6 +195,7 @@ export const DashboardWorkspace: React.FC<Props> = ({
                         project={project}
                         presentation={presentationToEdit}
                         onPresentationUpdate={onPresentationUpdate}
+                        onChartUpdate={props.onChartUpdate} // Pass this down
                         onBackToHub={onBackToHub}
                         onPresent={onPresent}
                     />

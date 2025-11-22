@@ -9,7 +9,6 @@
 ### `components/`
 *   **`ui/`**: **The Design System.** Contains atomic, reusable components like `Button.tsx`, `Input.tsx`, `Modal.tsx`, `LoadingSkeleton.tsx`. These have no business logic.
 *   **`charts/`**: Reusable charting wrappers (Recharts based) like `ChartRenderer.tsx`, `RechartsLineChart.tsx`.
-*   **`pages/`**: Top-level route components (e.g., `LoginPage.tsx`, `SettingsPage.tsx`).
 *   **`modals/`**: App-wide complex modals (e.g., `CreateProjectModal.tsx`).
 
 ### `features/`

@@ -1,6 +1,6 @@
 # Local Development & Migration Guide
 
-This document outlines the necessary steps to migrate the current "CDN/Single-File" architecture to a standard local development environment using **Vite**, **React Router**, and **Node.js**.
+This document outlines the necessary steps to migrate the current "CDN/Single-File" architecture to a standard local development environment using **Vite** and **Node.js**.
 
 ## 1. Environment Initialization
 
@@ -17,7 +17,7 @@ Replace the HTML `<script type="importmap">` dependencies with actual NPM packag
 
 ```bash
 # Core Runtime
-npm install react-router-dom @google/genai recharts xlsx react-grid-layout lucide-react uuid jspdf html2canvas pptxgenjs clsx tailwind-merge
+npm install @google/genai recharts xlsx react-grid-layout lucide-react uuid jspdf html2canvas pptxgenjs clsx tailwind-merge
 
 # Dev Dependencies
 npm install -D tailwindcss postcss autoprefixer @types/uuid @types/react-grid-layout
@@ -64,66 +64,26 @@ npm install -D tailwindcss postcss autoprefixer @types/uuid @types/react-grid-la
 
 ## 2. Architecture Changes
 
-### A. Routing (`App.tsx`)
-**Goal:** Replace "Conditional Rendering" (state-based) with "Declarative Routing" (URL-based).
+### A. Simplified App Entry (`App.tsx`)
+**Goal:** Render the Dashboard directly. Authentication and Routing have been removed for this version.
 
 **Action Items:**
-1.  Remove `useState<Page>('landing')`.
-2.  Remove `handleNavigate`, `renderPage`, and the `switch` statement.
-3.  Implement `react-router-dom`:
+1.  Import the `Dashboard` component.
+2.  Provide a default/mock user email prop.
 
 ```tsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
-// Wrapper for protected routes
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-  const user = localStorage.getItem('userEmail'); // Or context
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-};
+import { Dashboard } from './components/Dashboard';
 
 function App() {
+  // Default mock user
+  const userEmail = 'demo@local.dev';
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </BrowserRouter>
+    <Dashboard userEmail={userEmail} />
   );
 }
-```
 
-### B. Component Refactoring
-**Goal:** Remove prop-drilling of navigation handlers.
-
-**Action Items:**
-1.  **Search & Replace:** Find all interfaces defining `onNavigate: (page: Page) => void`. Remove this prop.
-2.  **Update Logic:** Inside components (`LandingPage`, `Header`, `LoginPage`), replace the `onNavigate` call with the `useNavigate` hook.
-
-**Example:**
-*Before:*
-```tsx
-<button onClick={() => onNavigate('login')}>Login</button>
-```
-*After:*
-```tsx
-import { useNavigate } from 'react-router-dom';
-// ...
-const navigate = useNavigate();
-<button onClick={() => navigate('/login')}>Login</button>
-// OR preferably:
-import { Link } from 'react-router-dom';
-<Link to="/login">Login</Link>
+export default App;
 ```
 
 ---
@@ -177,7 +137,6 @@ Move the provided files into the standard Vite structure:
 │   ├── components/
 │   │   ├── charts/
 │   │   ├── modals/
-│   │   ├── pages/
 │   │   └── ui/
 │   ├── features/
 │   │   ├── dashboard/

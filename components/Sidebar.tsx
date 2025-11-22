@@ -7,14 +7,10 @@ import {
   Folder,
   Edit,
   Trash2,
-  Settings,
   X,
   MoreVertical,
-  LogOut,
 } from 'lucide-react';
 import { Project } from '../types.ts';
-
-type MainView = 'dashboard' | 'settings' | 'account';
 
 interface Props {
   isOpen: boolean;
@@ -26,9 +22,6 @@ interface Props {
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
   userEmail: string;
-  onLogout: () => void;
-  mainView: MainView;
-  setMainView: (view: MainView) => void;
 }
 
 const ProjectLink: React.FC<{
@@ -118,21 +111,6 @@ const ProjectLink: React.FC<{
   );
 });
 
-const MenuItem: React.FC<{ icon: React.ElementType, label: string, onClick: () => void, isDestructive?: boolean }> = ({ icon: Icon, label, onClick, isDestructive = false }) => (
-    <button
-        onClick={onClick}
-        className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center transition-colors ${
-            isDestructive
-                ? 'text-red-600 hover:bg-red-50'
-                : 'text-slate-700 hover:bg-slate-50'
-        }`}
-    >
-        <Icon size={16} className={`mr-3 ${isDestructive ? 'text-red-500' : 'text-slate-400'}`} />
-        {label}
-    </button>
-);
-
-
 export const Sidebar: React.FC<Props> = ({ 
     isOpen, 
     setIsOpen, 
@@ -142,25 +120,10 @@ export const Sidebar: React.FC<Props> = ({
     onSelectProject,
     onRename,
     onDelete,
-    userEmail,
-    onLogout,
-    mainView,
-    setMainView
+    userEmail
 }) => {
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   useEffect(() => {
     const checkSize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -220,7 +183,7 @@ export const Sidebar: React.FC<Props> = ({
                            <ProjectLink 
                             key={proj.id} 
                             proj={proj} 
-                            isActive={proj.id === activeProjectId && mainView === 'dashboard'}
+                            isActive={proj.id === activeProjectId}
                             isOpen={isOpen}
                             isDesktop={isDesktop}
                             contextMenuOpen={contextMenuOpen}
@@ -234,22 +197,14 @@ export const Sidebar: React.FC<Props> = ({
                 </div>
             </nav>
             
-            <div className="p-4 border-t border-slate-100 relative flex-shrink-0" ref={userMenuRef}>
-                {isUserMenuOpen && (
-                    <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
-                        <MenuItem icon={User} label="Account Management" onClick={() => { setMainView('account'); setIsUserMenuOpen(false); }} />
-                        <MenuItem icon={Settings} label="Settings" onClick={() => { setMainView('settings'); setIsUserMenuOpen(false); }} />
-                        <div className="my-1 border-t border-slate-100" />
-                        <MenuItem icon={LogOut} label="Logout" onClick={onLogout} isDestructive />
-                    </div>
-                )}
-                <button onClick={() => setIsUserMenuOpen(prev => !prev)} className={`flex items-center w-full p-2 rounded-lg transition-colors group ${isUserMenuOpen ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'} ${isOpen ? '' : 'justify-center'}`}>
+            <div className="p-4 border-t border-slate-100 relative flex-shrink-0">
+                <div className={`flex items-center w-full p-2 rounded-lg transition-colors group ${isOpen ? '' : 'justify-center'}`}>
                     <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
                         <User size={18} className="text-slate-500"/>
                     </div>
                     {isOpen && (
                         <div className="ml-3 text-left overflow-hidden">
-                            <p className={`text-sm font-semibold truncate ${isUserMenuOpen ? 'text-slate-900' : 'text-slate-800'}`}>{userEmail}</p>
+                            <p className={`text-sm font-semibold truncate text-slate-800`}>{userEmail}</p>
                         </div>
                     )}
                     {!isOpen && (
@@ -257,7 +212,7 @@ export const Sidebar: React.FC<Props> = ({
                             {userEmail}
                         </span>
                     )}
-                </button>
+                </div>
             </div>
           </div>
         </aside>
